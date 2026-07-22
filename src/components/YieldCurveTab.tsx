@@ -6,10 +6,17 @@ import type { YieldCurveResult } from "@/lib/agents/trading-agent/types";
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-      {sub && <div className="text-sm text-zinc-500 mt-1">{sub}</div>}
+    <div className="jv-card">
+      <div className="jv-br-b" />
+      <div className="jv-label">{label}</div>
+      <div className="jv-cond c-neutral" style={{ fontSize: 18 }}>
+        {value}
+      </div>
+      {sub && (
+        <div className="text-xs" style={{ color: "var(--text-2)" }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
@@ -44,54 +51,51 @@ export function YieldCurveTab() {
   const chartData = data?.points.map((p) => ({ tenor: p.tenorLabel, yield: p.value })) ?? [];
 
   return (
-    <div className="space-y-6">
+    <div className="jarvis">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-500">
+        <p className="jv-lede" style={{ marginBottom: 0 }}>
           The full trackable Treasury yield curve (1 month through 30 years) plus high-yield and
           investment-grade credit spreads — every real tenor point this app can source from FRED.
         </p>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50 shrink-0 ml-4"
-        >
+        <button onClick={load} disabled={loading} className="jv-btn shrink-0 ml-4" style={{ padding: "6px 16px" }}>
           {loading ? "Loading…" : "Refresh"}
         </button>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+        <div className="jv-card mt-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {data && (
-        <>
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 h-72">
+        <div className="flex flex-col gap-6 mt-6">
+          <div className="jv-card h-72">
+            <div className="jv-br-b" />
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
-                <XAxis dataKey="tenor" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} unit="%" />
-                <Tooltip formatter={(v) => (typeof v === "number" ? `${v.toFixed(2)}%` : v)} />
-                <Line type="monotone" dataKey="yield" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+                <XAxis dataKey="tenor" tick={{ fontSize: 11, fill: "var(--text-2)" }} stroke="var(--line)" />
+                <YAxis tick={{ fontSize: 11, fill: "var(--text-2)" }} unit="%" stroke="var(--line)" />
+                <Tooltip
+                  formatter={(v) => (typeof v === "number" ? `${v.toFixed(2)}%` : v)}
+                  contentStyle={{ background: "var(--ink-800)", border: "1px solid var(--line-bright)", fontSize: 12 }}
+                  labelStyle={{ color: "var(--text-0)" }}
+                  itemStyle={{ color: "var(--text-1)" }}
+                />
+                <Line type="monotone" dataKey="yield" stroke="var(--signal)" strokeWidth={2} dot={{ r: 3, fill: "var(--signal)" }} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {data.points.map((p) => (
-              <StatCard
-                key={p.seriesId}
-                label={p.tenorLabel}
-                value={p.value !== null ? `${p.value.toFixed(2)}%` : "N/A"}
-                sub={p.date || undefined}
-              />
+              <StatCard key={p.seriesId} label={p.tenorLabel} value={p.value !== null ? `${p.value.toFixed(2)}%` : "N/A"} sub={p.date || undefined} />
             ))}
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold mb-2">Credit Spreads</h3>
+            <div className="jv-strip-title">Credit Spreads</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {data.creditSpreads.map((s) => (
                 <StatCard key={s.seriesId} label={s.label} value={`${s.value.toFixed(2)}%`} sub={s.date} />
@@ -100,13 +104,15 @@ export function YieldCurveTab() {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold mb-2">Curve Inversions</h3>
+            <div className="jv-strip-title">Curve Inversions</div>
             {data.inversions.length === 0 ? (
-              <p className="text-sm text-zinc-500">No adjacent-tenor inversions currently detected.</p>
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                No adjacent-tenor inversions currently detected.
+              </p>
             ) : (
-              <ul className="text-sm text-zinc-700 dark:text-zinc-300 space-y-1">
+              <ul className="text-sm flex flex-col gap-1" style={{ color: "var(--text-1)" }}>
                 {data.inversions.map((inv) => (
-                  <li key={`${inv.fromTenor}-${inv.toTenor}`} className="rounded-lg bg-red-50 dark:bg-red-950/20 px-3 py-2">
+                  <li key={`${inv.fromTenor}-${inv.toTenor}`} className="jv-card" style={{ borderColor: "var(--danger)" }}>
                     {inv.fromTenor} yields more than {inv.toTenor} — inverted segment.
                   </li>
                 ))}
@@ -115,14 +121,11 @@ export function YieldCurveTab() {
           </div>
 
           {data.dataLimitations.map((d) => (
-            <div
-              key={d.slice(0, 30)}
-              className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-400"
-            >
+            <div key={d.slice(0, 30)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
               {d}
             </div>
           ))}
-        </>
+        </div>
       )}
     </div>
   );

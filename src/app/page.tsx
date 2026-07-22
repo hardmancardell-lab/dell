@@ -296,51 +296,50 @@ export default async function Home() {
   ) : null;
 
   const sectorGroupsContent = sectorError ? (
-    <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400">
+    <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
       <div className="font-medium">Could not load live data</div>
       <div className="text-sm mt-1">{sectorError}</div>
     </div>
   ) : sector ? (
-    <div className="space-y-10">
-      <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-950">
-        <h2 className="text-lg font-semibold">
+    <div className="flex flex-col gap-10">
+      <div className="jv-verdict-panel">
+        <div className="jv-vp-label">
+          <span className="jv-dot" aria-hidden="true" />
+          Cyclical bargain screen
+        </div>
+        <h3>
           {sector.cyclicalBargainCandidates.length > 0
-            ? `Cyclical bargain candidates: ${sector.cyclicalBargainCandidates.join(", ")}`
+            ? sector.cyclicalBargainCandidates.join(", ")
             : "No cyclical bargain candidates flagged"}
-        </h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Industry groups running meaningfully below their long-run capacity
-          utilization. Graham&apos;s read: worth screening for asset-rich,
-          low-leverage names trading near liquidation value &mdash; but this
-          alone doesn&apos;t confirm balance sheet strength (see gaps below).
+        </h3>
+        <p>
+          Industry groups running meaningfully below their long-run capacity utilization. Graham&apos;s
+          read: worth screening for asset-rich, low-leverage names trading near liquidation value &mdash;
+          but this alone doesn&apos;t confirm balance sheet strength (see gaps below).
         </p>
-      </section>
+      </div>
 
       <section>
-        <h2 className="text-xl font-semibold mb-3">
-          Industry Groups &mdash; Production &amp; Capacity
-        </h2>
-        <div className="space-y-4">
+        <div className="jv-strip-title">Industry Groups &mdash; Production &amp; Capacity</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {sector.industryGroups.map((g) => (
-            <div key={g.id} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="font-medium">{g.label}</div>
-                <ConditionBadge text={g.classification} />
+            <div key={g.id} className="jv-card">
+              <div className="jv-br-b" />
+              <div className="flex items-center justify-between mb-2">
+                <div className="jv-label" style={{ marginBottom: 0 }}>
+                  {g.label}
+                </div>
+                <span className="jv-badge c-neutral">{g.classification}</span>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <StatCard
-                  label="Capacity Utilization"
-                  value={`${g.capacityUtilization.value.toFixed(1)}%`}
-                  sub={`Long-run avg ~${g.capacityUtilizationLongRunAvg}%`}
-                />
-                <StatCard
-                  label="Industrial Production"
-                  value={
-                    g.industrialProductionYoY !== null
-                      ? `${g.industrialProductionYoY.toFixed(1)}% YoY`
-                      : "N/A"
-                  }
-                />
+              <div className="jv-stat">
+                <span>Capacity util.</span>
+                <b>
+                  {g.capacityUtilization.value.toFixed(1)}% (avg ~{g.capacityUtilizationLongRunAvg}%)
+                </b>
+              </div>
+              <div className="jv-stat">
+                <span>Industrial production</span>
+                <b>{g.industrialProductionYoY !== null ? `${g.industrialProductionYoY.toFixed(1)}% YoY` : "N/A"}</b>
               </div>
             </div>
           ))}
@@ -348,25 +347,34 @@ export default async function Home() {
       </section>
 
       <section>
-        <h2 className="text-xl font-semibold mb-3">Supply &amp; Demand</h2>
-        <StatCard
-          label={sector.inventoryToSales.totalBusiness.label}
-          value={sector.inventoryToSales.totalBusiness.value.toFixed(2)}
-          sub={sector.inventoryToSales.note}
-        />
+        <div className="jv-strip-title">Supply &amp; Demand</div>
+        <div className="jv-card" style={{ maxWidth: 360 }}>
+          <div className="jv-label">{sector.inventoryToSales.totalBusiness.label}</div>
+          <div className="jv-cond c-neutral" style={{ fontSize: 20 }}>
+            {sector.inventoryToSales.totalBusiness.value.toFixed(2)}
+          </div>
+          <div className="text-xs" style={{ color: "var(--text-2)" }}>
+            {sector.inventoryToSales.note}
+          </div>
+        </div>
       </section>
 
       <section>
-        <h2 className="text-xl font-semibold mb-3">Not Yet Available</h2>
-        <p className="text-sm text-zinc-500 mb-3">
-          These require a company-fundamentals or ratings data source beyond
-          FRED. Listed explicitly rather than faked.
+        <div className="jv-strip-title">Not Yet Available</div>
+        <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+          These require a company-fundamentals or ratings data source beyond FRED. Listed explicitly
+          rather than faked.
         </p>
-        <div className="space-y-3">
+        <div className="flex flex-col gap-2">
           {sector.unavailable.map((m) => (
-            <div key={m.label} className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 p-4">
-              <div className="font-medium text-sm">{m.label}</div>
-              <div className="text-sm text-zinc-500 mt-1">{m.note}</div>
+            <div key={m.label} className="jv-card" style={{ borderStyle: "dashed" }}>
+              <div className="jv-br-b" />
+              <div className="text-sm font-medium" style={{ color: "var(--text-0)" }}>
+                {m.label}
+              </div>
+              <div className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
+                {m.note}
+              </div>
             </div>
           ))}
         </div>
@@ -417,20 +425,17 @@ export default async function Home() {
                       id: "sector",
                       label: "Sector",
                       content: (
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">
-                            Layer 2 &middot; Sector Agent
-                          </div>
-                          <h1 className="text-2xl font-semibold tracking-tight mt-1">
-                            Sector-Selection Matrix
-                          </h1>
-                          <p className="text-zinc-500 mt-2 mb-6">
+                        <div className="jarvis">
+                          <p className="jv-eyebrow">Layer 2 &middot; Sector Agent</p>
+                          <h1 className="jv-title">Sector-Selection Matrix</h1>
+                          <p className="jv-lede">
                             Structural stability and supply/demand
                             equilibrium by industry group &mdash; screening
                             candidates, not verdicts.
                           </p>
                           <Tabs
                             size="tertiary"
+                            theme="jarvis"
                             tabs={[
                               { id: "groups", label: "Industry Groups", content: sectorGroupsContent },
                               {
@@ -462,15 +467,12 @@ export default async function Home() {
                       id: "security",
                       label: "Security Analysis",
                       content: (
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">
-                            Layer 3 &middot; Security Analyst
-                          </div>
-                          <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">
-                            Graham Checklist
-                          </h1>
+                        <div className="jarvis">
+                          <p className="jv-eyebrow">Layer 3 &middot; Security Analyst</p>
+                          <h1 className="jv-title">Graham Checklist</h1>
                           <Tabs
                             size="tertiary"
+                            theme="jarvis"
                             tabs={[
                               { id: "analyze", label: "Analyze Ticker", content: <SecurityAnalystTab /> },
                               { id: "watchlist", label: "Watchlist", content: <ResearchWatchlistTab /> },

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef } from "react";
 
 const SESSION_KEY = "analytics-session-id";
 
-function getSessionId(): string {
+/** Shared anonymous session id — same one used for analytics events, reused by feedback capture so a submitted suggestion can be correlated with that session's other activity without collecting any identity. */
+export function getOrCreateSessionId(): string {
   if (typeof window === "undefined") return "";
   let id = window.localStorage.getItem(SESSION_KEY);
   if (!id) {
@@ -30,11 +31,11 @@ export function useTrackEvent() {
   const sessionIdRef = useRef<string>("");
 
   useEffect(() => {
-    sessionIdRef.current = getSessionId();
+    sessionIdRef.current = getOrCreateSessionId();
   }, []);
 
   const track = useCallback((eventName: string, extra?: TrackExtra) => {
-    const sessionId = sessionIdRef.current || getSessionId();
+    const sessionId = sessionIdRef.current || getOrCreateSessionId();
     try {
       fetch("/api/track", {
         method: "POST",

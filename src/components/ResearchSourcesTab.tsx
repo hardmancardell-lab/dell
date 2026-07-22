@@ -2,25 +2,31 @@ import { RESEARCH_SOURCE_CATEGORIES, SYNTHESIS_TABLE } from "@/lib/agents/resear
 
 export function ResearchSourcesTab() {
   return (
-    <div className="space-y-10">
-      <p className="text-zinc-500">
-        Where institutional-grade sector analysis actually comes from — past
-        the noise of retail financial news and sell-side consensus upgrades,
-        which are lagging, sentiment-driven, and prone to cyclical bias.
+    <div className="flex flex-col gap-10">
+      <p className="jv-lede">
+        Where institutional-grade sector analysis actually comes from — past the noise of retail
+        financial news and sell-side consensus upgrades, which are lagging, sentiment-driven, and
+        prone to cyclical bias.
       </p>
 
       {RESEARCH_SOURCE_CATEGORIES.map((cat) => (
         <section key={cat.id}>
-          <h2 className="text-lg font-semibold mb-1">{cat.title}</h2>
-          <p className="text-sm text-zinc-500 mb-4">{cat.intro}</p>
-          <div className="space-y-3">
+          <div className="jv-strip-title" style={{ marginBottom: 4 }}>
+            {cat.title}
+          </div>
+          <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>
+            {cat.intro}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {cat.sources.map((s) => (
-              <div
-                key={s.name}
-                className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-950"
-              >
-                <div className="font-medium text-sm">{s.name}</div>
-                <div className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">{s.description}</div>
+              <div key={s.name} className="jv-card">
+                <div className="jv-br-b" />
+                <div className="text-sm font-medium" style={{ color: "var(--text-0)" }}>
+                  {s.name}
+                </div>
+                <div className="text-sm mt-1" style={{ color: "var(--text-1)" }}>
+                  {s.description}
+                </div>
               </div>
             ))}
           </div>
@@ -28,22 +34,28 @@ export function ResearchSourcesTab() {
       ))}
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Synthesis: Question → Metric → Source</h2>
+        <div className="jv-strip-title">Synthesis: Question → Metric → Source</div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
             <thead>
-              <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                <th className="py-2 pr-4">Analytical Question</th>
-                <th className="py-2 pr-4">Target Metric</th>
-                <th className="py-2 pr-4">Primary Source</th>
+              <tr style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }} className="text-left">
+                <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Analytical Question</th>
+                <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Target Metric</th>
+                <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Primary Source</th>
               </tr>
             </thead>
             <tbody>
               {SYNTHESIS_TABLE.map((row) => (
-                <tr key={row.question} className="border-b border-zinc-100 dark:border-zinc-900">
-                  <td className="py-2 pr-4">{row.question}</td>
-                  <td className="py-2 pr-4 font-medium">{row.metric}</td>
-                  <td className="py-2 pr-4 text-zinc-500">{row.source}</td>
+                <tr key={row.question} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                  <td className="py-2 pr-4" style={{ color: "var(--text-1)" }}>
+                    {row.question}
+                  </td>
+                  <td className="py-2 pr-4 font-medium font-mono" style={{ color: "var(--text-0)" }}>
+                    {row.metric}
+                  </td>
+                  <td className="py-2 pr-4" style={{ color: "var(--text-2)" }}>
+                    {row.source}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -51,19 +63,20 @@ export function ResearchSourcesTab() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-950">
-        <h2 className="text-lg font-semibold mb-2">This App&apos;s Workflow</h2>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-          Economic analysis based on indicators (Macro tab) produces a
-          stance and a set of live signals. Sector Recommendations then maps
-          those same indicators onto each industry&apos;s primary drivers,
-          producing a favorable/unfavorable read per sector. That read is a
-          screening signal for where to look next, not a forecast &mdash;
-          confirm it against the metrics pointers on each card (Industry
-          Groups, Sector Fundamentals) and, ultimately, the primary sources
-          above before treating it as anything more than a starting point.
+      <div className="jv-verdict-panel">
+        <div className="jv-vp-label">
+          <span className="jv-dot" aria-hidden="true" />
+          This app&apos;s workflow
+        </div>
+        <p>
+          Economic analysis based on indicators (Macro tab) produces a stance and a set of live
+          signals. Sector Recommendations then maps those same indicators onto each industry&apos;s
+          primary drivers, producing a favorable/unfavorable read per sector. That read is a
+          screening signal for where to look next, not a forecast &mdash; confirm it against the
+          metrics pointers on each card (Industry Groups, Sector Fundamentals) and, ultimately, the
+          primary sources above before treating it as anything more than a starting point.
         </p>
-      </section>
+      </div>
     </div>
   );
 }

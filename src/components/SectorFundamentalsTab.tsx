@@ -21,10 +21,17 @@ const SECTORS = [
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-      {sub && <div className="text-sm text-zinc-500 mt-1">{sub}</div>}
+    <div className="jv-card">
+      <div className="jv-br-b" />
+      <div className="jv-label">{label}</div>
+      <div className="jv-cond c-neutral" style={{ fontSize: 20 }}>
+        {value}
+      </div>
+      {sub && (
+        <div className="text-xs" style={{ color: "var(--text-2)" }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
@@ -57,48 +64,55 @@ export function SectorFundamentalsTab() {
 
   return (
     <div>
-      <p className="text-zinc-500 mb-6">
-        Debt-to-Equity, Interest Coverage, CapEx/Depreciation, and margin
-        variance across a curated set of large-cap bellwethers &mdash;
-        closes the gaps FRED can&apos;t fill. Not a live market-cap screen
-        (see Data Limitations below).
+      <p className="jv-lede" style={{ marginBottom: 20 }}>
+        Debt-to-Equity, Interest Coverage, CapEx/Depreciation, and margin variance across a curated set
+        of large-cap bellwethers &mdash; closes the gaps FRED can&apos;t fill. Not a live market-cap
+        screen (see Data Limitations below). Every sector also shows a broader, real sub-industry
+        breakdown even where full ratios aren&apos;t available.
       </p>
 
       <form onSubmit={runAnalysis} className="flex gap-3">
         <select
           value={sector}
           onChange={(e) => setSector(e.target.value)}
-          className="flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="flex-1 px-4 py-2 text-sm"
+          style={{
+            background: "var(--ink-900)",
+            border: "1px solid var(--line)",
+            color: "var(--text-0)",
+            fontFamily: "var(--font-mono)",
+          }}
         >
           {SECTORS.map((s) => (
             <option key={s} value={s}>
-              {UNAVAILABLE_SECTORS.has(s) ? `${s} (unavailable on free plan)` : s}
+              {UNAVAILABLE_SECTORS.has(s) ? `${s} (no full ratios on free plan)` : s}
             </option>
           ))}
         </select>
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
+          className="px-5 py-2 text-sm font-medium disabled:opacity-50"
+          style={{ background: "var(--signal)", color: "var(--ink-950)" }}
         >
           {loading ? "Analyzing…" : "Analyze"}
         </button>
       </form>
 
       {error && (
-        <div className="mt-8 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400">
+        <div className="jv-card mt-8" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           <div className="font-medium">Could not load data</div>
           <div className="text-sm mt-1">{error}</div>
         </div>
       )}
 
       {data && (
-        <div className="mt-8 space-y-10">
+        <div className="mt-8 flex flex-col gap-10">
           <section>
-            <h2 className="text-xl font-semibold mb-3">
+            <div className="jv-strip-title">
               {data.sector} &mdash; Medians ({data.sampleNote})
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <StatCard
                 label="Debt / Equity (median)"
                 value={data.medians.debtToEquity !== null ? data.medians.debtToEquity.toFixed(2) : "N/A"}
@@ -133,48 +147,109 @@ export function SectorFundamentalsTab() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold mb-3">Data Limitations</h2>
-            <div className="space-y-3">
+            <div className="jv-strip-title">Data Limitations</div>
+            <div className="flex flex-col gap-2">
               {data.dataLimitations.map((d) => (
-                <div
-                  key={d.slice(0, 30)}
-                  className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-4 text-sm text-amber-800 dark:text-amber-400"
-                >
-                  {d}
+                <div key={d.slice(0, 30)} className="jv-card" style={{ borderColor: "var(--verdict-dim)" }}>
+                  <div className="text-sm" style={{ color: "var(--verdict)" }}>
+                    {d}
+                  </div>
                 </div>
               ))}
             </div>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold mb-3">Companies in Sample</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                    <th className="py-2 pr-4">Ticker</th>
-                    <th className="py-2 pr-4">Company</th>
-                    <th className="py-2 pr-4">D/E</th>
-                    <th className="py-2 pr-4">Int. Coverage</th>
-                    <th className="py-2 pr-4">CapEx/Dep</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.companiesAnalyzed.map((c) => (
-                    <tr key={c.ticker} className="border-b border-zinc-100 dark:border-zinc-900">
-                      <td className="py-2 pr-4 font-medium">{c.ticker}</td>
-                      <td className="py-2 pr-4">{c.companyName}</td>
-                      <td className="py-2 pr-4">{c.debtToEquity?.toFixed(2) ?? "N/A"}</td>
-                      <td className="py-2 pr-4">
-                        {c.interestCoverage !== null ? `${c.interestCoverage.toFixed(1)}x` : "N/A"}
-                      </td>
-                      <td className="py-2 pr-4">{c.capexToDepreciation?.toFixed(2) ?? "N/A"}</td>
+            <div className="jv-strip-title">Companies in Sample (Full Ratios)</div>
+            {data.companiesAnalyzed.length === 0 ? (
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                No companies in this sector have accessible full financial statements on the free FMP
+                plan — see &quot;Also Tracked in This Sector&quot; below for real company/sub-industry
+                coverage instead.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr
+                      className="text-left"
+                      style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }}
+                    >
+                      <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Ticker</th>
+                      <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Company</th>
+                      <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">
+                        Sub-Industry
+                      </th>
+                      <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">D/E</th>
+                      <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">
+                        Int. Coverage
+                      </th>
+                      <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">
+                        CapEx/Dep
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {data.companiesAnalyzed.map((c) => (
+                      <tr key={c.ticker} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                        <td className="py-2 pr-4 font-medium font-mono" style={{ color: "var(--text-0)" }}>
+                          {c.ticker}
+                        </td>
+                        <td className="py-2 pr-4" style={{ color: "var(--text-1)" }}>
+                          {c.companyName}
+                        </td>
+                        <td className="py-2 pr-4" style={{ color: "var(--text-2)" }}>
+                          {c.industry ?? "—"}
+                        </td>
+                        <td className="py-2 pr-4 font-mono" style={{ color: "var(--text-1)" }}>
+                          {c.debtToEquity?.toFixed(2) ?? "N/A"}
+                        </td>
+                        <td className="py-2 pr-4 font-mono" style={{ color: "var(--text-1)" }}>
+                          {c.interestCoverage !== null ? `${c.interestCoverage.toFixed(1)}x` : "N/A"}
+                        </td>
+                        <td className="py-2 pr-4 font-mono" style={{ color: "var(--text-1)" }}>
+                          {c.capexToDepreciation?.toFixed(2) ?? "N/A"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
+
+          {data.broaderCoverage.length > 0 && (
+            <section>
+              <div className="jv-strip-title">
+                Also Tracked in This Sector ({data.broaderCoverage.length} companies, name/sub-industry only)
+              </div>
+              <p className="text-sm mb-3" style={{ color: "var(--text-2)" }}>
+                Real companies and real sub-industry classifications from FMP, but no financial ratios
+                &mdash; that data is gated by the same free-tier allowlist as above.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {data.broaderCoverage.map((c) => (
+                  <div key={c.ticker} className="jv-card">
+                    <div className="jv-br-b" />
+                    <div className="flex items-baseline justify-between">
+                      <span className="font-mono font-medium" style={{ color: "var(--text-0)" }}>
+                        {c.ticker}
+                      </span>
+                      <span className="text-xs font-mono" style={{ color: "var(--text-2)" }}>
+                        {c.marketCap > 0 ? `$${(c.marketCap / 1e9).toFixed(1)}B` : ""}
+                      </span>
+                    </div>
+                    <div className="text-sm" style={{ color: "var(--text-1)" }}>
+                      {c.companyName}
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
+                      {c.industry ?? "Sub-industry unavailable"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>

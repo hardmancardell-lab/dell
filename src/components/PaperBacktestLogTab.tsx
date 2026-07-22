@@ -7,6 +7,9 @@ function fmtPct(v: number | null): string {
   return v !== null ? `${v.toFixed(2)}%` : "—";
 }
 
+const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal whitespace-nowrap";
+const TD_CLASS = "py-2 pr-4 whitespace-nowrap";
+
 export function PaperBacktestLogTab() {
   const [entries, setEntries] = useState<PaperBacktestLogEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,82 +49,73 @@ export function PaperBacktestLogTab() {
   const pending = (entries?.length ?? 0) - completed;
 
   return (
-    <div>
-      <p className="text-zinc-500 mb-6">
-        A row is logged automatically every time the GEX &amp; Dealer
-        Positioning check runs for a watchlisted underlying (deduped per
-        underlying + expiration), starting from whenever this was first
-        used — this accumulates real forward outcomes over time rather than
-        reconstructing history that isn&apos;t available for free (see
-        TRADIER_INTEGRATION_NOTES.md). Once an expiration week has passed,
-        realized Mon-Fri returns are backfilled automatically from real daily
-        bars the next time this page loads.
+    <div className="jarvis">
+      <p className="jv-lede">
+        A row is logged automatically every time the GEX &amp; Dealer Positioning check runs for a
+        watchlisted underlying (deduped per underlying + expiration), starting from whenever this was first
+        used — this accumulates real forward outcomes over time rather than reconstructing history that
+        isn&apos;t available for free (see TRADIER_INTEGRATION_NOTES.md). Once an expiration week has
+        passed, realized Mon-Fri returns are backfilled automatically from real daily bars the next time
+        this page loads.
       </p>
 
       <div className="flex items-center justify-between mb-4">
-        <div className="text-sm text-zinc-500">
+        <div className="text-sm" style={{ color: "var(--text-2)" }}>
           {loading ? "Loading…" : entries ? `${entries.length} logged — ${completed} completed, ${pending} pending realization` : ""}
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={load}
-            disabled={loading}
-            className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-4 py-1.5 text-xs font-medium disabled:opacity-50"
-          >
+          <button onClick={load} disabled={loading} className="jv-btn-outline">
             Refresh
           </button>
-          <button
-            onClick={copyJson}
-            disabled={!entries || entries.length === 0}
-            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
-          >
+          <button onClick={copyJson} disabled={!entries || entries.length === 0} className="jv-btn">
             {copied ? "Copied" : "Copy JSON for backtest_engine.py"}
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm mb-4">
+        <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {entries && entries.length === 0 && (
-        <p className="text-sm text-zinc-500">
-          No entries yet — visit the GEX &amp; Dealer Positioning section on the Options Dashboard for a watchlisted underlying to log the first one.
+        <p className="text-sm" style={{ color: "var(--text-2)" }}>
+          No entries yet — visit the GEX &amp; Dealer Positioning section on the Options Dashboard for a
+          watchlisted underlying to log the first one.
         </p>
       )}
 
       {entries && entries.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
             <thead>
-              <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                <th className="py-2 pr-4">Underlying</th>
-                <th className="py-2 pr-4">Signal Date</th>
-                <th className="py-2 pr-4">Expiration</th>
-                <th className="py-2 pr-4">Label</th>
-                <th className="py-2 pr-4">Mon</th>
-                <th className="py-2 pr-4">Tue</th>
-                <th className="py-2 pr-4">Wed</th>
-                <th className="py-2 pr-4">Thu</th>
-                <th className="py-2 pr-4">Fri</th>
-                <th className="py-2 pr-4">Pinned Near Wall</th>
+              <tr style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }} className="text-left">
+                <th className={TH_CLASS}>Underlying</th>
+                <th className={TH_CLASS}>Signal Date</th>
+                <th className={TH_CLASS}>Expiration</th>
+                <th className={TH_CLASS}>Label</th>
+                <th className={TH_CLASS}>Mon</th>
+                <th className={TH_CLASS}>Tue</th>
+                <th className={TH_CLASS}>Wed</th>
+                <th className={TH_CLASS}>Thu</th>
+                <th className={TH_CLASS}>Fri</th>
+                <th className={TH_CLASS}>Pinned Near Wall</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
               {entries.map((e) => (
-                <tr key={`${e.underlying}-${e.expirationDate}`} className="border-b border-zinc-100 dark:border-zinc-900">
-                  <td className="py-2 pr-4 font-medium">{e.underlying}</td>
-                  <td className="py-2 pr-4 text-zinc-500">{e.signalDate}</td>
-                  <td className="py-2 pr-4 text-zinc-500">{e.expirationDate}</td>
-                  <td className="py-2 pr-4">{e.signalLabel}</td>
-                  <td className="py-2 pr-4">{fmtPct(e.monRet)}</td>
-                  <td className="py-2 pr-4">{fmtPct(e.tueRet)}</td>
-                  <td className="py-2 pr-4">{fmtPct(e.wedRet)}</td>
-                  <td className="py-2 pr-4">{fmtPct(e.thuRet)}</td>
-                  <td className="py-2 pr-4">{fmtPct(e.friRet)}</td>
-                  <td className="py-2 pr-4 text-zinc-500">
+                <tr key={`${e.underlying}-${e.expirationDate}`} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                  <td className={`${TD_CLASS} font-medium font-mono`} style={{ color: "var(--text-0)" }}>{e.underlying}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{e.signalDate}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{e.expirationDate}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{e.signalLabel}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(e.monRet)}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(e.tueRet)}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(e.wedRet)}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(e.thuRet)}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(e.friRet)}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>
                     {e.pinnedNearWall === null ? "pending" : e.pinnedNearWall ? "yes" : "no"}
                   </td>
                 </tr>
@@ -131,12 +125,11 @@ export function PaperBacktestLogTab() {
         </div>
       )}
 
-      <p className="text-xs text-zinc-400 mt-6">
-        Minimum bar before treating any label as a real edge rather than
-        noise, per options-signals-project/README.md: passes FDR correction
-        in-sample AND holds the same sign out-of-sample AND has a bootstrap
-        CI that excludes zero — all three. Run{" "}
-        <code className="text-zinc-500">python backtest_engine.py</code> on
+      <p className="text-xs mt-6" style={{ color: "var(--text-2)" }}>
+        Minimum bar before treating any label as a real edge rather than noise, per
+        options-signals-project/README.md: passes FDR correction in-sample AND holds the same sign
+        out-of-sample AND has a bootstrap CI that excludes zero — all three. Run{" "}
+        <code style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>python backtest_engine.py</code> on
         the copied JSON once enough rows have completed to check.
       </p>
     </div>

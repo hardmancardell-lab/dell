@@ -27,7 +27,11 @@ export interface LiteracyModule {
   title: string;
   body: string; // teaching content, plain text paragraphs separated by \n\n
   tryIt: TryItPointer | null;
-  check: CheckQuestion;
+  // 3 applied-comprehension questions per module. checks[0] is the in-place
+  // learning check shown on the module card; all 3 feed the Quiz Mode
+  // question pool (review questions can be pulled from any of the 3, not
+  // just the one used in the learn flow).
+  checks: CheckQuestion[];
 }
 
 /** One of the 9 placement-quiz questions — 3 per tier, concept-recognition style, not vocabulary recall. */
@@ -57,9 +61,16 @@ export interface LiteracyProgress {
   lastActivityDateKey: string | null; // YYYY-MM-DD, Eastern-agnostic (client-local is fine here, not a market-data concern)
   // Kahoot-style consecutive-correct-answer streak across check questions,
   // distinct from streakDays (daily-activity streak) above — broken by any
-  // wrong or timed-out answer, not by a day gap.
+  // wrong or timed-out answer, not by a day gap. Shared between the
+  // per-module learn flow and Quiz Mode rounds — one running streak.
   answerStreak: number;
   longestAnswerStreak: number;
+  // Quiz Mode (multi-question timed rounds, pulled from the same checks[]
+  // pool as the learn flow) — separate from module-completion progress
+  // since a round can revisit already-completed modules' questions.
+  roundsPlayed: number;
+  bestRoundScore: number;
+  hasPerfectRound: boolean;
 }
 
 export type BadgeId =
@@ -67,4 +78,5 @@ export type BadgeId =
   | "finished-intermediate"
   | "finished-expert"
   | "first-module"
-  | "five-day-streak";
+  | "five-day-streak"
+  | "quiz-perfectionist";

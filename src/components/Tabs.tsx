@@ -12,9 +12,16 @@ export interface TabItem {
 export function Tabs({
   tabs,
   size = "primary",
+  theme = "default",
 }: {
   tabs: TabItem[];
   size?: "primary" | "secondary" | "tertiary";
+  // "jarvis" — the app's in-progress redesign direction. Opt-in per call
+  // site so unredesigned agents keep the current look untouched; only pass
+  // this where the surrounding content is also wrapped in the .jarvis CSS
+  // scope (globals.css), since the styling below leans on its custom
+  // properties.
+  theme?: "default" | "jarvis";
 }) {
   const [active, setActive] = useState(tabs[0]?.id);
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
@@ -29,19 +36,33 @@ export function Tabs({
     return (
       <div>
         <div className="flex flex-wrap gap-2 mb-6">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => selectTab(t.id, t.label)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                t.id === activeTab?.id
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-black"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+          {tabs.map((t) =>
+            theme === "jarvis" ? (
+              <button
+                key={t.id}
+                onClick={() => selectTab(t.id, t.label)}
+                className={`px-4 py-1.5 text-[11px] font-mono uppercase tracking-wider border transition-colors ${
+                  t.id === activeTab?.id
+                    ? "bg-[var(--signal)] text-[var(--ink-950)] border-[var(--signal)] font-semibold"
+                    : "border-[var(--line)] text-[var(--text-1)] hover:border-[var(--line-bright)]"
+                }`}
+              >
+                {t.label}
+              </button>
+            ) : (
+              <button
+                key={t.id}
+                onClick={() => selectTab(t.id, t.label)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                  t.id === activeTab?.id
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-black"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {t.label}
+              </button>
+            )
+          )}
         </div>
         <div>{activeTab?.content}</div>
       </div>

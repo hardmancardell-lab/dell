@@ -16,6 +16,9 @@ const EMPTY_PROGRESS: LiteracyProgress = {
   lastActivityDateKey: null,
   answerStreak: 0,
   longestAnswerStreak: 0,
+  roundsPlayed: 0,
+  bestRoundScore: 0,
+  hasPerfectRound: false,
 };
 
 function readRaw<T>(key: string): T | null {
@@ -49,6 +52,7 @@ export function deriveBadges(progress: LiteracyProgress): BadgeId[] {
   const badges: BadgeId[] = [];
   if (progress.completedModuleIds.length >= 1) badges.push("first-module");
   if (progress.streakDays >= 5) badges.push("five-day-streak");
+  if (progress.hasPerfectRound) badges.push("quiz-perfectionist");
   for (const tier of LITERACY_TIER_ORDER) {
     const allDone = moduleIdsForTier(tier).every((id) => progress.completedModuleIds.includes(id));
     if (allDone) {
@@ -58,6 +62,30 @@ export function deriveBadges(progress: LiteracyProgress): BadgeId[] {
     }
   }
   return badges;
+}
+
+/** The daily-activity-streak + XP + answer-streak bump shared by module completion and Quiz Mode's per-question scoring — the only difference between the two call sites is whether completedModuleIds also changes. */
+function bumpForCorrectAnswer(current: LiteracyProgress, xpAwarded: number): LiteracyProgress {
+  const today = todayDateKey();
+  let streakDays = current.streakDays;
+  if (current.lastActivityDateKey === null) {
+    streakDays = 1;
+  } else if (current.lastActivityDateKey !== today) {
+    const prior = new Date(current.lastActivityDateKey + "T00:00:00");
+    const now = new Date(today + "T00:00:00");
+    const dayGap = Math.round((now.getTime() - prior.getTime()) / (24 * 60 * 60 * 1000));
+    streakDays = dayGap === 1 ? current.streakDays + 1 : 1;
+  }
+  const answerStreak = current.answerStreak + 1;
+  const longestAnswerStreak = Math.max(current.longestAnswerStreak, answerStreak);
+  return {
+    ...current,
+    xp: current.xp + xpAwarded,
+    streakDays,
+    lastActivityDateKey: today,
+    answerStreak,
+    longestAnswerStreak,
+  };
 }
 
 export function useLiteracyProgress() {
@@ -97,41 +125,20 @@ export function useLiteracyProgress() {
       if (current.completedModuleIds.includes(moduleId)) return current;
 
       const mod = LITERACY_MODULES.find((m) => m.id === moduleId);
-      const today = todayDateKey();
-
-      let streakDays = current.streakDays;
-      if (current.lastActivityDateKey === null) {
-        streakDays = 1;
-      } else if (current.lastActivityDateKey !== today) {
-        const prior = new Date(current.lastActivityDateKey + "T00:00:00");
-        const now = new Date(today + "T00:00:00");
-        const dayGap = Math.round((now.getTime() - prior.getTime()) / (24 * 60 * 60 * 1000));
-        streakDays = dayGap === 1 ? current.streakDays + 1 : 1;
-      }
-
+      const bumped = bumpForCorrectAnswer(current, xpAwarded);
       const completedModuleIds = [...current.completedModuleIds, moduleId];
-      let xp = current.xp + xpAwarded;
+      let xp = bumped.xp;
       if (mod && moduleIdsForTier(mod.tier).every((id) => completedModuleIds.includes(id))) {
         xp += XP_PER_TIER_COMPLETE;
       }
 
-      const answerStreak = current.answerStreak + 1;
-      const longestAnswerStreak = Math.max(current.longestAnswerStreak, answerStreak);
-
-      const next: LiteracyProgress = {
-        completedModuleIds,
-        xp,
-        streakDays,
-        lastActivityDateKey: today,
-        answerStreak,
-        longestAnswerStreak,
-      };
+      const next: LiteracyProgress = { ...bumped, completedModuleIds, xp };
       window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
 
-  /** A wrong or timed-out answer breaks the Kahoot-style answer streak — doesn't touch XP or completed modules. */
+  /** A wrong or timed-out answer breaks the Kahoot-style answer streak — doesn't touch XP or completed modules. Shared by the module learn flow and Quiz Mode. */
   const recordWrongAnswer = useCallback(() => {
     setProgress((current) => {
       if (current.answerStreak === 0) return current;
@@ -141,5 +148,41 @@ export function useLiteracyProgress() {
     });
   }, []);
 
-  return { placement, progress, hydrated, recordPlacement, resetPlacement, completeModule, recordWrongAnswer };
+  /** A correct Quiz Mode answer — same XP/streak/daily-activity bump as completing a module's check, without touching completedModuleIds (a round can revisit already-completed modules' questions for review). */
+  const recordQuizAnswer = useCallback((xpAwarded: number) => {
+    setProgress((current) => {
+      const next = bumpForCorrectAnswer(current, xpAwarded);
+      window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  /** Called once at the end of a Quiz Mode round. Per-question XP/streak already posted via recordQuizAnswer/recordWrongAnswer during play — this just records round-level stats. */
+  const recordQuizRoundResult = useCallback(
+    (result: { correctCount: number; totalCount: number; pointsScored: number }) => {
+      setProgress((current) => {
+        const next: LiteracyProgress = {
+          ...current,
+          roundsPlayed: current.roundsPlayed + 1,
+          bestRoundScore: Math.max(current.bestRoundScore, result.pointsScored),
+          hasPerfectRound: current.hasPerfectRound || (result.totalCount > 0 && result.correctCount === result.totalCount),
+        };
+        window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    []
+  );
+
+  return {
+    placement,
+    progress,
+    hydrated,
+    recordPlacement,
+    resetPlacement,
+    completeModule,
+    recordWrongAnswer,
+    recordQuizAnswer,
+    recordQuizRoundResult,
+  };
 }

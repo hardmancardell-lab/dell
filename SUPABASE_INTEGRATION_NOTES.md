@@ -34,6 +34,28 @@ and `src/lib/analytics/use-track.ts` for what a `track()` call can carry.
    `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`.
 4. Restart the dev server (env vars only read at Next.js startup, same as every other provider key in this app).
 
+## Second table: `feedback` (Assistant's suggestion/problem capture)
+
+Same project, same env vars — no new setup beyond running this second `create table`. The Assistant's
+`submit_feedback` tool (`src/lib/agents/assistant/tools.ts`, client `src/lib/analytics/feedback.ts`) calls this
+whenever a user offers a suggestion or reports a problem in the chat.
+
+```sql
+create table feedback (
+  id uuid primary key default gen_random_uuid(),
+  session_id text not null,
+  category text not null,       -- 'suggestion' | 'problem' | 'other'
+  message text not null,
+  context_tab text,
+  created_at timestamptz not null default now()
+);
+```
+
+Verify: type "I have a suggestion: dark mode please" into the Assistant chat, confirm a row lands in `feedback`
+with `category = 'suggestion'` and the real message text. With Supabase unset, `submitFeedback()` returns
+`{stored: false}` instead of throwing — the assistant tells the user honestly that feedback capture isn't set
+up yet, rather than pretending it saved.
+
 ## Checklist — verify these once real keys are set
 
 1. **`/api/track` actually inserts a row.** → *How to check:* click through a few tabs in the app, then check

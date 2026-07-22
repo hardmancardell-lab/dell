@@ -10,14 +10,28 @@ const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "fore
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-      {sub && <div className="text-sm text-zinc-500 mt-1">{sub}</div>}
+    <div className="jv-card">
+      <div className="jv-br-b" />
+      <div className="jv-label">{label}</div>
+      <div className="jv-cond c-neutral" style={{ fontSize: 18 }}>
+        {value}
+      </div>
+      {sub && (
+        <div className="text-xs" style={{ color: "var(--text-2)" }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
 
+/**
+ * Reused across every asset class's own Dashboard tab (Equities directly,
+ * Bonds/Options/Currency/Futures/Commodities each embed this) — a single
+ * .jarvis island here upgrades all six for free, even though the
+ * surrounding page.tsx section shells and sibling tabs aren't redesigned
+ * yet.
+ */
 export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: AssetClass } = {}) {
   const { entries, hydrated, addEntry, removeEntry } = useWatchlist();
   const [symbolInput, setSymbolInput] = useState("");
@@ -74,8 +88,8 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
   const failed = summary?.results.filter((r) => r.error !== null) ?? [];
 
   return (
-    <div>
-      <p className="text-zinc-500 mb-6">
+    <div className="jarvis">
+      <p className="jv-lede">
         {filterAssetClass
           ? `Add ${assetClassLabel(filterAssetClass).toLowerCase()} symbols, then scan for three signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), and Mean Reversion (price deviation from its rolling mean). This dashboard scans automatically when it loads.`
           : "Add symbols across any asset class, then scan the watchlist for three signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), and Mean Reversion (price deviation from its rolling mean)."}
@@ -88,14 +102,10 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
           value={symbolInput}
           onChange={(e) => setSymbolInput(e.target.value)}
           placeholder="Symbol, e.g. AAPL, /ES, EUR/USD"
-          className="flex-1 min-w-[180px] rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="jv-input flex-1 min-w-[180px]"
         />
         {!filterAssetClass && (
-          <select
-            value={assetClass}
-            onChange={(e) => setAssetClass(e.target.value as AssetClass)}
-            className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
-          >
+          <select value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)} className="jv-select">
             {ASSET_CLASSES.map((ac) => (
               <option key={ac} value={ac}>
                 {assetClassLabel(ac)}
@@ -103,32 +113,26 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
             ))}
           </select>
         )}
-        <button
-          type="submit"
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium"
-        >
+        <button type="submit" className="jv-btn">
           Add
         </button>
       </form>
 
       {hydrated && filteredEntries.length === 0 && (
-        <p className="text-sm text-zinc-500 mb-4">Watchlist is empty — add a symbol above to get started.</p>
+        <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>
+          Watchlist is empty — add a symbol above to get started.
+        </p>
       )}
 
       {filteredEntries.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-6">
           {filteredEntries.map((e) => (
-            <span
-              key={`${e.symbol}-${e.assetClass}`}
-              className="inline-flex items-center gap-2 rounded-full bg-zinc-100 dark:bg-zinc-800 px-3 py-1 text-sm"
-            >
-              <span className="font-medium">{e.symbol}</span>
-              <span className="text-xs text-zinc-500">{assetClassLabel(e.assetClass)}</span>
-              <button
-                onClick={() => removeEntry(e.symbol, e.assetClass)}
-                className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
-                aria-label={`Remove ${e.symbol} (${assetClassLabel(e.assetClass)})`}
-              >
+            <span key={`${e.symbol}-${e.assetClass}`} className="jv-chip">
+              <span className="font-medium" style={{ color: "var(--text-0)" }}>
+                {e.symbol}
+              </span>
+              <span style={{ color: "var(--text-2)" }}>{assetClassLabel(e.assetClass)}</span>
+              <button onClick={() => removeEntry(e.symbol, e.assetClass)} aria-label={`Remove ${e.symbol} (${assetClassLabel(e.assetClass)})`}>
                 &times;
               </button>
             </span>
@@ -136,49 +140,43 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
         </div>
       )}
 
-      <button
-        onClick={runScan}
-        disabled={loading || filteredEntries.length === 0}
-        className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
-      >
+      <button onClick={runScan} disabled={loading || filteredEntries.length === 0} className="jv-btn">
         {loading ? "Scanning…" : autoScanned ? "Refresh Scan" : "Scan Watchlist"}
       </button>
 
       {error && (
-        <div className="mt-6 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+        <div className="jv-card mt-6" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {summary && (
-        <div className="mt-8 space-y-8">
-          <div className="text-sm text-zinc-500">
+        <div className="mt-8 flex flex-col gap-8">
+          <div className="text-sm" style={{ color: "var(--text-2)" }}>
             {summary.tickersScanned} scanned, {summary.tickersFlagged} flagged.
           </div>
 
           {summary.dataLimitations.map((d) => (
-            <div
-              key={d.slice(0, 30)}
-              className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-400"
-            >
+            <div key={d.slice(0, 30)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
               {d}
             </div>
           ))}
 
           <section>
-            <h2 className="text-lg font-semibold mb-3">
-              Volume Displacement ({volumeFlagged.length} flagged)
-            </h2>
+            <div className="jv-strip-title">Volume Displacement ({volumeFlagged.length} flagged)</div>
             {volumeFlagged.length === 0 ? (
-              <p className="text-sm text-zinc-500">No tickers crossed the volume threshold.</p>
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                No tickers crossed the volume threshold.
+              </p>
             ) : (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {volumeFlagged.map((r) => (
-                  <div key={r.symbol} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-                    <div className="font-medium text-sm mb-2">
-                      {r.symbol} <span className="text-xs text-zinc-500">({assetClassLabel(r.assetClass)})</span>
+                  <div key={r.symbol} className="jv-card">
+                    <div className="jv-br-b" />
+                    <div className="text-sm font-mono font-medium mb-2" style={{ color: "var(--text-0)" }}>
+                      {r.symbol} <span style={{ color: "var(--text-2)" }}>({assetClassLabel(r.assetClass)})</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <StatCard label="Today's Volume" value={r.volumeDisplacement!.todayVolume.toLocaleString()} />
                       <StatCard
                         label="Rolling Average"
@@ -190,11 +188,7 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
                       />
                       <StatCard
                         label="Multiple"
-                        value={
-                          r.volumeDisplacement!.multiple !== null
-                            ? `${r.volumeDisplacement!.multiple.toFixed(1)}x`
-                            : "N/A"
-                        }
+                        value={r.volumeDisplacement!.multiple !== null ? `${r.volumeDisplacement!.multiple.toFixed(1)}x` : "N/A"}
                         sub={`Threshold: ${r.volumeDisplacement!.threshold}x`}
                       />
                     </div>
@@ -205,17 +199,20 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold mb-3">Momentum ({momentumFlagged.length} flagged)</h2>
+            <div className="jv-strip-title">Momentum ({momentumFlagged.length} flagged)</div>
             {momentumFlagged.length === 0 ? (
-              <p className="text-sm text-zinc-500">No tickers had 3 green days with rising volume.</p>
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                No tickers had 3 green days with rising volume.
+              </p>
             ) : (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {momentumFlagged.map((r) => (
-                  <div key={r.symbol} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-                    <div className="font-medium text-sm mb-2">
-                      {r.symbol} <span className="text-xs text-zinc-500">({assetClassLabel(r.assetClass)})</span>
+                  <div key={r.symbol} className="jv-card">
+                    <div className="jv-br-b" />
+                    <div className="text-sm font-mono font-medium mb-2" style={{ color: "var(--text-0)" }}>
+                      {r.symbol} <span style={{ color: "var(--text-2)" }}>({assetClassLabel(r.assetClass)})</span>
                     </div>
-                    <div className="text-sm text-zinc-500">
+                    <div className="text-sm" style={{ color: "var(--text-2)" }}>
                       Volumes (oldest to newest): {r.momentum!.volumes.map((v) => v.toLocaleString()).join(" → ")}
                     </div>
                   </div>
@@ -225,36 +222,30 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold mb-3">
-              Mean Reversion ({meanReversionFlagged.length} flagged)
-            </h2>
-            <p className="text-xs text-zinc-500 mb-3">
-              Rolling z-score of price vs. its trailing 20-day mean — flags
-              &plusmn;2 standard-deviation deviations as oversold/overbought.
-              A statistical deviation, not a prediction — see the Backtest
+            <div className="jv-strip-title">Mean Reversion ({meanReversionFlagged.length} flagged)</div>
+            <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+              Rolling z-score of price vs. its trailing 20-day mean — flags &plusmn;2 standard-deviation
+              deviations as oversold/overbought. A statistical deviation, not a prediction — see the Backtest
               tab for whether reversion actually followed historically.
             </p>
             {meanReversionFlagged.length === 0 ? (
-              <p className="text-sm text-zinc-500">No tickers crossed the &plusmn;2 z-score threshold.</p>
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                No tickers crossed the &plusmn;2 z-score threshold.
+              </p>
             ) : (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {meanReversionFlagged.map((r) => (
-                  <div key={r.symbol} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-medium text-sm">
-                        {r.symbol} <span className="text-xs text-zinc-500">({assetClassLabel(r.assetClass)})</span>
+                  <div key={r.symbol} className="jv-card">
+                    <div className="jv-br-b" />
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="text-sm font-mono font-medium" style={{ color: "var(--text-0)" }}>
+                        {r.symbol} <span style={{ color: "var(--text-2)" }}>({assetClassLabel(r.assetClass)})</span>
                       </div>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          r.meanReversion!.direction === "oversold"
-                            ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-                            : "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400"
-                        }`}
-                      >
+                      <span className={`jv-badge ${r.meanReversion!.direction === "oversold" ? "c-signal" : "c-danger"}`}>
                         {r.meanReversion!.direction}
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <StatCard
                         label="Z-Score"
                         value={r.meanReversion!.zScore !== null ? r.meanReversion!.zScore.toFixed(2) : "N/A"}
@@ -275,11 +266,14 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
 
           {failed.length > 0 && (
             <section>
-              <h2 className="text-lg font-semibold mb-3">Failed to Scan</h2>
-              <div className="space-y-2">
+              <div className="jv-strip-title">Failed to Scan</div>
+              <div className="flex flex-col gap-1">
                 {failed.map((r) => (
-                  <div key={r.symbol} className="text-sm text-zinc-500">
-                    <span className="font-medium">{r.symbol}</span>: {r.error}
+                  <div key={r.symbol} className="text-sm" style={{ color: "var(--text-2)" }}>
+                    <span className="font-medium font-mono" style={{ color: "var(--text-1)" }}>
+                      {r.symbol}
+                    </span>
+                    : {r.error}
                   </div>
                 ))}
               </div>

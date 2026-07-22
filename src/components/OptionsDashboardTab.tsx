@@ -26,26 +26,30 @@ interface GexRow {
   error: string | null;
 }
 
-const SKEW_STYLES: Record<SkewLabel, string> = {
-  bearish: "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400",
-  bullish: "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400",
-  neutral: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+const SKEW_CLASS: Record<SkewLabel, string> = {
+  bearish: "jv-badge c-danger",
+  bullish: "jv-badge c-signal",
+  neutral: "jv-badge c-neutral",
 };
 
-const QUADRANT_STYLES: Record<QuadrantLabel, string> = {
-  "bullish-stable": "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400",
-  "bullish-volatile": "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400",
-  "bearish-stable": "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400",
-  "bearish-volatile": "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400",
+const QUADRANT_CLASS: Record<QuadrantLabel, string> = {
+  "bullish-stable": "jv-badge c-signal",
+  "bullish-volatile": "jv-badge c-signal",
+  "bearish-stable": "jv-badge c-danger",
+  "bearish-volatile": "jv-badge c-danger",
 };
 
-const CATEGORY_STYLES: Record<StrategyCategory, string> = {
-  income: "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400",
-  directional: "bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-400",
-  volatility: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400",
-  hedging: "bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:text-teal-400",
+// Strategy categories aren't good/bad signals — just categorical types — so
+// they stay neutral rather than borrowing the semantic signal/danger colors;
+// the category name itself is the information, shown as a mono label.
+const CATEGORY_LABEL: Record<StrategyCategory, string> = {
+  income: "Income",
+  directional: "Directional",
+  volatility: "Volatility",
+  hedging: "Hedging",
 };
 
+/** Options' Dashboard tab — embeds TradingDashboardTab (already .jarvis) as a sibling below its own GEX/skew/strategy sections. */
 export function OptionsDashboardTab() {
   const { entries, hydrated, addEntry } = useWatchlist();
   const optionEntries = entries.filter((e) => e.assetClass === "option");
@@ -150,85 +154,69 @@ export function OptionsDashboardTab() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="flex flex-col gap-10">
+      <div className="jarvis flex flex-col gap-10">
       <WatchlistSelector />
 
       <form onSubmit={handleQuickAdd} className="flex flex-wrap gap-3">
-        <input
-          value={quickAddSymbol}
-          onChange={(e) => setQuickAddSymbol(e.target.value)}
-          placeholder="Company/ticker to scan, e.g. AAPL"
-          className="flex-1 min-w-[200px] rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
-        />
-        <button
-          type="submit"
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium"
-        >
+        <input value={quickAddSymbol} onChange={(e) => setQuickAddSymbol(e.target.value)} placeholder="Company/ticker to scan, e.g. AAPL" className="jv-input flex-1 min-w-[200px]" />
+        <button type="submit" className="jv-btn">
           Scan
         </button>
       </form>
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">GEX &amp; Dealer Positioning</h2>
-          <button
-            onClick={runGexCheck}
-            disabled={gexLoading || optionEntries.length === 0}
-            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
-          >
+          <div className="jv-strip-title" style={{ margin: 0 }}>GEX &amp; Dealer Positioning</div>
+          <button onClick={runGexCheck} disabled={gexLoading || optionEntries.length === 0} className="jv-btn" style={{ padding: "6px 16px" }}>
             {gexLoading ? "Checking…" : "Refresh"}
           </button>
         </div>
-        <p className="text-sm text-zinc-500 mb-4">
-          Dealer gamma-exposure regime, gamma flip level, call/put walls, IV
-          term structure, and a 4-quadrant direction/volatility label —
-          computed from a live options chain with real open interest (via
-          Tradier). Each check here also logs a row to the forward paper
-          backtest (see the Paper Backtest Log tab) so real outcomes
-          accumulate over time.
+        <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>
+          Dealer gamma-exposure regime, gamma flip level, call/put walls, IV term structure, and a 4-quadrant
+          direction/volatility label — computed from a live options chain with real open interest (via
+          Tradier). Each check here also logs a row to the forward paper backtest (see the Paper Backtest Log
+          tab) so real outcomes accumulate over time.
         </p>
         {optionEntries.length === 0 ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm" style={{ color: "var(--text-2)" }}>
             Add an underlying to your Options watchlist below to see this signal.
           </p>
         ) : gexRows.length === 0 ? (
-          <p className="text-sm text-zinc-500">{gexLoading ? "Checking…" : "No data yet."}</p>
+          <p className="text-sm" style={{ color: "var(--text-2)" }}>{gexLoading ? "Checking…" : "No data yet."}</p>
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             {gexRows.map((r) => (
-              <div key={r.ticker} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
+              <div key={r.ticker} className="jv-card">
+                <div className="jv-br-b" />
                 <div className="flex items-center justify-between mb-2">
-                  <div className="font-medium text-sm">{r.ticker}</div>
-                  {r.signal?.quadrant && (
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${QUADRANT_STYLES[r.signal.quadrant]}`}>
-                      {r.signal.quadrant}
-                    </span>
-                  )}
+                  <div className="text-sm font-mono font-medium" style={{ color: "var(--text-0)" }}>{r.ticker}</div>
+                  {r.signal?.quadrant && <span className={QUADRANT_CLASS[r.signal.quadrant]}>{r.signal.quadrant}</span>}
                 </div>
                 {r.error ? (
-                  <div className="text-sm text-zinc-500">{r.error}</div>
+                  <div className="text-sm" style={{ color: "var(--text-2)" }}>{r.error}</div>
                 ) : r.signal ? (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Regime</div>
-                      <div>{r.signal.gexRegime.regime}</div>
+                      <div className="jv-label">Regime</div>
+                      <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.regime}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Gamma Flip</div>
-                      <div>{r.signal.gexRegime.gammaFlip !== null ? r.signal.gexRegime.gammaFlip.toFixed(2) : "N/A"}</div>
+                      <div className="jv-label">Gamma Flip</div>
+                      <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.gammaFlip !== null ? r.signal.gexRegime.gammaFlip.toFixed(2) : "N/A"}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Call Wall</div>
-                      <div>{r.signal.gexRegime.callWall.toFixed(2)}</div>
+                      <div className="jv-label">Call Wall</div>
+                      <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.callWall.toFixed(2)}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Put Wall</div>
-                      <div>{r.signal.gexRegime.putWall.toFixed(2)}</div>
+                      <div className="jv-label">Put Wall</div>
+                      <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.putWall.toFixed(2)}</div>
                     </div>
                     {r.signal.termStructure && (
                       <div className="col-span-2 sm:col-span-4">
-                        <div className="text-xs uppercase tracking-wide text-zinc-500">IV Term Structure</div>
-                        <div>
+                        <div className="jv-label">IV Term Structure</div>
+                        <div className="font-mono" style={{ color: "var(--text-1)" }}>
                           {r.signal.termStructure.shape} (spread {r.signal.termStructure.spread.toFixed(4)})
                         </div>
                       </div>
@@ -236,12 +224,9 @@ export function OptionsDashboardTab() {
                   </div>
                 ) : null}
                 {r.signal && r.signal.dataLimitations.length > 0 && (
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 flex flex-col gap-2">
                     {r.signal.dataLimitations.map((d) => (
-                      <div
-                        key={d.slice(0, 30)}
-                        className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-                      >
+                      <div key={d.slice(0, 30)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
                         {d}
                       </div>
                     ))}
@@ -255,45 +240,36 @@ export function OptionsDashboardTab() {
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Put/Call Flow Skew</h2>
-          <button
-            onClick={runCheck}
-            disabled={loading || optionEntries.length === 0}
-            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
-          >
+          <div className="jv-strip-title" style={{ margin: 0 }}>Put/Call Flow Skew</div>
+          <button onClick={runCheck} disabled={loading || optionEntries.length === 0} className="jv-btn" style={{ padding: "6px 16px" }}>
             {loading ? "Checking…" : "Refresh"}
           </button>
         </div>
-        <p className="text-sm text-zinc-500 mb-4">
-          Put/call volume ratio per underlying in your Options watchlist —
-          above 1.5 flagged bearish skew, below 0.7 flagged bullish skew. A
-          simple directional read on options flow — see GEX &amp; Dealer
+        <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>
+          Put/call volume ratio per underlying in your Options watchlist — above 1.5 flagged bearish skew,
+          below 0.7 flagged bullish skew. A simple directional read on options flow — see GEX &amp; Dealer
           Positioning above for the fuller regime-based signal.
         </p>
         {optionEntries.length === 0 ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm" style={{ color: "var(--text-2)" }}>
             Add an underlying to your Options watchlist below to see flow skew.
           </p>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-zinc-500">{loading ? "Checking…" : "No data yet."}</p>
+          <p className="text-sm" style={{ color: "var(--text-2)" }}>{loading ? "Checking…" : "No data yet."}</p>
         ) : (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             {rows.map((r) => (
-              <div
-                key={r.ticker}
-                className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 flex items-center justify-between"
-              >
-                <div className="font-medium text-sm">{r.ticker}</div>
+              <div key={r.ticker} className="jv-card flex items-center justify-between">
+                <div className="jv-br-b" />
+                <div className="text-sm font-mono font-medium" style={{ color: "var(--text-0)" }}>{r.ticker}</div>
                 {r.error ? (
-                  <div className="text-sm text-zinc-500">{r.error}</div>
+                  <div className="text-sm" style={{ color: "var(--text-2)" }}>{r.error}</div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-zinc-500">
+                    <span className="text-sm font-mono" style={{ color: "var(--text-2)" }}>
                       Ratio: {r.ratio !== null ? r.ratio.toFixed(2) : "N/A"}
                     </span>
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${SKEW_STYLES[r.skew]}`}>
-                      {r.skew}
-                    </span>
+                    <span className={SKEW_CLASS[r.skew]}>{r.skew}</span>
                   </div>
                 )}
               </div>
@@ -303,26 +279,25 @@ export function OptionsDashboardTab() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Strategy Scanner</h2>
-        <p className="text-sm text-zinc-500 mb-4">
-          Auto-derived from the GEX regime and flow skew already computed
-          above for each Options watchlist underlying — no separate fetch. A
-          rule-based heuristic mapping conditions to candidate strategies
-          (see the Strategy Guide tab for the full catalog), not a
-          backtested recommendation — treat it as a starting framework, not
-          investment advice.
+        <div className="jv-strip-title">Strategy Scanner</div>
+        <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>
+          Auto-derived from the GEX regime and flow skew already computed above for each Options watchlist
+          underlying — no separate fetch. A rule-based heuristic mapping conditions to candidate strategies
+          (see the Strategy Guide tab for the full catalog), not a backtested recommendation — treat it as a
+          starting framework, not investment advice.
         </p>
         {optionEntries.length === 0 ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm" style={{ color: "var(--text-2)" }}>
             Add an underlying to your Options watchlist below to see strategy suggestions.
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             {strategyRows.map((r) => (
-              <div key={r.ticker} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-                <div className="font-medium text-sm mb-2">{r.ticker}</div>
+              <div key={r.ticker} className="jv-card">
+                <div className="jv-br-b" />
+                <div className="text-sm font-mono font-medium mb-2" style={{ color: "var(--text-0)" }}>{r.ticker}</div>
                 {r.recommendations.length === 0 ? (
-                  <div className="text-sm text-zinc-500">
+                  <div className="text-sm" style={{ color: "var(--text-2)" }}>
                     {gexLoading || loading
                       ? "Waiting on signals above…"
                       : r.gexError
@@ -330,15 +305,14 @@ export function OptionsDashboardTab() {
                         : "No clear signal from current conditions."}
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="flex flex-col gap-2">
                     {r.recommendations.map((rec) => (
                       <div key={rec.strategyName} className="flex items-start gap-3">
-                        <span
-                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${CATEGORY_STYLES[rec.category]}`}
-                        >
-                          {rec.strategyName}
-                        </span>
-                        <div className="text-sm text-zinc-600 dark:text-zinc-400">{rec.rationale}</div>
+                        <span className="jv-badge c-neutral shrink-0">{CATEGORY_LABEL[rec.category]}</span>
+                        <div className="text-sm">
+                          <span className="font-medium" style={{ color: "var(--text-0)" }}>{rec.strategyName}</span>{" "}
+                          <span style={{ color: "var(--text-2)" }}>— {rec.rationale}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -348,6 +322,7 @@ export function OptionsDashboardTab() {
           </div>
         )}
       </section>
+      </div>
 
       <TradingDashboardTab filterAssetClass="option" />
     </div>

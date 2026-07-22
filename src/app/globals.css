@@ -24,3 +24,334 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * JARVIS visual identity — the app's redesign direction, approved against
+ * the Macro/Research Agent mockup. Scoped under .jarvis (not :root/body) so
+ * it can be rolled out agent-by-agent/tab-by-tab without flipping the whole
+ * app at once — every not-yet-redesigned tab keeps its current zinc/light-
+ * dark look until it's specifically redone. Single-theme by design (an
+ * instrument panel doesn't have a light mode) — this is intentional, not an
+ * oversight, matching the approved mockup's own footnote.
+ */
+.jarvis {
+  --ink-950: #080b10;
+  --ink-900: #0e131b;
+  --ink-800: #131a24;
+  --ink-700: #1a2330;
+  --line: #223040;
+  --line-bright: #35495e;
+  --signal: #4fe8d0;
+  --signal-dim: #2a6e63;
+  --verdict: #f0a868;
+  --verdict-dim: #7a5636;
+  --danger: #e8637a;
+  --text-0: #edf2f7;
+  --text-1: #9fb0c4;
+  --text-2: #62748c;
+  --font-ui: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+
+  position: relative;
+  background: var(--ink-950);
+  color: var(--text-0);
+  font-family: var(--font-ui);
+  background-image:
+    linear-gradient(var(--ink-900) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ink-900) 1px, transparent 1px);
+  background-size: 28px 28px;
+  background-position: -1px -1px;
+  padding: 24px 28px 48px;
+  border-radius: 12px;
+}
+
+.jarvis::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 900px 500px at 50% 0%, rgba(79, 232, 208, 0.06), transparent 70%);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.jarvis .jv-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--signal);
+  text-transform: uppercase;
+  margin: 0 0 6px;
+}
+
+.jarvis h1.jv-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  margin: 0 0 10px;
+  color: var(--text-0);
+}
+
+.jarvis p.jv-lede {
+  font-size: 14px;
+  color: var(--text-1);
+  line-height: 1.6;
+  max-width: 72ch;
+  margin: 0 0 28px;
+}
+
+/* Corner-bracket instrument card — the base unit reused for signal cards. */
+.jarvis .jv-card {
+  position: relative;
+  background: var(--ink-900);
+  border: 1px solid var(--line);
+  padding: 14px 14px 16px;
+}
+.jarvis .jv-card::before,
+.jarvis .jv-card::after,
+.jarvis .jv-card .jv-br-b::before,
+.jarvis .jv-card .jv-br-b::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-color: var(--line-bright);
+  border-style: solid;
+  border-width: 0;
+}
+.jarvis .jv-card::before { top: -1px; left: -1px; border-top-width: 1px; border-left-width: 1px; }
+.jarvis .jv-card::after { top: -1px; right: -1px; border-top-width: 1px; border-right-width: 1px; }
+.jarvis .jv-card .jv-br-b::before { bottom: -1px; left: -1px; border-bottom-width: 1px; border-left-width: 1px; }
+.jarvis .jv-card .jv-br-b::after { bottom: -1px; right: -1px; border-bottom-width: 1px; border-right-width: 1px; }
+
+.jarvis .jv-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-2);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.jarvis .jv-cond { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.jarvis .jv-cond.c-warm { color: var(--verdict); }
+.jarvis .jv-cond.c-signal { color: var(--signal); }
+.jarvis .jv-cond.c-danger { color: var(--danger); }
+.jarvis .jv-cond.c-neutral { color: var(--text-1); }
+
+.jarvis .jv-stat {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-1);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.jarvis .jv-stat b { color: var(--text-0); font-weight: 500; }
+
+/* Converge indicator — a single animated pulse bar standing in for the
+   mockup's per-count wire SVG, which doesn't generalize to a dynamic number
+   of signal cards (real data, unlike the mockup's fixed 4). Same idea —
+   independent readings visibly feeding one verdict — simpler geometry. */
+.jarvis .jv-converge-bar {
+  position: relative;
+  height: 18px;
+  margin: 2px 0;
+}
+.jarvis .jv-converge-bar svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.jarvis .jv-converge-bar line.base { stroke: var(--line); stroke-width: 1; }
+.jarvis .jv-converge-bar line.pulse {
+  stroke: var(--signal);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 90;
+  animation: jv-travel 2.6s linear infinite;
+  opacity: 0.9;
+}
+@keyframes jv-travel {
+  0% { stroke-dashoffset: 95; }
+  100% { stroke-dashoffset: -5; }
+}
+
+.jarvis .jv-verdict-panel {
+  position: relative;
+  background: linear-gradient(180deg, var(--ink-800), var(--ink-900));
+  border: 1px solid var(--line-bright);
+  padding: 20px 24px 20px;
+}
+.jarvis .jv-verdict-panel::before,
+.jarvis .jv-verdict-panel::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--verdict);
+  border-style: solid;
+  border-width: 0;
+  opacity: 0.7;
+}
+.jarvis .jv-verdict-panel::before { top: -1px; left: -1px; border-top-width: 2px; border-left-width: 2px; }
+.jarvis .jv-verdict-panel::after { bottom: -1px; right: -1px; border-bottom-width: 2px; border-right-width: 2px; }
+
+.jarvis .jv-verdict-panel .jv-vp-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  color: var(--verdict);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.jarvis .jv-verdict-panel .jv-vp-label .jv-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--verdict);
+  box-shadow: 0 0 0 0 rgba(240, 168, 104, 0.6);
+  animation: jv-pulse-dot-v 2.4s ease-out infinite;
+}
+@keyframes jv-pulse-dot-v {
+  0% { box-shadow: 0 0 0 0 rgba(240, 168, 104, 0.55); }
+  70% { box-shadow: 0 0 0 9px rgba(240, 168, 104, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(240, 168, 104, 0); }
+}
+.jarvis .jv-verdict-panel h3 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+  color: var(--text-0);
+  text-wrap: balance;
+}
+.jarvis .jv-verdict-panel p {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-1);
+  margin: 0;
+}
+.jarvis .jv-verdict-panel p b {
+  color: var(--text-0);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.jarvis .jv-strip-title {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--text-2);
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+
+.jarvis .jv-strip {
+  display: grid;
+  border: 1px solid var(--line);
+}
+.jarvis .jv-strip .jv-cell {
+  padding: 11px 14px;
+  border-right: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+}
+.jarvis .jv-strip .jv-cell:nth-child(-n+2) { border-top: none; }
+.jarvis .jv-strip .jv-cell .jv-k {
+  font-size: 10.5px;
+  color: var(--text-2);
+  letter-spacing: 0.04em;
+  margin-bottom: 5px;
+}
+.jarvis .jv-strip .jv-cell .jv-v {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-0);
+}
+
+.jarvis .jv-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border: 1px solid;
+}
+.jarvis .jv-badge.c-signal { color: var(--signal); border-color: var(--signal-dim); background: rgba(79, 232, 208, 0.06); }
+.jarvis .jv-badge.c-danger { color: var(--danger); border-color: var(--danger); background: rgba(232, 99, 122, 0.08); }
+.jarvis .jv-badge.c-neutral { color: var(--text-1); border-color: var(--line-bright); }
+
+.jarvis .jv-note {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.6;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 8px;
+}
+.jarvis .jv-note b { color: var(--text-1); font-weight: 500; }
+
+.jarvis a, .jarvis button { font-family: inherit; }
+
+/* GlossaryTerm.tsx is shared across every agent, most not yet redesigned —
+   these hook classes (added alongside its existing Tailwind ones, no prop
+   change) only take effect inside .jarvis, leaving every other call site
+   untouched. */
+.jarvis .jv-glossary-icon { color: var(--text-2); }
+.jarvis .jv-glossary-icon:hover { color: var(--signal); }
+.jarvis .jv-glossary-popover {
+  background: var(--ink-800) !important;
+  border-color: var(--line-bright) !important;
+  color: var(--text-1);
+}
+.jarvis .jv-glossary-popover > div:first-child { color: var(--text-0); }
+
+/* Form-control primitives — reused across every redesigned tab's inputs/selects/buttons instead of repeating inline styles. */
+.jarvis .jv-input,
+.jarvis .jv-select {
+  background: var(--ink-900);
+  border: 1px solid var(--line);
+  color: var(--text-0);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 8px 12px;
+}
+.jarvis .jv-input::placeholder { color: var(--text-2); }
+.jarvis .jv-input:focus, .jarvis .jv-select:focus { outline: none; border-color: var(--line-bright); }
+.jarvis .jv-btn {
+  background: var(--signal);
+  color: var(--ink-950);
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 13px;
+  padding: 8px 20px;
+  border: 1px solid var(--signal);
+}
+.jarvis .jv-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.jarvis .jv-btn-outline {
+  background: transparent;
+  color: var(--text-1);
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 12px;
+  padding: 6px 14px;
+  border: 1px solid var(--line-bright);
+}
+.jarvis .jv-btn-outline:hover { border-color: var(--signal-dim); color: var(--signal); }
+.jarvis .jv-btn-outline:disabled { opacity: 0.4; cursor: not-allowed; }
+.jarvis .jv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 10px;
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+.jarvis .jv-chip button { color: var(--text-2); }
+.jarvis .jv-chip button:hover { color: var(--danger); }

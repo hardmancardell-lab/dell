@@ -39,72 +39,74 @@ export function ResearchWatchlistTab() {
   }, [hydrated, checked, watchlistedSymbols.length]);
 
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-zinc-500 flex-1">
-          Tickers saved from Analyze Ticker or the Screener, with a fresh Graham Checklist run the moment this page
-          loads — the honest version of &quot;alerts&quot; for an app with no background server process: real flags
-          computed from real data on load, not a push notification.
+        <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
+          Tickers saved from Analyze Ticker or the Screener, with a fresh Graham Checklist run the moment this
+          page loads — the honest version of &quot;alerts&quot; for an app with no background server process:
+          real flags computed from real data on load, not a push notification.
         </p>
         <button
           onClick={runCheck}
           disabled={loading || watchlistedSymbols.length === 0}
-          className="shrink-0 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
+          className="shrink-0 px-4 py-1.5 text-xs font-medium disabled:opacity-50"
+          style={{ background: "var(--signal)", color: "var(--ink-950)" }}
         >
           {loading ? "Checking…" : "Refresh"}
         </button>
       </div>
 
       {hydrated && watchlistedSymbols.length === 0 && (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm" style={{ color: "var(--text-2)" }}>
           Watchlist is empty — save a ticker from Analyze Ticker or the Screener to get started.
         </p>
       )}
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+        <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {result && (
-        <div className="space-y-6">
-          <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 bg-white dark:bg-zinc-950">
-            <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Macro Stance</div>
-            <div className="text-lg font-semibold mb-2">{result.macroStanceLabel}</div>
-            <div className="space-y-1">
+        <div className="flex flex-col gap-6">
+          <div className="jv-verdict-panel">
+            <div className="jv-vp-label">
+              <span className="jv-dot" aria-hidden="true" />
+              Macro Stance
+            </div>
+            <h3>{result.macroStanceLabel}</h3>
+            <div className="flex flex-col gap-1">
               {result.macroStanceRationale.map((r) => (
-                <p key={r.slice(0, 30)} className="text-sm text-zinc-500">
+                <p key={r.slice(0, 30)} style={{ marginBottom: 0 }}>
                   {r}
                 </p>
               ))}
             </div>
-          </section>
+          </div>
 
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             {result.entries.map((e) => (
-              <div
-                key={e.symbol}
-                className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 flex items-center justify-between gap-3"
-              >
-                <div className="font-medium text-sm">{e.symbol}</div>
+              <div key={e.symbol} className="jv-card flex items-center justify-between gap-3">
+                <div className="jv-br-b" />
+                <div className="font-mono font-medium text-sm" style={{ color: "var(--text-0)" }}>
+                  {e.symbol}
+                </div>
                 {e.error ? (
-                  <div className="text-sm text-zinc-500 flex-1 text-right">{e.error}</div>
+                  <div className="text-sm flex-1 text-right" style={{ color: "var(--text-2)" }}>
+                    {e.error}
+                  </div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-zinc-500">
+                    <span className="text-sm" style={{ color: "var(--text-2)" }}>
                       Graham Checklist: {e.checklistPassCount}/{e.checklistTotal}
                     </span>
-                    {e.isStrong && (
-                      <span className="rounded-full px-3 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400">
-                        Strong
-                      </span>
-                    )}
+                    {e.isStrong && <span className="jv-badge c-signal">Strong</span>}
                   </div>
                 )}
                 <button
                   onClick={() => removeSymbol(e.symbol)}
-                  className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                  style={{ color: "var(--text-2)" }}
                   aria-label={`Remove ${e.symbol}`}
                 >
                   &times;
@@ -114,10 +116,7 @@ export function ResearchWatchlistTab() {
           </div>
 
           {result.dataLimitations.map((d) => (
-            <div
-              key={d.slice(0, 30)}
-              className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-            >
+            <div key={d.slice(0, 30)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
               {d}
             </div>
           ))}

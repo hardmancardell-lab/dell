@@ -41,7 +41,7 @@ export function GlossaryTerm({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={`What does ${entry.label} mean?`}
-        className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-xs align-super cursor-help"
+        className="jv-glossary-icon text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-xs align-super cursor-help"
       >
         ⓘ
       </button>
@@ -53,7 +53,7 @@ export function GlossaryTerm({
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-10 cursor-default"
           />
-          <div className="absolute left-0 top-full mt-1 z-20 w-64 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-lg p-3 text-left normal-case">
+          <div className="jv-glossary-popover absolute left-0 top-full mt-1 z-20 w-64 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-lg p-3 text-left normal-case">
             <div className="text-sm font-semibold mb-1">{entry.label}</div>
             <div className="text-xs text-zinc-600 dark:text-zinc-400">{entry.definition}</div>
           </div>

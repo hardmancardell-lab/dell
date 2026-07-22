@@ -7,6 +7,8 @@ import { WatchlistSelector } from "./WatchlistSelector";
 import type { AssetClass, OrbWatchlistSummary } from "@/lib/agents/trading-agent/types";
 
 const RANGE_OPTIONS: (5 | 15 | 30)[] = [5, 15, 30];
+const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal whitespace-nowrap";
+const TD_CLASS = "py-2 pr-4 whitespace-nowrap";
 
 function fmtPct(v: number | null): string {
   return v !== null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "N/A";
@@ -16,6 +18,7 @@ function fmtPrice(v: number | null): string {
   return v !== null ? `$${v.toFixed(2)}` : "N/A";
 }
 
+/** Reused across Equities/Currency/Futures/Commodities' own ORB Watchlist tabs — a single .jarvis island here upgrades all four. */
 export function OrbWatchlistTab({ filterAssetClass = "equity" }: { filterAssetClass?: AssetClass }) {
   const { entries, hydrated } = useWatchlist();
   const scopedEntries = entries.filter((e) => e.assetClass === filterAssetClass);
@@ -62,97 +65,76 @@ export function OrbWatchlistTab({ filterAssetClass = "equity" }: { filterAssetCl
   }, [hydrated, autoScanned, scopedEntries.length]);
 
   return (
-    <div>
-      <p className="text-zinc-500 mb-6">
+    <div className="jarvis">
+      <p className="jv-lede">
         Opening Range Breakout, backtested and tracked across every {filterAssetClass === "equity" ? "equity" : filterAssetClass} ticker on the
         watchlist at once. For the full 6-row breakdown of any one ticker (long/short ×
         30min/60min/hold-to-EOD), use the Ticker Detail tab.
       </p>
 
       {filterAssetClass === "forex" && (
-        <div className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-400 mb-4">
-          The opening range is built around a single NYSE/Nasdaq session open (9:30am ET). Spot
-          forex trades 24/5 with no single daily open, so this concept doesn&apos;t map cleanly
-          onto currency pairs — read these results as an approximation using 9:30am ET as an
-          arbitrary anchor time, not a true session-open breakout the way it is for equities.
+        <div className="jv-card mb-4 text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
+          The opening range is built around a single NYSE/Nasdaq session open (9:30am ET). Spot forex trades
+          24/5 with no single daily open, so this concept doesn&apos;t map cleanly onto currency pairs — read
+          these results as an approximation using 9:30am ET as an arbitrary anchor time, not a true
+          session-open breakout the way it is for equities.
         </div>
       )}
 
       <WatchlistSelector />
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <span className="text-xs uppercase tracking-wide text-zinc-500">Opening Range</span>
+        <span className="jv-label" style={{ marginBottom: 0 }}>Opening Range</span>
         {RANGE_OPTIONS.map((m) => (
-          <button
-            key={m}
-            onClick={() => setOpeningRangeMinutes(m)}
-            className={`rounded-lg px-3 py-1 text-xs font-medium ${
-              m === openingRangeMinutes
-                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-            }`}
-          >
+          <button key={m} onClick={() => setOpeningRangeMinutes(m)} className={m === openingRangeMinutes ? "jv-btn" : "jv-btn-outline"} style={{ padding: "6px 14px" }}>
             {m}min
           </button>
         ))}
-        <span className="text-xs uppercase tracking-wide text-zinc-500 ml-4">Lookback</span>
+        <span className="jv-label ml-4" style={{ marginBottom: 0 }}>Lookback</span>
         {ORB_LOOKBACK_MONTH_OPTIONS.map((m) => (
-          <button
-            key={m}
-            onClick={() => setLookbackMonths(m)}
-            className={`rounded-lg px-3 py-1 text-xs font-medium ${
-              m === lookbackMonths
-                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-            }`}
-          >
+          <button key={m} onClick={() => setLookbackMonths(m)} className={m === lookbackMonths ? "jv-btn" : "jv-btn-outline"} style={{ padding: "6px 14px" }}>
             {m}mo
           </button>
         ))}
       </div>
 
       {hydrated && scopedEntries.length === 0 && (
-        <p className="text-sm text-zinc-500 mb-4">No {filterAssetClass} symbols on the watchlist — add some on the Dashboard tab first.</p>
+        <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>
+          No {filterAssetClass} symbols on the watchlist — add some on the Dashboard tab first.
+        </p>
       )}
 
-      <button
-        onClick={runScan}
-        disabled={loading || scopedEntries.length === 0}
-        className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
-      >
+      <button onClick={runScan} disabled={loading || scopedEntries.length === 0} className="jv-btn">
         {loading ? "Scanning…" : autoScanned ? "Refresh Scan" : "Scan Watchlist"}
       </button>
 
       {error && (
-        <div className="mt-6 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+        <div className="jv-card mt-6" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {summary && (
-        <div className="mt-8 space-y-6">
-          <div className="text-sm text-zinc-500">
+        <div className="mt-8 flex flex-col gap-6">
+          <div className="text-sm" style={{ color: "var(--text-2)" }}>
             {summary.tickersScanned} scanned, {summary.tickersWithBreakoutToday} with a breakout today.
           </div>
 
           {summary.dataLimitations.map((d) => (
-            <div
-              key={d.slice(0, 30)}
-              className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-400"
-            >
+            <div key={d.slice(0, 30)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
               {d}
             </div>
           ))}
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
               <thead>
-                <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                  <th className="py-2 pr-4">Symbol</th>
-                  <th className="py-2 pr-4">Opening Range</th>
-                  <th className="py-2 pr-4">Breakout Today</th>
-                  <th className="py-2 pr-4">Long Hold-to-EOD</th>
-                  <th className="py-2 pr-4">Short Hold-to-EOD</th>
+                <tr style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }} className="text-left">
+                  <th className={TH_CLASS}>Symbol</th>
+                  <th className={TH_CLASS}>Opening Range</th>
+                  <th className={TH_CLASS}>Breakout Today</th>
+                  <th className={TH_CLASS}>Long Hold-to-EOD</th>
+                  <th className={TH_CLASS}>Short Hold-to-EOD</th>
                 </tr>
               </thead>
               <tbody>
@@ -160,39 +142,33 @@ export function OrbWatchlistTab({ filterAssetClass = "equity" }: { filterAssetCl
                   const longEod = r.orb?.horizons.find((h) => h.direction === "long" && h.horizonLabel === "holdToEod");
                   const shortEod = r.orb?.horizons.find((h) => h.direction === "short" && h.horizonLabel === "holdToEod");
                   return (
-                    <tr key={r.symbol} className="border-b border-zinc-100 dark:border-zinc-900">
-                      <td className="py-2 pr-4 font-medium">{r.symbol}</td>
+                    <tr key={r.symbol} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                      <td className={`${TD_CLASS} font-medium font-mono`} style={{ color: "var(--text-0)" }}>{r.symbol}</td>
                       {r.error ? (
-                        <td className="py-2 pr-4 text-zinc-500 text-xs" colSpan={4}>
+                        <td className={`${TD_CLASS} text-xs`} style={{ color: "var(--text-2)" }} colSpan={4}>
                           {r.error}
                         </td>
                       ) : (
                         <>
-                          <td className="py-2 pr-4 text-zinc-500">
+                          <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>
                             {fmtPrice(r.orb?.todaySnapshot?.openingRangeLow ?? null)} -{" "}
                             {fmtPrice(r.orb?.todaySnapshot?.openingRangeHigh ?? null)}
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className={TD_CLASS}>
                             {r.orb?.todaySnapshot?.breakoutDirection && r.orb.todaySnapshot.breakoutDirection !== "none-yet" ? (
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
-                                  r.orb.todaySnapshot.breakoutDirection === "long"
-                                    ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-                                    : "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400"
-                                }`}
-                              >
+                              <span className={`jv-badge capitalize ${r.orb.todaySnapshot.breakoutDirection === "long" ? "c-signal" : "c-danger"}`}>
                                 {r.orb.todaySnapshot.breakoutDirection}
                               </span>
                             ) : (
-                              <span className="text-xs text-zinc-500">
+                              <span className="text-xs" style={{ color: "var(--text-2)" }}>
                                 {r.orb?.todaySnapshot?.breakoutDirection === "none-yet" ? "none yet" : "N/A"}
                               </span>
                             )}
                           </td>
-                          <td className="py-2 pr-4 text-zinc-500">
+                          <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>
                             {longEod ? `${fmtPct(longEod.meanReturnPct)} (n=${longEod.sampleSize}, pass=${longEod.passesAllThreeBars ? "yes" : "no"})` : "N/A"}
                           </td>
-                          <td className="py-2 pr-4 text-zinc-500">
+                          <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>
                             {shortEod ? `${fmtPct(shortEod.meanReturnPct)} (n=${shortEod.sampleSize}, pass=${shortEod.passesAllThreeBars ? "yes" : "no"})` : "N/A"}
                           </td>
                         </>

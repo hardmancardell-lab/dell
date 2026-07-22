@@ -9,10 +9,10 @@ import type { SecurityAnalysis, SectorPeerRanking, ValuationVerdict } from "@/li
 
 type QualityTier = "Strong" | "Moderate" | "Weak";
 
-const QUALITY_TIER_STYLES: Record<QualityTier, string> = {
-  Strong: "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400",
-  Moderate: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400",
-  Weak: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+const QUALITY_TIER_CLASS: Record<QualityTier, string> = {
+  Strong: "jv-badge c-signal",
+  Moderate: "jv-badge c-neutral",
+  Weak: "jv-badge c-danger",
 };
 
 // A skimmable summary on top of the full 7-item checklist below — the
@@ -27,53 +27,37 @@ function qualityTier(passedCount: number, total: number): QualityTier {
   return "Weak";
 }
 
-function StatCard({
-  label,
-  value,
-  sub,
-}: {
-  label: ReactNode;
-  value: string;
-  sub?: string;
-}) {
+function StatCard({ label, value, sub }: { label: ReactNode; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-      <div className="text-xs uppercase tracking-wide text-zinc-500">
-        {label}
+    <div className="jv-card">
+      <div className="jv-br-b" />
+      <div className="jv-label">{label}</div>
+      <div className="jv-cond c-neutral" style={{ fontSize: 20 }}>
+        {value}
       </div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-      {sub && <div className="text-sm text-zinc-500 mt-1">{sub}</div>}
+      {sub && (
+        <div className="text-xs" style={{ color: "var(--text-2)" }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
 
 function PassFailBadge({ passed }: { passed: boolean | null }) {
-  const className =
-    passed === null
-      ? "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-      : passed
-        ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-        : "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400";
-  return (
-    <span className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${className}`}>
-      {passed === null ? "N/A" : passed ? "Pass" : "Fail"}
-    </span>
-  );
+  const cls = passed === null ? "jv-badge c-neutral" : passed ? "jv-badge c-signal" : "jv-badge c-danger";
+  return <span className={cls}>{passed === null ? "N/A" : passed ? "Pass" : "Fail"}</span>;
 }
 
-const VERDICT_STYLES: Record<ValuationVerdict, string> = {
-  undervalued: "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400",
-  overvalued: "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400",
-  "fairly valued": "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-  "not applicable": "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
+const VERDICT_CLASS: Record<ValuationVerdict, string> = {
+  undervalued: "jv-badge c-signal",
+  overvalued: "jv-badge c-danger",
+  "fairly valued": "jv-badge c-neutral",
+  "not applicable": "jv-badge c-neutral",
 };
 
 function VerdictBadge({ verdict }: { verdict: ValuationVerdict }) {
-  return (
-    <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium capitalize ${VERDICT_STYLES[verdict]}`}>
-      {verdict}
-    </span>
-  );
+  return <span className={VERDICT_CLASS[verdict]}>{verdict}</span>;
 }
 
 function formatMoney(value: number): string {
@@ -143,10 +127,9 @@ export function SecurityAnalystTab() {
 
   return (
     <div>
-      <p className="text-zinc-500 mb-6">
-        A cold-blooded interrogation of one company&apos;s financial
-        statements &mdash; NCAV, earnings stability, debt coverage, and the
-        Graham multiplier.
+      <p className="jv-lede" style={{ marginBottom: 20 }}>
+        A cold-blooded interrogation of one company&apos;s financial statements &mdash; NCAV, earnings
+        stability, debt coverage, and the Graham multiplier.
       </p>
 
       <form onSubmit={runAnalysis} className="flex gap-3">
@@ -154,68 +137,77 @@ export function SecurityAnalystTab() {
           value={ticker}
           onChange={(e) => setTicker(e.target.value)}
           placeholder="Ticker, e.g. AAPL"
-          className="flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="flex-1 px-4 py-2 text-sm"
+          style={{
+            background: "var(--ink-900)",
+            border: "1px solid var(--line)",
+            color: "var(--text-0)",
+            fontFamily: "var(--font-mono)",
+          }}
         />
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
+          className="px-5 py-2 text-sm font-medium disabled:opacity-50"
+          style={{ background: "var(--signal)", color: "var(--ink-950)" }}
         >
           {loading ? "Analyzing…" : "Analyze"}
         </button>
       </form>
 
       {error && (
-        <div className="mt-8 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400">
+        <div className="jv-card mt-8" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           <div className="font-medium">Could not load data</div>
           <div className="text-sm mt-1">{error}</div>
         </div>
       )}
 
       {data && (
-        <div className="mt-8 space-y-10">
-          <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-950">
+        <div className="mt-8 flex flex-col gap-10">
+          <div className="jv-verdict-panel">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold">
-                  {data.companyName} ({data.ticker})
-                </h2>
-                <p className="text-sm text-zinc-500 mt-1">
+                <div className="jv-vp-label">
+                  <span className="jv-dot" aria-hidden="true" />
                   {data.sector} &middot; {data.industry}
-                </p>
+                </div>
+                <h3>
+                  {data.companyName} ({data.ticker})
+                </h3>
               </div>
               <button
                 onClick={() => addSymbol(data.ticker)}
                 disabled={watchlist.some((w) => w.symbol === data.ticker)}
-                className="shrink-0 rounded-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 px-3 py-1 text-xs font-medium"
+                className="shrink-0 px-3 py-1 text-xs font-medium disabled:opacity-50"
+                style={{ border: "1px solid var(--line-bright)", color: "var(--text-1)" }}
               >
                 {watchlist.some((w) => w.symbol === data.ticker) ? "On Watchlist" : "+ Save to Watchlist"}
               </button>
             </div>
-            <div className="flex items-center gap-3 mt-3">
-              <div className="text-2xl font-semibold">
-                {passedCount} / {data.checklist.length} Graham criteria passed
-              </div>
+            <div className="flex items-center gap-3 mt-2">
+              <p style={{ marginBottom: 0 }}>
+                <b>
+                  {passedCount} / {data.checklist.length}
+                </b>{" "}
+                Graham criteria passed
+              </p>
               <GlossaryTerm term="qualityTier" getEntry={getResearchGlossaryEntry}>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${QUALITY_TIER_STYLES[qualityTier(passedCount, data.checklist.length)]}`}
-                >
+                <span className={QUALITY_TIER_CLASS[qualityTier(passedCount, data.checklist.length)]}>
                   {qualityTier(passedCount, data.checklist.length)}
                 </span>
               </GlossaryTerm>
             </div>
-          </section>
+          </div>
 
           {data.dataLimitations.length > 0 && (
             <section>
-              <h2 className="text-lg font-semibold mb-3">Data Limitations</h2>
-              <div className="space-y-3">
+              <div className="jv-strip-title">Data Limitations</div>
+              <div className="flex flex-col gap-2">
                 {data.dataLimitations.map((d) => (
-                  <div
-                    key={d.slice(0, 30)}
-                    className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-4 text-sm text-amber-800 dark:text-amber-400"
-                  >
-                    {d}
+                  <div key={d.slice(0, 30)} className="jv-card" style={{ borderColor: "var(--verdict-dim)" }}>
+                    <div className="text-sm" style={{ color: "var(--verdict)" }}>
+                      {d}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -223,18 +215,20 @@ export function SecurityAnalystTab() {
           )}
 
           <section>
-            <h2 className="text-xl font-semibold mb-3">The Graham Checklist</h2>
-            <div className="space-y-3">
+            <div className="jv-strip-title">The Graham Checklist</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {data.checklist.map((c) => (
-                <div
-                  key={c.criterion}
-                  className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="font-medium text-sm">{c.criterion}</div>
+                <div key={c.criterion} className="jv-card">
+                  <div className="jv-br-b" />
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="text-sm font-medium" style={{ color: "var(--text-0)" }}>
+                      {c.criterion}
+                    </div>
                     <PassFailBadge passed={c.passed} />
                   </div>
-                  <div className="text-sm text-zinc-500 mt-1">{c.detail}</div>
+                  <div className="text-sm" style={{ color: "var(--text-2)" }}>
+                    {c.detail}
+                  </div>
                 </div>
               ))}
             </div>
@@ -242,34 +236,38 @@ export function SecurityAnalystTab() {
 
           {data.sectorPanel && (
             <section>
-              <h2 className="text-xl font-semibold mb-1">
-                Sector-Specific: {data.sectorPanel.subSector}
-              </h2>
-              <p className="text-sm text-zinc-500 mb-3">{data.sectorPanel.classificationNote}</p>
-              <div className="space-y-3">
+              <div className="jv-strip-title">Sector-Specific: {data.sectorPanel.subSector}</div>
+              <p className="text-sm mb-3" style={{ color: "var(--text-2)" }}>
+                {data.sectorPanel.classificationNote}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {data.sectorPanel.ratios.map((r) => (
-                  <div
-                    key={r.label}
-                    className={`rounded-lg border p-4 ${
-                      r.available
-                        ? "border-zinc-200 dark:border-zinc-800"
-                        : "border-dashed border-zinc-300 dark:border-zinc-700"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium text-sm">{r.label}</div>
+                  <div key={r.label} className="jv-card" style={!r.available ? { borderStyle: "dashed" } : undefined}>
+                    <div className="jv-br-b" />
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="text-sm font-medium" style={{ color: "var(--text-0)" }}>
+                        {r.label}
+                      </div>
                       {r.available ? (
                         <PassFailBadge passed={r.passed} />
                       ) : (
-                        <span className="text-xs text-zinc-500">Not available</span>
+                        <span className="text-xs" style={{ color: "var(--text-2)" }}>
+                          Not available
+                        </span>
                       )}
                     </div>
                     {r.available && (
-                      <div className="text-lg font-semibold mt-1">{r.value}</div>
+                      <div className="jv-cond c-neutral" style={{ fontSize: 18 }}>
+                        {r.value}
+                      </div>
                     )}
-                    <div className="text-sm text-zinc-500 mt-1">{r.benchmark}</div>
+                    <div className="text-xs" style={{ color: "var(--text-2)" }}>
+                      {r.benchmark}
+                    </div>
                     {r.note && (
-                      <div className="text-xs text-zinc-400 mt-1">{r.note}</div>
+                      <div className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
+                        {r.note}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -278,28 +276,22 @@ export function SecurityAnalystTab() {
           )}
 
           <section>
-            <h2 className="text-xl font-semibold mb-3">
-              1. Earning Power ({data.earningPower.yearsAvailable}/
-              {data.earningPower.yearsRequested} years)
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="jv-strip-title">
+              1. Earning Power ({data.earningPower.yearsAvailable}/{data.earningPower.yearsRequested} years)
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <StatCard
                 label="Average Net Income"
                 value={`$${(data.earningPower.averageNetIncome / 1_000_000).toFixed(1)}M`}
                 sub={data.earningPower.warning ?? undefined}
               />
-              <StatCard
-                label="Deficit Years"
-                value={String(data.earningPower.deficitYears)}
-              />
+              <StatCard label="Deficit Years" value={String(data.earningPower.deficitYears)} />
             </div>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold mb-3">
-              2. Net-Current-Asset Value (Liquidation Floor)
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="jv-strip-title">2. Net-Current-Asset Value (Liquidation Floor)</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <StatCard
                 label={
                   <GlossaryTerm term="ncav" getEntry={getResearchGlossaryEntry}>
@@ -310,68 +302,48 @@ export function SecurityAnalystTab() {
               />
               <StatCard
                 label="Price vs NCAV"
-                value={
-                  data.ncav.priceToNcav !== null
-                    ? `${(data.ncav.priceToNcav * 100).toFixed(0)}%`
-                    : "N/A"
-                }
+                value={data.ncav.priceToNcav !== null ? `${(data.ncav.priceToNcav * 100).toFixed(0)}%` : "N/A"}
                 sub={data.ncav.isBargain ? "Below 2/3 of NCAV — Graham bargain" : undefined}
               />
             </div>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold mb-3">
-              3. Liquidity &amp; Solvency
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
-              <StatCard
-                label="Current Ratio"
-                value={data.liquidity.currentRatio.toFixed(2)}
-                sub="Graham floor: 2.0"
-              />
+            <div className="jv-strip-title">3. Liquidity &amp; Solvency</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <StatCard label="Current Ratio" value={data.liquidity.currentRatio.toFixed(2)} sub="Graham floor: 2.0" />
               <StatCard
                 label={
                   <GlossaryTerm term="fixedChargeCoverage" getEntry={getResearchGlossaryEntry}>
                     Fixed-Charge Coverage
                   </GlossaryTerm>
                 }
-                value={
-                  data.solvency.fixedChargeCoverage !== null
-                    ? `${data.solvency.fixedChargeCoverage.toFixed(1)}x`
-                    : "No debt"
-                }
+                value={data.solvency.fixedChargeCoverage !== null ? `${data.solvency.fixedChargeCoverage.toFixed(1)}x` : "No debt"}
                 sub="Graham floor: 4x"
               />
               <StatCard
                 label="Debt / Equity"
-                value={
-                  data.solvency.debtToEquity !== null
-                    ? data.solvency.debtToEquity.toFixed(2)
-                    : "N/A"
-                }
+                value={data.solvency.debtToEquity !== null ? data.solvency.debtToEquity.toFixed(2) : "N/A"}
                 sub={data.solvency.topHeavy ? "Top-heavy capital structure" : undefined}
               />
-              <StatCard
-                label="Dividend Record"
-                value={`${data.dividends.consecutiveYearsPaid} yrs`}
-                sub={`Graham floor: ${data.dividends.yearsRequested} yrs`}
-              />
+              <StatCard label="Dividend Record" value={`${data.dividends.consecutiveYearsPaid} yrs`} sub={`Graham floor: ${data.dividends.yearsRequested} yrs`} />
             </div>
             {data.dividends.growthTrend && (
-              <p className="text-sm text-zinc-500 mt-3">
+              <p className="text-sm mt-3" style={{ color: "var(--text-2)" }}>
                 Dividend total per year has been{" "}
-                <span
-                  className={
-                    data.dividends.growthTrend === "growing"
-                      ? "text-green-700 dark:text-green-400 font-medium"
-                      : data.dividends.growthTrend === "declining"
-                        ? "text-red-700 dark:text-red-400 font-medium"
-                        : "font-medium"
-                  }
+                <b
+                  style={{
+                    fontFamily: "inherit",
+                    color:
+                      data.dividends.growthTrend === "growing"
+                        ? "var(--signal)"
+                        : data.dividends.growthTrend === "declining"
+                          ? "var(--danger)"
+                          : "var(--text-1)",
+                  }}
                 >
                   {data.dividends.growthTrend}
-                </span>{" "}
+                </b>{" "}
                 over the available history (comparing the most recent full year to ~5 years earlier, or as far back
                 as data allows) — supplements the {data.dividends.yearsRequested}-year record criterion above,
                 doesn&apos;t change it.
@@ -380,117 +352,109 @@ export function SecurityAnalystTab() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold mb-3">4. Valuation</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <StatCard
-                label="PE (3yr avg EPS)"
-                value={data.valuation.peRatio !== null ? data.valuation.peRatio.toFixed(1) : "N/A"}
-              />
-              <StatCard
-                label="PB (book value)"
-                value={data.valuation.pbRatio !== null ? data.valuation.pbRatio.toFixed(1) : "N/A"}
-              />
+            <div className="jv-strip-title">4. Valuation</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <StatCard label="PE (3yr avg EPS)" value={data.valuation.peRatio !== null ? data.valuation.peRatio.toFixed(1) : "N/A"} />
+              <StatCard label="PB (book value)" value={data.valuation.pbRatio !== null ? data.valuation.pbRatio.toFixed(1) : "N/A"} />
               <StatCard
                 label={
                   <GlossaryTerm term="grahamMultiplier" getEntry={getResearchGlossaryEntry}>
                     Graham Multiplier (PE x PB)
                   </GlossaryTerm>
                 }
-                value={
-                  data.valuation.grahamMultiplier !== null
-                    ? data.valuation.grahamMultiplier.toFixed(1)
-                    : "N/A"
-                }
+                value={data.valuation.grahamMultiplier !== null ? data.valuation.grahamMultiplier.toFixed(1) : "N/A"}
                 sub="Graham ceiling: 22.5"
               />
             </div>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold mb-1">5. Valuation Methods vs. Market Price</h2>
-            <p className="text-sm text-zinc-500 mb-3">
-              Every method compared against the current market price of ${data.valuation.price.toFixed(2)}.
-              Each has its own assumptions listed underneath — these are scenarios, not a single answer.
+            <div className="jv-strip-title">5. Valuation Methods vs. Market Price</div>
+            <p className="text-sm mb-3" style={{ color: "var(--text-2)" }}>
+              Every method compared against the current market price of ${data.valuation.price.toFixed(2)}. Each
+              has its own assumptions listed underneath — these are scenarios, not a single answer.
             </p>
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               {data.valuationMethods.map((v) => (
-                <div key={v.method} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="font-medium text-sm">{v.method}</div>
+                <div key={v.method} className="jv-card">
+                  <div className="jv-br-b" />
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="text-sm font-medium" style={{ color: "var(--text-0)" }}>
+                      {v.method}
+                    </div>
                     <VerdictBadge verdict={v.verdict} />
                   </div>
-                  <div className="grid grid-cols-2 gap-4 mt-3">
-                    <StatCard
-                      label="Implied Value / Share"
-                      value={v.impliedValuePerShare !== null ? `$${v.impliedValuePerShare.toFixed(2)}` : "N/A"}
-                    />
-                    <StatCard
-                      label="vs. Market Price"
-                      value={v.percentDifference !== null ? `${v.percentDifference > 0 ? "+" : ""}${v.percentDifference.toFixed(1)}%` : "N/A"}
-                    />
+                  <div className="jv-stat">
+                    <span>Implied value / share</span>
+                    <b>{v.impliedValuePerShare !== null ? `$${v.impliedValuePerShare.toFixed(2)}` : "N/A"}</b>
                   </div>
-                  <div className="text-xs text-zinc-500 mt-2">{v.assumptions}</div>
-                  {v.note && <div className="text-xs text-zinc-400 mt-1">{v.note}</div>}
+                  <div className="jv-stat">
+                    <span>vs. market price</span>
+                    <b>{v.percentDifference !== null ? `${v.percentDifference > 0 ? "+" : ""}${v.percentDifference.toFixed(1)}%` : "N/A"}</b>
+                  </div>
+                  <div className="text-xs mt-2" style={{ color: "var(--text-2)" }}>
+                    {v.assumptions}
+                  </div>
+                  {v.note && (
+                    <div className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
+                      {v.note}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold mb-1">6. Sector Peer Ranking</h2>
-            <p className="text-sm text-zinc-500 mb-3">
-              Opt-in — fetches several peer companies&apos; statements, which
-              spends real FMP API quota. Grouped by FMP&apos;s own
-              sector/industry taxonomy (FMP&apos;s free tier doesn&apos;t
-              expose NAICS codes).
+            <div className="jv-strip-title">6. Sector Peer Ranking</div>
+            <p className="text-sm mb-3" style={{ color: "var(--text-2)" }}>
+              Opt-in — fetches several peer companies&apos; statements, which spends real FMP API quota. Grouped
+              by FMP&apos;s own sector/industry taxonomy (FMP&apos;s free tier doesn&apos;t expose NAICS codes).
             </p>
             {!peerRanking && (
               <button
                 onClick={runPeerRanking}
                 disabled={peerLoading}
-                className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
+                className="px-5 py-2 text-sm font-medium disabled:opacity-50"
+                style={{ background: "var(--signal)", color: "var(--ink-950)" }}
               >
                 {peerLoading ? "Ranking…" : "Rank against sector peers"}
               </button>
             )}
             {peerError && (
-              <div className="mt-4 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+              <div className="jv-card mt-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
                 {peerError}
               </div>
             )}
             {peerRanking && (
-              <div className="mt-2 space-y-4">
-                <p className="text-xs text-zinc-500">{peerRanking.classificationNote}</p>
+              <div className="mt-2 flex flex-col gap-4">
+                <p className="text-xs" style={{ color: "var(--text-2)" }}>
+                  {peerRanking.classificationNote}
+                </p>
                 {peerRanking.dataLimitations.map((d) => (
-                  <div
-                    key={d.slice(0, 30)}
-                    className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-400"
-                  >
+                  <div key={d.slice(0, 30)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
                     {d}
                   </div>
                 ))}
-                <div className="space-y-3">
+                <div className="flex flex-col gap-3">
                   {peerRanking.rankings.map((r) => (
-                    <div key={r.ratioLabel} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium text-sm">{r.ratioLabel}</div>
-                        <span className="text-xs text-zinc-500">
+                    <div key={r.ratioLabel} className="jv-card">
+                      <div className="jv-br-b" />
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="text-sm font-medium" style={{ color: "var(--text-0)" }}>
+                          {r.ratioLabel}
+                        </div>
+                        <span className="text-xs" style={{ color: "var(--text-2)" }}>
                           {r.higherIsBetter ? "Higher is better" : "Lower is better"}
                         </span>
                       </div>
-                      <div className="grid grid-cols-3 gap-4 mt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <StatCard
                           label={`${peerRanking.ticker} Value`}
                           value={r.targetValue !== null ? `${r.targetValue.toFixed(2)}${r.unit === "%" ? "%" : r.unit === "x" ? "x" : ""}` : "N/A"}
                         />
-                        <StatCard
-                          label="Rank"
-                          value={r.rank !== null ? `#${r.rank} of ${r.totalRanked}` : "N/A"}
-                        />
-                        <StatCard
-                          label="Percentile"
-                          value={r.percentile !== null ? `${r.percentile.toFixed(0)}th` : "N/A"}
-                        />
+                        <StatCard label="Rank" value={r.rank !== null ? `#${r.rank} of ${r.totalRanked}` : "N/A"} />
+                        <StatCard label="Percentile" value={r.percentile !== null ? `${r.percentile.toFixed(0)}th` : "N/A"} />
                       </div>
                     </div>
                   ))}
@@ -500,47 +464,61 @@ export function SecurityAnalystTab() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold mb-1">7. Financial Statements</h2>
-            <p className="text-sm text-zinc-500 mb-3">
+            <div className="jv-strip-title">7. Financial Statements</div>
+            <p className="text-sm mb-3" style={{ color: "var(--text-2)" }}>
               Raw line items behind every ratio above, most recent year first.
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
                 <thead>
-                  <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                    <th className="py-2 pr-4">Fiscal Year</th>
-                    <th className="py-2 pr-4">Revenue</th>
-                    <th className="py-2 pr-4">Gross Profit</th>
-                    <th className="py-2 pr-4">Operating Income</th>
-                    <th className="py-2 pr-4">Net Income</th>
-                    <th className="py-2 pr-4">EPS</th>
-                    <th className="py-2 pr-4">Total Assets (Current)</th>
-                    <th className="py-2 pr-4">Total Liabilities</th>
-                    <th className="py-2 pr-4">Stockholders&apos; Equity</th>
-                    <th className="py-2 pr-4">Total Debt</th>
-                    <th className="py-2 pr-4">Cash</th>
-                    <th className="py-2 pr-4">Operating Cash Flow</th>
-                    <th className="py-2 pr-4">CapEx</th>
-                    <th className="py-2 pr-4">Free Cash Flow</th>
+                  <tr style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }} className="text-left">
+                    {[
+                      "Fiscal Year",
+                      "Revenue",
+                      "Gross Profit",
+                      "Operating Income",
+                      "Net Income",
+                      "EPS",
+                      "Total Assets (Current)",
+                      "Total Liabilities",
+                      "Stockholders' Equity",
+                      "Total Debt",
+                      "Cash",
+                      "Operating Cash Flow",
+                      "CapEx",
+                      "Free Cash Flow",
+                    ].map((h) => (
+                      <th key={h} className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
                   {data.financialStatements.map((y) => (
-                    <tr key={y.fiscalYear} className="border-b border-zinc-100 dark:border-zinc-900">
-                      <td className="py-2 pr-4 font-medium">{y.fiscalYear}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.revenue)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.grossProfit)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.operatingIncome)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.netIncome)}</td>
-                      <td className="py-2 pr-4">${y.eps.toFixed(2)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.totalCurrentAssets)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.totalLiabilities)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.totalStockholdersEquity)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.totalDebt)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.cashAndCashEquivalents)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.operatingCashFlow)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.capitalExpenditure)}</td>
-                      <td className="py-2 pr-4">{formatMoney(y.freeCashFlow)}</td>
+                    <tr key={y.fiscalYear} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                      <td className="py-2 pr-4 font-medium font-mono" style={{ color: "var(--text-0)" }}>
+                        {y.fiscalYear}
+                      </td>
+                      {[
+                        formatMoney(y.revenue),
+                        formatMoney(y.grossProfit),
+                        formatMoney(y.operatingIncome),
+                        formatMoney(y.netIncome),
+                        `$${y.eps.toFixed(2)}`,
+                        formatMoney(y.totalCurrentAssets),
+                        formatMoney(y.totalLiabilities),
+                        formatMoney(y.totalStockholdersEquity),
+                        formatMoney(y.totalDebt),
+                        formatMoney(y.cashAndCashEquivalents),
+                        formatMoney(y.operatingCashFlow),
+                        formatMoney(y.capitalExpenditure),
+                        formatMoney(y.freeCashFlow),
+                      ].map((v, i) => (
+                        <td key={i} className="py-2 pr-4 font-mono whitespace-nowrap" style={{ color: "var(--text-1)" }}>
+                          {v}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

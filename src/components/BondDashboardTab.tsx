@@ -6,10 +6,17 @@ import type { BondMacroSnapshot } from "@/lib/agents/trading-agent/types";
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-      {sub && <div className="text-sm text-zinc-500 mt-1">{sub}</div>}
+    <div className="jv-card">
+      <div className="jv-br-b" />
+      <div className="jv-label">{label}</div>
+      <div className="jv-cond c-neutral" style={{ fontSize: 20 }}>
+        {value}
+      </div>
+      {sub && (
+        <div className="text-xs" style={{ color: "var(--text-2)" }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
@@ -42,48 +49,37 @@ export function BondDashboardTab() {
   }, [load]);
 
   return (
-    <div className="space-y-10">
-      <section>
+    <div className="flex flex-col gap-10">
+      <div className="jarvis">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Treasury &amp; Credit Conditions</h2>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
-          >
+          <div className="jv-strip-title" style={{ margin: 0 }}>Treasury &amp; Credit Conditions</div>
+          <button onClick={load} disabled={loading} className="jv-btn" style={{ padding: "6px 16px" }}>
             {loading ? "Loading…" : "Refresh"}
           </button>
         </div>
         {error && (
-          <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+          <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {error}
           </div>
         )}
         {snapshot && (
           <>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <StatCard
                 label={snapshot.yieldCurveSpread.label}
                 value={`${snapshot.yieldCurveSpread.value.toFixed(2)} pp`}
                 sub={snapshot.yieldCurveInverted ? "Inverted" : "Not inverted"}
               />
-              <StatCard
-                label={snapshot.highYieldSpread.label}
-                value={`${snapshot.highYieldSpread.value.toFixed(2)}%`}
-                sub={snapshot.highYieldSpread.date}
-              />
+              <StatCard label={snapshot.highYieldSpread.label} value={`${snapshot.highYieldSpread.value.toFixed(2)}%`} sub={snapshot.highYieldSpread.date} />
             </div>
             {snapshot.dataLimitations.map((d) => (
-              <div
-                key={d.slice(0, 30)}
-                className="mt-4 rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-400"
-              >
+              <div key={d.slice(0, 30)} className="jv-card mt-4 text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
                 {d}
               </div>
             ))}
           </>
         )}
-      </section>
+      </div>
 
       <TradingDashboardTab filterAssetClass="bond" />
     </div>

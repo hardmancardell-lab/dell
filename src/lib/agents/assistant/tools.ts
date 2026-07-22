@@ -15,6 +15,7 @@ import { computeGexSignal } from "../trading-agent/skills/gex-signal";
 import { classifyPutCallSkew, computeChainWideUnusualActivity } from "../trading-agent/skills/options-flow-skew";
 import { findCorrelations, DEFAULT_CORRELATION_CANDIDATES } from "../trading-agent/skills/correlation-finder";
 import { fetchQuote } from "@/lib/data/market-data";
+import { submitFeedback, type FeedbackCategory } from "@/lib/analytics/feedback";
 import type { AnthropicToolSchema } from "./anthropic-client";
 
 // Defensive cap on any single tool result serialized back to the model —
@@ -106,6 +107,19 @@ export const ASSISTANT_TOOLS: AnthropicToolSchema[] = [
       required: ["baseSymbol"],
     },
   },
+  {
+    name: "submit_feedback",
+    description:
+      "Logs a suggestion, bug report, or other feedback the user is giving about this app so the team can review it later. Call this whenever the user offers a feature idea, reports something broken or confusing, or explicitly says they want to leave feedback — don't just acknowledge it in text, actually call this tool. Use the user's own words for the message, not a paraphrase that loses specifics.",
+    input_schema: {
+      type: "object",
+      properties: {
+        category: { type: "string", enum: ["suggestion", "problem", "other"] },
+        message: { type: "string", description: "The feedback itself, in the user's own words." },
+      },
+      required: ["category", "message"],
+    },
+  },
 ];
 
 function truncate(payload: unknown): unknown {
@@ -114,7 +128,11 @@ function truncate(payload: unknown): unknown {
   return { truncated: true, preview: json.slice(0, MAX_RESULT_CHARS) };
 }
 
-export async function dispatchTool(name: string, input: Record<string, unknown>): Promise<unknown> {
+export async function dispatchTool(
+  name: string,
+  input: Record<string, unknown>,
+  sessionId?: string
+): Promise<unknown> {
   try {
     switch (name) {
       case "get_macro_overview":
@@ -152,6 +170,13 @@ export async function dispatchTool(name: string, input: Record<string, unknown>)
           ? (input.candidates as string[])
           : DEFAULT_CORRELATION_CANDIDATES;
         return truncate(await findCorrelations(String(input.baseSymbol ?? ""), candidates));
+      }
+      case "submit_feedback": {
+        const category = String(input.category ?? "other") as FeedbackCategory;
+        const message = String(input.message ?? "").trim();
+        if (!message) return { error: "No feedback message provided." };
+        const result = await submitFeedback({ sessionId: sessionId ?? "unknown", category, message });
+        return result;
       }
       default:
         return { error: `Unknown tool: ${name}` };

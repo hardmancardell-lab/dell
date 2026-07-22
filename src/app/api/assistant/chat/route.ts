@@ -23,10 +23,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as { messages?: AssistantMessage[] };
+    const body = (await request.json()) as { messages?: AssistantMessage[]; sessionId?: string };
     if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
       return NextResponse.json({ error: "Request body must include a non-empty 'messages' array." }, { status: 400 });
     }
+    const sessionId = body.sessionId;
 
     const workingMessages: AnthropicApiMessage[] = body.messages.map((m) => ({ role: m.role, content: m.content }));
     const toolsUsed = new Set<string>();
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
       const toolResults: AnthropicContentBlock[] = [];
       for (const block of toolUseBlocks) {
         toolsUsed.add(block.name);
-        const result = await dispatchTool(block.name, block.input);
+        const result = await dispatchTool(block.name, block.input, sessionId);
         if (
           result &&
           typeof result === "object" &&

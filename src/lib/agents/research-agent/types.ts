@@ -178,6 +178,7 @@ export interface SectorSelectionMatrix {
 export interface SectorFundamentalsCompany {
   ticker: string;
   companyName: string;
+  industry: string | null; // real FMP sub-industry classification, e.g. "Oil & Gas Midstream"
   marketCap: number;
   debtToEquity: number | null;
   interestCoverage: number | null;
@@ -185,9 +186,23 @@ export interface SectorFundamentalsCompany {
   operatingMarginByYear: number[]; // most recent first
 }
 
+// A lighter-weight company entry: real name + real sub-industry + market cap
+// from FMP's /profile endpoint (broadly accessible on the free tier), but no
+// financial ratios — those need /income-statement etc., which are gated by a
+// hard allowlist (see SECTOR_CONSTITUENTS' comment in sector-fundamentals.ts).
+// Exists so sub-industry breadth can be shown even for tickers/sectors where
+// full statements aren't available, instead of showing nothing.
+export interface SectorProfileOnlyCompany {
+  ticker: string;
+  companyName: string;
+  industry: string | null;
+  marketCap: number;
+}
+
 export interface SectorFundamentals {
   sector: string;
   companiesAnalyzed: SectorFundamentalsCompany[];
+  broaderCoverage: SectorProfileOnlyCompany[];
   sampleNote: string;
   medians: {
     debtToEquity: number | null;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import type { AssistantMessage } from "@/lib/agents/assistant/types";
 
 interface DisplayMessage extends AssistantMessage {
@@ -15,11 +16,75 @@ const EXAMPLE_QUESTIONS = [
   "What's the current macro stance and why?",
 ];
 
+// Minimal ambient shape for the Web Speech API — not in TypeScript's default
+// DOM lib, and only Chrome/Edge/Safari implement it (no Firefox support as
+// of this writing), so this is feature-detected at runtime, never assumed.
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: { results: { [i: number]: { [j: number]: { transcript: string } } } }) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+}
+
+function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as Record<string, unknown>;
+  return (w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null) as (new () => SpeechRecognitionLike) | null;
+}
+
 export function AssistantChatTab() {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [speakReplies, setSpeakReplies] = useState(false);
+  const [speechOutputSupported, setSpeechOutputSupported] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setVoiceSupported(getSpeechRecognitionCtor() !== null);
+    setSpeechOutputSupported(typeof window !== "undefined" && "speechSynthesis" in window);
+  }, []);
+
+  function toggleListening() {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) return;
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const recognition = new Ctor();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript ?? "";
+      if (transcript) setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+    };
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+  }
+
+  function speak(text: string) {
+    if (!speakReplies || !speechOutputSupported) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  }
+
+  function prefillFeedback(lead: string) {
+    setInput((prev) => (prev ? prev : lead));
+    inputRef.current?.focus();
+  }
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -35,7 +100,10 @@ export function AssistantChatTab() {
       const res = await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMessages.map((m) => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({
+          messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
+          sessionId: getOrCreateSessionId(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -46,6 +114,7 @@ export function AssistantChatTab() {
         ...prev,
         { role: "assistant", content: data.reply, toolsUsed: data.toolsUsed, dataLimitations: data.dataLimitations },
       ]);
+      speak(data.reply);
     } catch {
       setError("Network error reaching the assistant.");
     } finally {
@@ -120,6 +189,18 @@ export function AssistantChatTab() {
         </div>
       )}
 
+      <div className="flex items-center gap-3 mb-2 text-xs text-zinc-500">
+        {speechOutputSupported && (
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" checked={speakReplies} onChange={(e) => setSpeakReplies(e.target.checked)} />
+            Read replies aloud
+          </label>
+        )}
+        {!voiceSupported && (
+          <span>Voice input isn&apos;t supported in this browser — try Chrome, Edge, or Safari.</span>
+        )}
+      </div>
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -127,7 +208,22 @@ export function AssistantChatTab() {
         }}
         className="flex gap-2"
       >
+        {voiceSupported && (
+          <button
+            type="button"
+            onClick={toggleListening}
+            title={listening ? "Stop listening" : "Speak your question"}
+            className={`shrink-0 rounded-lg border px-3 py-2 text-sm ${
+              listening
+                ? "border-red-400 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 animate-pulse"
+                : "border-zinc-200 dark:border-zinc-800"
+            }`}
+          >
+            {listening ? "● Listening" : "🎤"}
+          </button>
+        )}
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about a ticker, a concept, or where to find something…"
@@ -141,6 +237,24 @@ export function AssistantChatTab() {
           Send
         </button>
       </form>
+
+      <div className="flex flex-wrap gap-2 mt-3">
+        <button
+          onClick={() => prefillFeedback("I have a suggestion: ")}
+          className="text-xs rounded-full border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-zinc-500 hover:border-zinc-400 dark:hover:border-zinc-600"
+        >
+          💡 Suggest a feature
+        </button>
+        <button
+          onClick={() => prefillFeedback("I ran into a problem: ")}
+          className="text-xs rounded-full border border-zinc-200 dark:border-zinc-800 px-3 py-1 text-zinc-500 hover:border-zinc-400 dark:hover:border-zinc-600"
+        >
+          🐛 Report a problem
+        </button>
+        <span className="text-xs text-zinc-400 self-center">
+          Finish the sentence and send — the assistant logs it for the team.
+        </span>
+      </div>
     </div>
   );
 }
