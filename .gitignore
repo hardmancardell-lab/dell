@@ -39,6 +39,15 @@ yarn-error.log*
 # generated forward paper-backtest dataset
 gex-paper-backtest-log.json
 
+# ad-hoc scratch JSON dumps from manual API verification (root-level only —
+# doesn't touch legitimate config like package.json/tsconfig.json)
+/*_test.json
+/sa_*.json
+/nvda_*.json
+/tech_*.json
+/scenario_test.json
+/momentum_test.json
+
 # vercel
 .vercel
 
