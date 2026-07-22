@@ -1,0 +1,595 @@
+import type { GoalOption, LiteracyModule, PlacementQuestion } from "../types";
+
+/**
+ * Content data file, same pattern as trading-agent/skills/glossary.ts and
+ * options-strategies.ts — plain structured data, rendered by
+ * FinancialLiteracyTab.tsx. Adapted from the curriculum outline reviewed
+ * with the user (see the published project-overview/curriculum artifacts).
+ * Each module's "tryIt" points at a real, already-built tab elsewhere in
+ * this app — descriptive only for now, not a deep link (no cross-tab
+ * navigation API exists yet to jump there directly).
+ */
+
+export const LITERACY_MODULES: LiteracyModule[] = [
+  // ---------- BEGINNER ----------
+  {
+    id: "beginner-01",
+    tier: "beginner",
+    order: 1,
+    title: "What money actually does",
+    body: "Money does three jobs: it's a medium of exchange (you can trade it for anything), a unit of account (it lets you compare the price of wildly different things), and a store of value (it's supposed to hold its worth over time).\n\nThat third job is the one that quietly breaks. Inflation means prices rise over time, so cash sitting still — under a mattress, in a checking account paying near-zero interest — loses purchasing power even while the number on the balance stays the same. This is the single idea the rest of this course exists to respond to: money that isn't working somehow is quietly shrinking.",
+    tryIt: null,
+    check: {
+      prompt: "You keep $500 in a jar for 3 years while inflation runs about 4% a year. What happened to what that $500 can actually buy?",
+      options: ["It can buy more now", "It can buy about the same", "It can buy less now", "It doubled"],
+      correctIndex: 2,
+      explanation: "The number stayed $500, but prices rose roughly 12% over 3 years — so that same $500 buys noticeably less than it did.",
+    },
+  },
+  {
+    id: "beginner-02",
+    tier: "beginner",
+    order: 2,
+    title: "Budgeting without the spreadsheet phobia",
+    body: "A budget is just income minus expenses, tracked honestly. The 50/30/20 framework is a reasonable starting split: roughly 50% of take-home pay to needs (rent, groceries, minimum debt payments), 30% to wants (everything discretionary), and 20% to savings and extra debt paydown.\n\nBefore anything else on this list, build a real emergency fund — 3 to 6 months of essential expenses, sitting somewhere liquid. It's not exciting, but it's what stops a car repair or a lost job from turning into high-interest debt.",
+    tryIt: null,
+    check: {
+      prompt: "Under the 50/30/20 framework, if your take-home pay is $4,000/month, what's the target amount for wants?",
+      options: ["$4,000", "$2,000", "$1,200", "$800"],
+      correctIndex: 2,
+      explanation: "30% of $4,000 is $1,200 — the discretionary slice, separate from the 50% for needs and 20% for savings.",
+    },
+  },
+  {
+    id: "beginner-03",
+    tier: "beginner",
+    order: 3,
+    title: "Debt and credit, honestly",
+    body: "APR is the real annual cost of borrowing, including most fees — always compare APRs, not just headline interest rates. Your credit score is mostly driven by payment history and how much of your available credit you're using, and it directly determines what rates you're offered on everything from cards to mortgages.\n\nThe minimum-payment trap is real: paying only the minimum on a high-APR balance can mean the interest charged nearly matches (or exceeds) what you're paying down, so the balance barely moves for months or years.",
+    tryIt: null,
+    check: {
+      prompt: "You carry a $1,000 credit card balance at 22% APR and only pay the $25 minimum each month. What's the biggest risk?",
+      options: [
+        "Your credit score improves immediately",
+        "You'll pay it off in about a year",
+        "Interest can outpace your payments and the balance barely shrinks",
+        "There's no real downside since you're paying on time",
+      ],
+      correctIndex: 2,
+      explanation: "At 22% APR, a large chunk of each minimum payment goes to interest, not principal — the balance can take years to clear this way.",
+    },
+  },
+  {
+    id: "beginner-04",
+    tier: "beginner",
+    order: 4,
+    title: "Saving and investing are different tools",
+    body: "The variable that decides which one you need is time horizon, not how much you want to grow your money. Money you need within the next 1-3 years — a down payment, an upcoming expense — belongs somewhere low-risk and liquid, because you can't afford for it to be down 20% right when you need it.\n\nMoney you won't touch for 10+ years (retirement is the classic case) can tolerate real short-term swings in exchange for meaningfully higher long-run growth. Confusing the two — investing short-term money aggressively, or leaving long-term money in cash — is one of the most common beginner mistakes.",
+    tryIt: null,
+    check: {
+      prompt: "You need $10,000 for a house down payment in 14 months. Where does that money belong?",
+      options: [
+        "A diversified stock portfolio",
+        "A high-yield savings account or similar low-risk, liquid option",
+        "Cryptocurrency, for higher growth",
+        "Long-term bonds",
+      ],
+      correctIndex: 1,
+      explanation: "14 months is too short a horizon to risk a market downturn right before you need the cash — liquidity and stability matter more than growth here.",
+    },
+  },
+  {
+    id: "beginner-05",
+    tier: "beginner",
+    order: 5,
+    title: "What a share of stock actually is",
+    body: "A share of stock is a small, real, fractional ownership stake in an actual business — its assets, its future earnings, its risks. It is not a scratch ticket or a number that moves for no reason; price changes reflect (often messily, often overreacting) changing expectations about that business's future.\n\nThis is the single most load-bearing reframe in the whole beginner tier: if you own the stock, you own a sliver of the company, not a bet placed against a stranger.",
+    tryIt: { label: "Security Analysis · Analyze Ticker" },
+    check: {
+      prompt: "You buy 10 shares of a company. What do you actually own?",
+      options: [
+        "A loan to the company that must be repaid",
+        "A tiny fractional ownership stake in the company's future earnings",
+        "A guaranteed dividend payment",
+        "Nothing until you sell",
+      ],
+      correctIndex: 1,
+      explanation: "Stock is ownership, not a loan — that's what separates it from a bond, and it's why a stock's value ultimately tracks the business's real performance.",
+    },
+  },
+  {
+    id: "beginner-06",
+    tier: "beginner",
+    order: 6,
+    title: "What a bond actually is",
+    body: "A bond is a loan — you're lending money to a company or government in exchange for regular interest payments and your principal back at maturity. Unlike a stock, you don't own anything; you're a creditor, not an owner.\n\nBond prices move opposite to interest rates: when new bonds start paying more, your older, lower-paying bond becomes less attractive and its market price falls, even though nothing about the issuer changed.",
+    tryIt: null,
+    check: {
+      prompt: "Interest rates rise sharply after you buy a 10-year bond paying a fixed 3%. What happens to your existing bond's market price?",
+      options: [
+        "It rises, since rates rose too",
+        "It falls, since new bonds now pay more and yours looks less attractive",
+        "It's unaffected",
+        "It doubles",
+      ],
+      correctIndex: 1,
+      explanation: "Bond prices and interest rates move in opposite directions — your fixed 3% is worth less once the market can get more elsewhere.",
+    },
+  },
+  {
+    id: "beginner-07",
+    tier: "beginner",
+    order: 7,
+    title: "Risk and diversification, quantified",
+    body: "\"Don't put all your eggs in one basket\" is really a statement about correlation: if you hold many different things that don't all move together, one bad outcome doesn't sink the whole portfolio. Holding 1 stock means your entire result depends on that one company's news, lawsuits, and earnings surprises.\n\nHolding 30 stocks across different industries means any single company's bad news barely dents the total — the portfolio's swings shrink even though you haven't given up much expected return.",
+    tryIt: null,
+    check: {
+      prompt: "Portfolio A holds 1 stock. Portfolio B holds 30 stocks across different industries. Which is more likely to swing wildly on one company's bad news?",
+      options: ["Portfolio B", "Portfolio A", "They're identical", "Can't tell without more info"],
+      correctIndex: 1,
+      explanation: "A single holding means one company's news is the whole story for Portfolio A — diversification is precisely what dilutes that.",
+    },
+  },
+  {
+    id: "beginner-08",
+    tier: "beginner",
+    order: 8,
+    title: "Compound interest and the Rule of 72",
+    body: "Compound interest means you earn returns not just on your original money, but on the returns it already made — growth on growth. The Rule of 72 is a fast mental-math shortcut: divide 72 by your annual return rate to estimate how many years it takes money to double.\n\nThis is why starting at 25 instead of 35 matters so much more than most people expect — a decade of extra compounding, even at a modest contribution rate, can end up being roughly the difference between a comfortable and an uncomfortable retirement.",
+    tryIt: null,
+    check: {
+      prompt: "Using the Rule of 72, roughly how many years does it take money to double at a steady 8% annual return?",
+      options: ["3 years", "9 years", "24 years", "72 years"],
+      correctIndex: 1,
+      explanation: "72 ÷ 8 = 9 — at 8% annual growth, the money roughly doubles in about 9 years.",
+    },
+  },
+  {
+    id: "beginner-09",
+    tier: "beginner",
+    order: 9,
+    title: "Taxes, the parts that matter now",
+    body: "Ordinary income (your paycheck) is taxed differently than capital gains (profit from selling an investment). Hold an investment over a year before selling and the profit typically qualifies for lower long-term capital gains rates than your regular income tax rate.\n\nTax-advantaged accounts like a 401(k) or IRA let contributions grow without being taxed every year the way a regular brokerage account is — understanding this now, even at a beginner level, changes how much of your investing you'd want to route through those accounts first.",
+    tryIt: null,
+    check: {
+      prompt: "You sell a stock you held for 2 years at a profit. Compared to your regular paycheck income, how is that gain typically taxed?",
+      options: [
+        "Exactly the same as your paycheck",
+        "Usually at a lower long-term capital gains rate",
+        "It's never taxed",
+        "At double your income tax rate",
+      ],
+      correctIndex: 1,
+      explanation: "Gains on investments held over a year generally qualify for preferential long-term capital gains rates, lower than ordinary income tax brackets.",
+    },
+  },
+
+  // ---------- INTERMEDIATE ----------
+  {
+    id: "intermediate-01",
+    tier: "intermediate",
+    order: 1,
+    title: "Reading the three statements",
+    body: "The income statement shows revenue and profit over a period. The balance sheet shows what a company owns and owes at a single point in time. The cash flow statement shows actual cash moving in and out — and it's the one that's hardest to fake, because accounting profit can include revenue that hasn't actually been collected yet.\n\nA company can report a genuine accounting profit while its cash position quietly deteriorates — usually a sign to look at receivables and inventory before trusting the headline number.",
+    tryIt: { label: "Security Analysis · Graham Checklist" },
+    check: {
+      prompt: "A company reports a profit on its income statement, but its cash flow statement shows cash actually declining. What should that make you check?",
+      options: [
+        "Nothing, profit is profit",
+        "Whether that profit is backed by real cash coming in, or sitting in unpaid receivables/inventory",
+        "The stock is definitely a fraud",
+        "The balance sheet is irrelevant now",
+      ],
+      correctIndex: 1,
+      explanation: "Profit is an accounting figure; cash flow shows what actually moved. A gap between them is exactly what the cash flow statement exists to surface.",
+    },
+  },
+  {
+    id: "intermediate-02",
+    tier: "intermediate",
+    order: 2,
+    title: "Valuation: what \"cheap\" and \"expensive\" mean",
+    body: "P/E (price divided by earnings per share) and P/B (price divided by book value per share) are the most common starting valuation ratios. A high P/E can mean a stock is genuinely overpriced — or it can mean the market expects much faster growth, which changes what a \"fair\" multiple even looks like.\n\nComparing a P/E across two completely different sectors is a classic beginner-dressed-as-analyst mistake — a software company and a utility company have structurally different growth and risk profiles, so their \"normal\" P/E ranges are nowhere near the same.",
+    tryIt: null,
+    check: {
+      prompt: "Company X has a P/E of 40. Its industry average P/E is 15. What's the correct first question?",
+      options: [
+        "X is obviously overpriced, avoid it",
+        "Why is X trading at a premium — faster growth, different accounting, or genuine overvaluation?",
+        "P/E doesn't matter for comparing companies",
+        "X should be compared to the overall market only",
+      ],
+      correctIndex: 1,
+      explanation: "A large premium isn't automatically wrong — it demands an explanation (growth expectations, accounting differences, or real overvaluation) before you draw a conclusion.",
+    },
+  },
+  {
+    id: "intermediate-03",
+    tier: "intermediate",
+    order: 3,
+    title: "Market structure, briefly",
+    body: "Stocks trade on exchanges through market makers who quote a bid (what buyers offer) and an ask (what sellers want) — the gap between them is the spread. A quoted price isn't quite the price you'll get: buying at market means paying the ask, not the midpoint.\n\nThis matters most for thinly-traded stocks, where wide spreads can quietly cost you more than a few cents per share.",
+    tryIt: null,
+    check: {
+      prompt: "You see a stock quoted at $50.00 bid / $50.05 ask. If you buy at market price right now, roughly what do you pay?",
+      options: ["$50.00", "$50.05", "$50.025 exactly, no more", "It's random"],
+      correctIndex: 1,
+      explanation: "A market buy order fills at the ask — the price sellers are currently willing to accept.",
+    },
+  },
+  {
+    id: "intermediate-04",
+    tier: "intermediate",
+    order: 4,
+    title: "Building an actual diversified portfolio",
+    body: "True diversification is about correlation, not just \"different companies.\" Two stocks in different industries can still move together if they share the same underlying economic sensitivity — this is the mistake this module exists to prevent.\n\nChecking real correlation between holdings, not just eyeballing that the tickers look different, is the difference between a portfolio that's actually diversified and one that only looks that way on paper.",
+    tryIt: { label: "Portfolio Tracker · Correlation Finder" },
+    check: {
+      prompt: "You own stock in 3 different airlines. Are you well-diversified?",
+      options: [
+        "Yes, 3 different companies is diversified",
+        "No — they're likely highly correlated since they share the same industry risks",
+        "Diversification only matters with 10+ holdings",
+        "Airlines are always uncorrelated with each other",
+      ],
+      correctIndex: 1,
+      explanation: "Same industry usually means shared exposure to fuel costs, travel demand, and labor costs — 3 tickers, one real risk factor.",
+    },
+  },
+  {
+    id: "intermediate-05",
+    tier: "intermediate",
+    order: 5,
+    title: "Macro basics: rates, the Fed, the yield curve",
+    body: "The Federal Reserve sets short-term interest rates, which ripples through borrowing costs across the whole economy. Higher rates mean future cash flows are discounted more heavily when valuing a company — so growth stocks, whose value depends heavily on earnings far in the future, are typically hit hardest when rates rise.\n\nThe yield curve (the relationship between short- and long-term Treasury yields) is one of the most closely watched macro signals precisely because an inverted curve has preceded most U.S. recessions historically.",
+    tryIt: { label: "Top-Down Economic Analysis · Macro" },
+    check: {
+      prompt: "The Fed raises interest rates. All else equal, what typically happens to the present value of a company's far-future expected earnings?",
+      options: ["It rises", "It falls, since future cash flows are discounted at a higher rate", "No effect", "It becomes infinite"],
+      correctIndex: 1,
+      explanation: "Higher discount rates reduce the present value of cash flows expected far in the future — which is why growth stocks are especially rate-sensitive.",
+    },
+  },
+  {
+    id: "intermediate-06",
+    tier: "intermediate",
+    order: 6,
+    title: "Sector rotation",
+    body: "Different sectors historically lead at different points in the economic cycle. Defensive sectors — consumer staples, utilities, healthcare — tend to hold up better in a slowdown because demand for their products doesn't disappear in a recession. Cyclical sectors — consumer discretionary, homebuilders, industrials — tend to lead coming out of one.\n\nThis isn't a rigid rulebook, but understanding the pattern is what separates \"the market is down\" from \"the market is rotating.\"",
+    tryIt: { label: "Top-Down Economic Analysis · Sector" },
+    check: {
+      prompt: "The economy is entering a recession. Which sector has historically tended to hold up better?",
+      options: ["Consumer discretionary (luxury goods)", "Consumer staples (groceries, household basics)", "Homebuilders", "Airlines"],
+      correctIndex: 1,
+      explanation: "People keep buying groceries and basics in a downturn in a way they don't keep buying luxury goods or new homes — that demand stability is what makes staples defensive.",
+    },
+  },
+  {
+    id: "intermediate-07",
+    tier: "intermediate",
+    order: 7,
+    title: "Reading a chart without superstition",
+    body: "Support and resistance aren't magic lines — they represent real clusters of buy or sell orders at prices where enough market participants previously acted. A stock that keeps bouncing at $40 is showing you that real demand has repeatedly shown up there, not that $40 has some mystical property.\n\nVolume confirms or undermines a price move: a breakout on heavy volume reflects real conviction; the same move on thin volume is easier to dismiss.",
+    tryIt: { label: "Trading Analysis · Charts" },
+    check: {
+      prompt: "A stock keeps bouncing off $40 every time it drops there, then rising. What does $40 likely represent?",
+      options: [
+        "A random coincidence with no meaning",
+        "A support level — real buy orders tend to cluster there",
+        "A guaranteed floor that can never break",
+        "The company's book value",
+      ],
+      correctIndex: 1,
+      explanation: "Support reflects a real pattern of buying interest at that price — useful information, but never a guarantee the level holds next time.",
+    },
+  },
+  {
+    id: "intermediate-08",
+    tier: "intermediate",
+    order: 8,
+    title: "Why \"backtested\" isn't proof",
+    body: "A strategy that wins 9 of 10 trades sounds convincing — until you realize 10 trades is nowhere near enough to distinguish a real, repeatable edge from a lucky streak. Real statistical evaluation requires a large enough sample, correction for testing many ideas at once, and confirmation that the pattern holds on data it wasn't built on.\n\nThis is the exact discipline this app's own backtest engines are built around — every result reports its sample size honestly, specifically because that number is the difference between a signal and noise.",
+    tryIt: { label: "Trading Analysis · Backtest" },
+    check: {
+      prompt: "A strategy shows a 90% win rate over 10 trades. How much should that convince you it's a real edge?",
+      options: [
+        "Completely — 90% is 90%",
+        "Very little — 10 trades is far too small a sample to distinguish a real edge from luck",
+        "It proves the strategy works forever",
+        "Sample size doesn't matter if the win rate is high enough",
+      ],
+      correctIndex: 1,
+      explanation: "Small samples can easily produce an impressive-looking win rate by chance — real confidence needs a much larger, statistically evaluated sample.",
+    },
+  },
+  {
+    id: "intermediate-09",
+    tier: "intermediate",
+    order: 9,
+    title: "Options, before the Greeks",
+    body: "A call option is a bet that a stock will rise above a certain price (the strike) before a certain date. A put option is the mirror image — a bet the stock falls below the strike. Both come with an expiration date, after which the option is worthless if the bet didn't pay off.\n\nThis module deliberately stops before the Greeks (delta, gamma, theta, vega) — those come in the Expert tier. For now, the shape of the payoff is the important part.",
+    tryIt: null,
+    check: {
+      prompt: "You buy a call option on a stock. What are you betting on?",
+      options: [
+        "The stock price falling",
+        "The stock price rising above the strike price before expiration",
+        "The company going bankrupt",
+        "Nothing — calls have no directional bet",
+      ],
+      correctIndex: 1,
+      explanation: "A call profits when the stock rises above the strike price before expiration — the mirror image of a put, which profits on a decline.",
+    },
+  },
+  {
+    id: "intermediate-10",
+    tier: "intermediate",
+    order: 10,
+    title: "The biases that wreck a good plan",
+    body: "Loss aversion (the disposition effect, specifically) shows up as selling winners too early to lock in a good feeling, while holding losers far too long hoping they'll come back — the exact opposite of a disciplined \"cut losses, let winners run\" approach. Recency bias means overweighting whatever just happened, assuming a recent trend will continue indefinitely.\n\nFor most intermediate investors, these biases — not a lack of market knowledge — are the single biggest source of avoidable underperformance.",
+    tryIt: null,
+    check: {
+      prompt: "You sell a losing stock quickly to \"stop the pain,\" but hold a winning stock far too long hoping for more. What bias is this closest to?",
+      options: ["Recency bias", "Loss aversion / disposition effect", "Confirmation bias", "Anchoring"],
+      correctIndex: 1,
+      explanation: "This asymmetric treatment of gains and losses — quick to sell winners, slow to sell losers — is the textbook disposition effect, rooted in loss aversion.",
+    },
+  },
+
+  // ---------- EXPERT ----------
+  {
+    id: "expert-01",
+    tier: "expert",
+    order: 1,
+    title: "Options Greeks and dealer positioning",
+    body: "Delta, gamma, theta, and vega describe how an option's value responds to the underlying price, the rate of that response, time decay, and volatility, respectively. Aggregated across an entire options chain, these describe how options dealers — who are usually on the other side of customer trades — are positioned.\n\nWhen dealers are net short gamma, their hedging tends to amplify price moves (sell into declines, buy into rallies, to stay hedged). When they're net long gamma, hedging tends to dampen moves. This mechanism is what this app's GEX signal is built to surface.",
+    tryIt: { label: "Options · GEX & Dealer Positioning" },
+    check: {
+      prompt: "Dealers are net short gamma on a stock. As the price falls, what does their hedging typically do to that move?",
+      options: [
+        "Dampens it (they buy dips to stay hedged)",
+        "Amplifies it (they must sell into the decline to stay hedged)",
+        "Has no effect on price",
+        "Only affects the options market, never the stock",
+      ],
+      correctIndex: 1,
+      explanation: "Short-gamma dealers must trade in the same direction as the move to stay hedged — selling into a decline, buying into a rally — which can amplify the move.",
+    },
+  },
+  {
+    id: "expert-02",
+    tier: "expert",
+    order: 2,
+    title: "Portfolio theory in depth",
+    body: "The Sharpe ratio measures return earned per unit of risk taken — expected return minus the risk-free rate, divided by volatility. A higher Sharpe ratio means a portfolio delivered more return for the risk it carried, not just more return in absolute terms.\n\nThe efficient frontier is the set of portfolios offering the best possible expected return for each level of risk — everything below it is leaving return on the table for the risk being taken.",
+    tryIt: { label: "Portfolio Tracker · Modern Portfolio Theory" },
+    check: {
+      prompt: "Two portfolios have the same expected return, but Portfolio A has lower volatility. Which has the higher Sharpe ratio?",
+      options: ["Portfolio B (higher volatility)", "Portfolio A (lower volatility)", "They're always equal", "Sharpe ratio doesn't use volatility"],
+      correctIndex: 1,
+      explanation: "Same return, less risk taken to get it — that's a strictly better risk-adjusted outcome, which the Sharpe ratio is built to capture.",
+    },
+  },
+  {
+    id: "expert-03",
+    tier: "expert",
+    order: 3,
+    title: "Evaluating a strategy like a statistician",
+    body: "Testing many trading signals at once and reporting only the one that looks significant is a classic multiple-comparisons trap — with enough tests, some will look significant purely by chance. Correction methods like Benjamini-Hochberg FDR adjust the bar for significance based on how many things you tested.\n\nOut-of-sample testing (checking whether a pattern holds on data it wasn't built on) and overfitting (a strategy tuned so precisely to historical data that it fails on new data) are the other two pillars of taking a backtest seriously.",
+    tryIt: { label: "Glossary · Statistics terms" },
+    check: {
+      prompt: "You test 20 different trading signals and 1 comes back statistically significant at p<0.05. Should you trust it as a real edge?",
+      options: [
+        "Yes, p<0.05 is p<0.05",
+        "Be skeptical — testing 20 signals means you'd expect about 1 false positive by chance alone",
+        "No correction is ever needed for multiple tests",
+        "p-values don't apply to trading strategies",
+      ],
+      correctIndex: 1,
+      explanation: "This is exactly what FDR correction exists to guard against — at a 5% significance threshold, roughly 1 in 20 tests will look significant purely by chance.",
+    },
+  },
+  {
+    id: "expert-04",
+    tier: "expert",
+    order: 4,
+    title: "Macro-to-position synthesis, cross-asset",
+    body: "Fiscal and monetary policy don't just move stocks — they thread through currencies, commodities, and rates with different mechanics in each. A stronger dollar (often driven by relatively higher U.S. rates) tends to pressure globally-priced, dollar-denominated commodities lower, since it takes fewer dollars to buy the same physical amount.\n\nUnderstanding these cross-asset transmission mechanisms — not just \"rates went up, stocks went down\" — is what separates genuine macro analysis from headline reaction.",
+    tryIt: { label: "Currency / Futures / Commodities tabs" },
+    check: {
+      prompt: "The dollar strengthens sharply due to Fed policy. All else equal, what's the typical initial pressure on dollar-denominated commodities like oil and gold?",
+      options: [
+        "Upward pressure, since a strong dollar makes commodities more attractive",
+        "Downward pressure, since it takes fewer dollars to buy the same amount of a globally-priced commodity",
+        "No relationship exists",
+        "Commodities always move with the dollar, not against it",
+      ],
+      correctIndex: 1,
+      explanation: "Commodities priced in dollars get more expensive in other currencies when the dollar strengthens, typically pressuring dollar-priced demand and price lower.",
+    },
+  },
+  {
+    id: "expert-05",
+    tier: "expert",
+    order: 5,
+    title: "Market microstructure",
+    body: "Liquidity isn't constant throughout the day or across stocks — it's thin in the pre-market, thin in thinly-traded names, and thick at the open and close of a liquid large-cap. A large order hitting a thin order book moves the price more than the same order hitting a deep one, simply because there are fewer resting orders to absorb it.\n\nThis app is explicit about where it can't verify microstructure claims — no tick-level or order-book data is available at this budget tier, so anything beyond descriptive, snapshot-level signals (like same-day options volume/OI) stays out of scope rather than being faked.",
+    tryIt: null,
+    check: {
+      prompt: "A large sell order hits a stock with thin order-book liquidity at that moment. Compared to hitting during a liquid, high-volume window, what's more likely?",
+      options: [
+        "Identical price impact regardless of liquidity",
+        "A larger price impact / slippage, since there are fewer resting orders to absorb it",
+        "No price impact ever, since price is 'set' by the exchange",
+        "Liquidity only matters for options, not stocks",
+      ],
+      correctIndex: 1,
+      explanation: "Thin liquidity means fewer orders sitting at nearby prices to absorb a large trade, so the same order size moves the price further.",
+    },
+  },
+  {
+    id: "expert-06",
+    tier: "expert",
+    order: 6,
+    title: "Deep-value methodology",
+    body: "Benjamin Graham's Net Current Asset Value (NCAV) approach values a company against current assets minus all liabilities — deliberately ignoring long-term/fixed assets and goodwill entirely. It's a conservative, liquidation-style floor: what would be left for shareholders if the company were wound down today, using only the most liquid assets.\n\nThis app's Graham Checklist implements the full 7-criteria version of this methodology, and deliberately excludes analyst price targets — not as an oversight, but because forecasting isn't part of Graham's method.",
+    tryIt: { label: "Security Analysis · full Checklist" },
+    check: {
+      prompt: "What does Graham's NCAV approach deliberately exclude from a company's valuation?",
+      options: [
+        "Current liabilities",
+        "Long-term/fixed assets and goodwill — it's a conservative, liquidation-style floor",
+        "Current assets",
+        "Cash on the balance sheet",
+      ],
+      correctIndex: 1,
+      explanation: "NCAV is deliberately conservative — it only counts current assets against all liabilities, ignoring long-term assets and goodwill that might not hold their value in a real liquidation.",
+    },
+  },
+  {
+    id: "expert-07",
+    tier: "expert",
+    order: 7,
+    title: "Portfolio-level risk management",
+    body: "Hedging a concentrated position doesn't require selling it — a protective put, for instance, caps downside on a held position while leaving upside intact (minus the cost of the hedge). Real risk management is a sizing discipline: how much protection, at what cost, against how much of the position.\n\nDrawdown management — actively limiting how far a portfolio falls from its peak — matters because recovering from a large drawdown requires a disproportionately larger gain (a 50% loss needs a 100% gain just to break even).",
+    tryIt: { label: "Portfolio Tracker · Risk & Rebalancing" },
+    check: {
+      prompt: "You hold a concentrated position and want to limit downside without selling. What's the direct hedging tool for that?",
+      options: [
+        "Buying more of the same stock",
+        "Buying a protective put (or similar) on the position",
+        "Ignoring it since diversification isn't needed",
+        "Switching to a savings account",
+      ],
+      correctIndex: 1,
+      explanation: "A protective put caps downside risk on a held position while leaving the position itself — and its upside — intact.",
+    },
+  },
+  {
+    id: "expert-08",
+    tier: "expert",
+    order: 8,
+    title: "Building a full top-down thesis",
+    body: "The capstone module: a real investment thesis connects macro/fiscal backdrop, sector positioning, and company-level fundamentals and technicals into one coherent, falsifiable argument — not any single layer in isolation. A cheap P/E means nothing if the sector is structurally declining; a great macro backdrop means nothing for a company with deteriorating fundamentals.\n\nThis is the exact chain this app's planned assistant is meant to walk when asked \"should I buy this\" — presenting what each real layer of data shows, not issuing a directive.",
+    tryIt: null,
+    check: {
+      prompt: "You're evaluating whether a defense-sector stock is attractive right now. Which single fact, alone, is enough to decide?",
+      options: [
+        "The stock's P/E ratio alone",
+        "No single layer alone — a real thesis connects macro/geopolitical backdrop, sector read, and company fundamentals together",
+        "Whatever a friend recommended",
+        "The stock's 1-day price change",
+      ],
+      correctIndex: 1,
+      explanation: "A real thesis is a synthesis across layers — no single number, however important, substitutes for connecting macro, sector, and company-level evidence.",
+    },
+  },
+];
+
+export const PLACEMENT_QUESTIONS: PlacementQuestion[] = [
+  // Beginner probes
+  {
+    tier: "beginner",
+    prompt: "If inflation runs higher than the interest rate your savings account pays, what's happening to your money's real value over time?",
+    options: ["Growing faster than prices", "Losing purchasing power even though the balance grows", "Completely protected", "Doubling every year"],
+    correctIndex: 1,
+  },
+  {
+    tier: "beginner",
+    prompt: "What does it mean to diversify a portfolio?",
+    options: [
+      "Put all your money in the single best stock you can find",
+      "Spread investments across different assets so one bad outcome doesn't sink you",
+      "Only invest in your employer's stock",
+      "Keep everything in cash",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "beginner",
+    prompt: "Which of these is generally considered \"good debt\" in most financial literacy frameworks?",
+    options: ["A payday loan at 300% APR", "A mortgage on a home you can afford, at a reasonable rate", "Maxing out a credit card for a vacation", "All debt is equally bad"],
+    correctIndex: 1,
+  },
+  // Intermediate probes
+  {
+    tier: "intermediate",
+    prompt: "A stock's P/E ratio is 40 while its industry average is 15. On its own, what does that tell you?",
+    options: [
+      "The stock is definitely a bad investment",
+      "Not much by itself — it needs context like growth rate or industry norms before it means anything",
+      "The company is guaranteed to grow 40% next year",
+      "P/E ratios are meaningless",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "intermediate",
+    prompt: "Why might two companies in totally different industries still be highly correlated in a portfolio?",
+    options: [
+      "That's impossible if industries differ",
+      "They can share the same broad market/economic sensitivity even in different industries",
+      "Correlation only applies within the same industry",
+      "Correlation doesn't apply to individual stocks",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "intermediate",
+    prompt: "A backtest shows a trading strategy worked great over the last 8 occurrences. What's most important to check before trusting it?",
+    options: [
+      "Nothing, 8 wins is convincing",
+      "Whether the sample size is large enough and whether it holds up out-of-sample",
+      "How much money you'd have made",
+      "Whether the chart looks nice",
+    ],
+    correctIndex: 1,
+  },
+  // Expert probes
+  {
+    tier: "expert",
+    prompt: "Dealers holding negative (short) gamma on a large options position are hedging. What does that typically do to realized volatility in the underlying?",
+    options: ["Dampens it", "Can amplify it, since they must trade in the same direction as the move to stay hedged", "Has zero effect on the underlying", "Only matters at options expiration"],
+    correctIndex: 1,
+  },
+  {
+    tier: "expert",
+    prompt: "You run 15 separate statistical tests looking for a trading edge and one comes back significant at p<0.05. What should you immediately be worried about?",
+    options: [
+      "Nothing, it's significant",
+      "A false positive from multiple comparisons — roughly 1 in 20 tests looks significant by chance alone",
+      "p-values don't apply to finance",
+      "The test is definitely correct since p<0.05",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "expert",
+    prompt: "What does Graham's Net Current Asset Value (NCAV) approach deliberately exclude from a company's valuation?",
+    options: ["Current liabilities", "Long-term/fixed assets and goodwill — a conservative, liquidation-style floor", "Current assets", "Cash on the balance sheet"],
+    correctIndex: 1,
+  },
+];
+
+export const GOAL_OPTIONS: GoalOption[] = [
+  {
+    id: "personal-finance",
+    label: "Understand my own money",
+    description: "Budgeting, saving, debt, and the basics of building financial security.",
+  },
+  {
+    id: "evaluate-companies",
+    label: "Evaluate companies & sectors",
+    description: "Read financial statements, judge valuation, and understand what's driving a sector.",
+  },
+  {
+    id: "build-portfolio",
+    label: "Build & manage a portfolio",
+    description: "Diversification, correlation, risk, and constructing a real portfolio.",
+  },
+  {
+    id: "trade-with-signals",
+    label: "Trade with real signals",
+    description: "Technical analysis, backtesting rigor, options mechanics, and macro-driven strategy.",
+  },
+];
