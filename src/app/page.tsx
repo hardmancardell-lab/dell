@@ -22,6 +22,7 @@ import { OrbWatchlistTab } from "@/components/OrbWatchlistTab";
 import { TradingDashboardTab } from "@/components/TradingDashboardTab";
 import { WatchlistProvider } from "@/lib/agents/trading-agent/watchlist-storage";
 import { GlossaryTab } from "@/components/GlossaryTab";
+import { AlertsSubscribeTab } from "@/components/AlertsSubscribeTab";
 import { InternationalEconomicsTab } from "@/components/InternationalEconomicsTab";
 import { BondDashboardTab } from "@/components/BondDashboardTab";
 import { YieldCurveTab } from "@/components/YieldCurveTab";
@@ -710,6 +711,11 @@ export default async function Home() {
                           <GlossaryTab />
                         </div>
                       ),
+                    },
+                    {
+                      id: "alerts",
+                      label: "Alerts",
+                      content: <AlertsSubscribeTab />,
                     },
                   ]}
                 />
