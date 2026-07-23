@@ -102,10 +102,15 @@ create table alert_log (
    `DEPLOYMENT.md`'s checklist) — `CRON_SECRET` also needs to be set for Vercel Cron to actually authenticate;
    Vercel automatically sends it as a Bearer token to cron-invoked routes when configured this way.
 
-`vercel.json`'s cron schedule (`*/15 12-21 * * 1-5`) is a fixed-UTC superset covering both EST and EDT market
-hours — the route itself does the precise 9:30am-4:00pm ET trim via `toEasternParts`, so the wider cron window
-is safe (it just no-ops outside real market hours rather than needing DST-aware cron scheduling, which Vercel
-doesn't support).
+**Real constraint, confirmed live**: Vercel's free Hobby plan caps cron jobs at once per day (per-hour ±59min
+precision) — a `*/15` schedule is silently rejected at deploy time (the deployment fails with no obvious error
+in the dashboard; the real reason only shows up as a failed GitHub commit status check pointing at
+vercel.com/docs/cron-jobs/usage-and-pricing). `vercel.json`'s schedule is currently `0 18 * * 1-5` — a single
+daily check at 18:00 UTC (2:00pm EDT / 1:00pm EST, comfortably inside market hours either way), not the
+originally-intended every-15-minutes cadence. **Upgrading to Vercel Pro (~$20/mo) unlocks per-minute cron
+scheduling** — bump the schedule back to something like `*/15 12-21 * * 1-5` (a fixed-UTC superset covering
+both EST and EDT market hours — the route itself does the precise 9:30am-4:00pm ET trim via `toEasternParts`,
+so a wider cron window is safe) once/if that upgrade happens.
 
 ## Checklist — verify these once real keys are set
 
