@@ -55,22 +55,23 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-      <div className="text-xs uppercase tracking-wide text-zinc-500">
-        {label}
+    <div className="jv-card">
+      <div className="jv-br-b" />
+      <div className="jv-label">{label}</div>
+      <div className="jv-cond c-neutral" style={{ fontSize: 18 }}>
+        {value}
       </div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-      {sub && <div className="text-sm text-zinc-500 mt-1">{sub}</div>}
+      {sub && (
+        <div className="text-xs" style={{ color: "var(--text-2)" }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
 
 function ConditionBadge({ text }: { text: string }) {
-  return (
-    <span className="inline-block rounded-full bg-zinc-100 dark:bg-zinc-800 px-3 py-1 text-sm font-medium">
-      {text}
-    </span>
-  );
+  return <span className="jv-badge c-neutral">{text}</span>;
 }
 
 export default async function Home() {
@@ -101,50 +102,49 @@ export default async function Home() {
   }
 
   const macroStanceContent = macroError ? (
-    <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400">
+    <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
       <div className="font-medium">Could not load live data</div>
       <div className="text-sm mt-1">{macroError}</div>
     </div>
   ) : matrix ? (
-    <div className="space-y-10">
+    <div className="flex flex-col gap-10">
       {briefing && (
         <section>
-          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium mb-3">
-            National Summary &mdash; Beige-Book-Style Read
-          </div>
-          <div className="space-y-4 mb-8">
+          <div className="jv-strip-title">National Summary &mdash; Beige-Book-Style Read</div>
+          <div className="flex flex-col gap-3 mb-8">
             {briefing.nationalSummary.map((s) => (
-              <div key={s.category} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-                <div className="text-sm font-semibold mb-1">{s.category}</div>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">{s.narrative}</p>
+              <div key={s.category} className="jv-card">
+                <div className="jv-br-b" />
+                <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>{s.category}</div>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-1)" }}>{s.narrative}</p>
               </div>
             ))}
           </div>
 
-          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium mb-3">
-            Current Conditions &mdash; SEP-Styled Table
-          </div>
+          <div className="jv-strip-title">Current Conditions &mdash; SEP-Styled Table</div>
           <div className="overflow-x-auto mb-3">
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
               <thead>
-                <tr className="text-left text-xs text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                  <th className="py-2 pr-4">Metric</th>
-                  <th className="py-2 pr-4">Current Reading</th>
-                  <th className="py-2 pr-4">As-Of Date</th>
-                  <th className="py-2 pr-4">Prior Reading</th>
-                  <th className="py-2">Direction</th>
+                <tr className="text-left" style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }}>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Metric</th>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Current Reading</th>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">As-Of Date</th>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Prior Reading</th>
+                  <th className="py-2 font-mono text-xs uppercase tracking-wider font-normal">Direction</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
                 {briefing.currentConditionsTable.map((row) => (
-                  <tr key={row.metric} className="border-b border-zinc-100 dark:border-zinc-900">
-                    <td className="py-2 pr-4 font-medium">{row.metric}</td>
-                    <td className="py-2 pr-4">{row.currentValue !== null ? `${row.currentValue.toFixed(2)}%` : "N/A"}</td>
-                    <td className="py-2 pr-4 text-zinc-500">{row.currentDate}</td>
-                    <td className="py-2 pr-4 text-zinc-500">
+                  <tr key={row.metric} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                    <td className="py-2 pr-4 font-medium" style={{ color: "var(--text-0)" }}>{row.metric}</td>
+                    <td className="py-2 pr-4 font-mono" style={{ color: "var(--text-1)" }}>
+                      {row.currentValue !== null ? `${row.currentValue.toFixed(2)}%` : "N/A"}
+                    </td>
+                    <td className="py-2 pr-4 font-mono" style={{ color: "var(--text-2)" }}>{row.currentDate}</td>
+                    <td className="py-2 pr-4 font-mono" style={{ color: "var(--text-2)" }}>
                       {row.yearAgoValue !== null ? `${row.yearAgoValue.toFixed(2)}% (${row.yearAgoDate})` : "N/A"}
                     </td>
-                    <td className="py-2 font-mono">
+                    <td className="py-2 font-mono" style={{ color: "var(--text-1)" }}>
                       {row.direction === "up" ? "↑" : row.direction === "down" ? "↓" : row.direction === "flat" ? "→" : "?"}
                     </td>
                   </tr>
@@ -152,36 +152,40 @@ export default async function Home() {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-amber-700 dark:text-amber-500 mb-8">{briefing.asOfNote}</p>
+          <p className="text-xs" style={{ color: "var(--verdict)" }}>{briefing.asOfNote}</p>
         </section>
       )}
       {briefingError && !briefing && (
-        <div className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-400 mb-8">
+        <div className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
           Extended macro briefing view unavailable: {briefingError}. Showing the underlying stance and matrix data below.
         </div>
       )}
 
-      <section className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-950">
-        <h2 className="text-lg font-semibold">
+      <div className="jv-verdict-panel">
+        <div className="jv-vp-label">
+          <span className="jv-dot" aria-hidden="true" />
+          Overall stance
+        </div>
+        <h3>
           <ResearchGlossaryTerm term="macroStanceLabel">{matrix.stance.label}</ResearchGlossaryTerm>
-        </h2>
-        <ul className="mt-3 space-y-2 list-disc list-inside text-sm text-zinc-700 dark:text-zinc-300">
+        </h3>
+        <div className="flex flex-col gap-2">
           {matrix.stance.rationale.map((r) => (
-            <li key={r.slice(0, 24)}>{r}</li>
+            <p key={r.slice(0, 24)}>{r}</p>
           ))}
-        </ul>
-      </section>
+        </div>
+      </div>
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">
+          <div className="jv-strip-title" style={{ marginBottom: 0 }}>
             1. Credit &amp; Systemic Liquidity
-          </h2>
+          </div>
           <ResearchGlossaryTerm term="creditCondition">
             <ConditionBadge text={matrix.credit.creditCondition} />
           </ResearchGlossaryTerm>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <StatCard
             label={
               <ResearchGlossaryTerm term="yieldCurveInversion">
@@ -205,14 +209,14 @@ export default async function Home() {
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">
+          <div className="jv-strip-title" style={{ marginBottom: 0 }}>
             2. Valuation &amp; Market Over-Extension
-          </h2>
+          </div>
           <ResearchGlossaryTerm term="valuationCondition">
             <ConditionBadge text={matrix.valuation.valuationCondition} />
           </ResearchGlossaryTerm>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <StatCard
             label={
               <ResearchGlossaryTerm term="buffettIndicator">
@@ -232,14 +236,14 @@ export default async function Home() {
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">
+          <div className="jv-strip-title" style={{ marginBottom: 0 }}>
             3. Normalized Earning Power &amp; Production
-          </h2>
+          </div>
           <ResearchGlossaryTerm term="productionPhase">
             <ConditionBadge text={matrix.production.productionPhase} />
           </ResearchGlossaryTerm>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <StatCard
             label={
               <ResearchGlossaryTerm term="capacityUtilization">
@@ -270,14 +274,14 @@ export default async function Home() {
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">
+          <div className="jv-strip-title" style={{ marginBottom: 0 }}>
             4. Purchasing Power &amp; Inflation
-          </h2>
+          </div>
           <ResearchGlossaryTerm term="marginPressure">
             <ConditionBadge text={matrix.inflation.marginPressure} />
           </ResearchGlossaryTerm>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <StatCard
             label="CPI YoY"
             value={matrix.inflation.cpiYoY !== null ? `${matrix.inflation.cpiYoY.toFixed(1)}%` : "N/A"}
@@ -398,20 +402,17 @@ export default async function Home() {
                       id: "macro",
                       label: "Macro",
                       content: (
-                        <div>
-                          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">
-                            Layer 1 &middot; Macro Agent
-                          </div>
-                          <h1 className="text-2xl font-semibold tracking-tight mt-1">
-                            Macro-Margin Matrix
-                          </h1>
-                          <p className="text-zinc-500 mt-2 mb-6">
+                        <div className="jarvis">
+                          <p className="jv-eyebrow">Layer 1 &middot; Macro Agent</p>
+                          <h1 className="jv-title">Macro-Margin Matrix</h1>
+                          <p className="jv-lede">
                             A Graham-style read on systemic stability and
                             normalized earning power &mdash; not a market
                             forecast.
                           </p>
                           <Tabs
                             size="tertiary"
+                            theme="jarvis"
                             tabs={[
                               { id: "dashboard", label: "Dashboard", content: <MacroDashboardTab /> },
                               { id: "stance", label: "Stance & Details", content: macroStanceContent },

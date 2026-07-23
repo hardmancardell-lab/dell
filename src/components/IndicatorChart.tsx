@@ -6,17 +6,13 @@ import type { IndicatorSeriesResult } from "@/lib/agents/research-agent/skills/i
 import type { IndicatorClassification } from "@/lib/agents/research-agent/skills/indicator-metadata";
 
 const CLASSIFICATION_STYLES: Record<IndicatorClassification, string> = {
-  leading: "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400",
-  coincident: "bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-400",
-  lagging: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  leading: "c-signal",
+  coincident: "c-neutral",
+  lagging: "c-neutral",
 };
 
 function ClassificationBadge({ classification }: { classification: IndicatorClassification }) {
-  return (
-    <span className={`inline-block rounded-full px-3 py-1 text-xs font-medium capitalize ${CLASSIFICATION_STYLES[classification]}`}>
-      {classification}
-    </span>
-  );
+  return <span className={`jv-badge ${CLASSIFICATION_STYLES[classification]} capitalize`}>{classification}</span>;
 }
 
 export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
@@ -51,7 +47,8 @@ export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-950 h-[320px] flex items-center justify-center text-sm text-zinc-500">
+      <div className="jv-card h-[320px] flex items-center justify-center text-sm" style={{ color: "var(--text-2)" }}>
+        <div className="jv-br-b" />
         Loading…
       </div>
     );
@@ -59,7 +56,7 @@ export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-6 text-red-700 dark:text-red-400 text-sm">
+      <div className="jv-card text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
         {error}
       </div>
     );
@@ -68,28 +65,30 @@ export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
   if (!data) return null;
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-950">
+    <div className="jv-card">
+      <div className="jv-br-b" />
       <div className="flex items-start justify-between gap-3 mb-1">
-        <h3 className="font-semibold text-sm">{data.meta.label}</h3>
+        <h3 className="font-semibold text-sm" style={{ color: "var(--text-0)" }}>{data.meta.label}</h3>
         <ClassificationBadge classification={data.meta.classification} />
       </div>
-      <p className="text-xs text-zinc-500 mb-4">{data.meta.classificationNote}</p>
+      <p className="text-xs mb-4" style={{ color: "var(--text-2)" }}>{data.meta.classificationNote}</p>
 
       <ResponsiveContainer width="100%" height={180}>
         <LineChart data={data.points}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#71717a" opacity={0.2} />
-          <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717a" }} minTickGap={40} />
-          <YAxis tick={{ fontSize: 10, fill: "#71717a" }} domain={["auto", "auto"]} width={45} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text-2)" }} stroke="var(--line)" minTickGap={40} />
+          <YAxis tick={{ fontSize: 10, fill: "var(--text-2)" }} stroke="var(--line)" domain={["auto", "auto"]} width={45} />
           <Tooltip
-            contentStyle={{ fontSize: 12, borderRadius: 8 }}
-            labelStyle={{ color: "#71717a" }}
+            contentStyle={{ fontSize: 12, borderRadius: 4, background: "var(--ink-900)", border: "1px solid var(--line)" }}
+            labelStyle={{ color: "var(--text-2)" }}
+            itemStyle={{ color: "var(--text-0)" }}
           />
-          <Line type="monotone" dataKey="value" stroke="#3b82f6" dot={false} strokeWidth={2} />
+          <Line type="monotone" dataKey="value" stroke="var(--signal)" dot={false} strokeWidth={2} />
         </LineChart>
       </ResponsiveContainer>
 
-      <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-3">{data.meta.description}</p>
-      <p className="text-xs text-zinc-400 mt-2">Unit: {data.meta.unit}</p>
+      <p className="text-sm mt-3" style={{ color: "var(--text-1)" }}>{data.meta.description}</p>
+      <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>Unit: {data.meta.unit}</p>
     </div>
   );
 }

@@ -15,28 +15,23 @@ const DRIVER_GLOSSARY_TERM: Record<string, string> = {
 
 export function IndustryImpactTab() {
   return (
-    <div className="space-y-6">
-      <p className="text-sm text-zinc-500">
+    <div className="flex flex-col gap-6">
+      <p className="text-sm" style={{ color: "var(--text-2)" }}>
         How the macro environment translates into industry-level risk and opportunity —
         which indicators matter most for each industry, and why.
       </p>
-      <div className="space-y-6">
+      <div className="flex flex-col gap-4">
         {INDUSTRY_IMPACTS.map((industry) => (
-          <div
-            key={industry.id}
-            className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-950"
-          >
-            <h3 className="text-lg font-semibold mb-2">{industry.name}</h3>
+          <div key={industry.id} className="jv-card">
+            <div className="jv-br-b" />
+            <h3 className="text-sm font-medium mb-2" style={{ color: "var(--text-0)" }}>{industry.name}</h3>
             <div className="flex flex-wrap gap-2 mb-3">
               {industry.primaryDrivers.map((driverId) => {
                 const meta = INDICATOR_LIBRARY.find((i) => i.id === driverId);
                 const label = meta?.label ?? driverId;
                 const glossaryTerm = DRIVER_GLOSSARY_TERM[driverId];
                 return (
-                  <span
-                    key={driverId}
-                    className="inline-block rounded-full bg-zinc-100 dark:bg-zinc-800 px-3 py-1 text-xs font-medium"
-                  >
+                  <span key={driverId} className="jv-badge c-neutral">
                     {glossaryTerm ? (
                       <GlossaryTerm term={glossaryTerm} getEntry={getResearchGlossaryEntry}>
                         {label}
@@ -48,7 +43,7 @@ export function IndustryImpactTab() {
                 );
               })}
             </div>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-1)" }}>
               {industry.analysis}
             </p>
           </div>

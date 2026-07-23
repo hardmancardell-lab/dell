@@ -10,10 +10,10 @@ export function MacroDashboardTab() {
   const [selectedOther, setSelectedOther] = useState(others[0]?.id ?? "");
 
   return (
-    <div className="space-y-10">
-      <div>
-        <h2 className="text-xl font-semibold mb-1">Six Flagship Indicators</h2>
-        <p className="text-sm text-zinc-500 mb-4">
+    <div className="flex flex-col gap-10">
+      <section>
+        <div className="jv-strip-title">Six Flagship Indicators</div>
+        <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>
           Chosen to span growth/business cycle, labor, credit conditions, inflation, and
           consumer strength — not just headline GDP and CPI.
         </p>
@@ -22,17 +22,17 @@ export function MacroDashboardTab() {
             <IndicatorChart key={i.id} indicatorId={i.id} />
           ))}
         </div>
-      </div>
+      </section>
 
-      <div>
-        <h2 className="text-xl font-semibold mb-1">More Indicators</h2>
-        <p className="text-sm text-zinc-500 mb-4">
+      <section>
+        <div className="jv-strip-title">More Indicators</div>
+        <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>
           Everything else in the library — pick one to chart it.
         </p>
         <select
           value={selectedOther}
           onChange={(e) => setSelectedOther(e.target.value)}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm w-full sm:w-auto"
+          className="jv-select w-full sm:w-auto"
         >
           {others.map((i) => (
             <option key={i.id} value={i.id}>
@@ -45,7 +45,7 @@ export function MacroDashboardTab() {
             <IndicatorChart indicatorId={selectedOther} />
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
