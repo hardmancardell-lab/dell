@@ -401,6 +401,7 @@ export default async function Home() {
                     <video
                       controls
                       preload="metadata"
+                      poster="/videos/top-down-investing-agent-poster.svg"
                       className="w-full aspect-video bg-black"
                       src="/videos/top-down-investing-agent.mp4"
                     >

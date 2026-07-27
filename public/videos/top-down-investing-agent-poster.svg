@@ -1,0 +1,17 @@
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="720" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0a0a0a" />
+      <stop offset="1" stop-color="#18181b" />
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)" />
+  <circle cx="640" cy="330" r="64" fill="#27272a" stroke="#52525b" stroke-width="2" />
+  <path d="M 618 300 L 618 360 L 670 330 Z" fill="#f4f4f5" />
+  <text x="640" y="470" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="34" font-weight="600" fill="#f4f4f5">
+    The Top-Down Investing Agent
+  </text>
+  <text x="640" y="508" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" fill="#a1a1aa">
+    A 5-minute walkthrough — click to play
+  </text>
+</svg>
