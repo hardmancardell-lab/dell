@@ -396,9 +396,23 @@ export default async function Home() {
               id: "top-down",
               label: "Top-Down Economic Analysis",
               content: (
-                <Tabs
-                  size="secondary"
-                  tabs={[
+                <div>
+                  <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                    <video
+                      controls
+                      preload="metadata"
+                      className="w-full aspect-video bg-black"
+                      src="/videos/top-down-investing-agent.mp4"
+                    >
+                      Your browser does not support embedded video.
+                    </video>
+                    <div className="px-4 py-2 text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800">
+                      New here? This ~5-minute walkthrough explains the top-down approach and every tab below.
+                    </div>
+                  </div>
+                  <Tabs
+                    size="secondary"
+                    tabs={[
                     {
                       id: "macro",
                       label: "Macro",
@@ -484,8 +498,9 @@ export default async function Home() {
                         </div>
                       ),
                     },
-                  ]}
-                />
+                    ]}
+                  />
+                </div>
               ),
             },
             {
