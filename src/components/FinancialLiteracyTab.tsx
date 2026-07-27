@@ -160,6 +160,8 @@ function ModuleCard({
   onWrongAnswer: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [totalXpEarned, setTotalXpEarned] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
@@ -168,11 +170,12 @@ function ModuleCard({
   const { track } = useTrackEvent();
 
   // A fresh, timed round only runs for a not-yet-completed module while
-  // open and not yet answered — an already-completed module just reviews
-  // the question statically, no clock, no re-scoring.
+  // open and not yet answered — an already-completed module reviews every
+  // question in the set statically instead of just the first one.
   const roundActive = open && !completed && !submitted;
   const revealed = submitted || completed;
-  const question = mod.checks[0];
+  const question = mod.checks[questionIndex];
+  const isLastQuestion = questionIndex === mod.checks.length - 1;
   const isCorrect = revealed && !timedOut && selected === question.correctIndex;
 
   useEffect(() => {
@@ -180,7 +183,7 @@ function ModuleCard({
     if (timeLeft <= 0) {
       setSubmitted(true);
       setTimedOut(true);
-      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, correct: false, timedOut: true } });
+      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, questionIndex, correct: false, timedOut: true } });
       onWrongAnswer();
       return;
     }
@@ -193,6 +196,8 @@ function ModuleCard({
     setOpen((o) => {
       const next = !o;
       if (next && !completed) {
+        setQuestionIndex(0);
+        setTotalXpEarned(0);
         setSelected(null);
         setSubmitted(false);
         setTimedOut(false);
@@ -210,12 +215,24 @@ function ModuleCard({
     if (oi === question.correctIndex) {
       const xp = speedScaledXp(timeLeft);
       setAwardedXp(xp);
-      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, correct: true, timedOut: false, xpAwarded: xp } });
-      onComplete(xp);
+      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, questionIndex, correct: true, timedOut: false, xpAwarded: xp } });
+      if (isLastQuestion) {
+        onComplete(totalXpEarned + xp);
+      }
     } else {
-      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, correct: false, timedOut: false } });
+      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, questionIndex, correct: false, timedOut: false } });
       onWrongAnswer();
     }
+  }
+
+  function nextQuestion() {
+    setTotalXpEarned((t) => t + (awardedXp ?? 0));
+    setQuestionIndex((i) => i + 1);
+    setSelected(null);
+    setSubmitted(false);
+    setTimedOut(false);
+    setAwardedXp(null);
+    setTimeLeft(QUESTION_TIME_SECONDS);
   }
 
   function retry() {
@@ -258,83 +275,125 @@ function ModuleCard({
             </div>
           )}
 
-          <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="text-sm font-medium">{question.prompt}</div>
-              {roundActive && (
-                <div className="shrink-0 text-right">
-                  <div className={`text-lg font-mono font-bold leading-none ${timeLeft <= 5 ? "text-red-600 dark:text-red-400" : ""}`}>
-                    {timeLeft}s
+          {completed ? (
+            <div className="space-y-3">
+              {mod.checks.map((q, qi) => (
+                <div key={qi} className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4">
+                  {mod.checks.length > 1 && (
+                    <div className="text-xs text-zinc-400 mb-1">Question {qi + 1} of {mod.checks.length}</div>
+                  )}
+                  <div className="text-sm font-medium mb-3">{q.prompt}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                    {q.options.map((opt, oi) => {
+                      const style = ANSWER_STYLES[oi];
+                      const showCorrect = oi === q.correctIndex;
+                      return (
+                        <div
+                          key={oi}
+                          className={`flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium text-white ${style.bg} ${
+                            showCorrect ? "ring-4 ring-zinc-900 dark:ring-white" : "opacity-40"
+                          }`}
+                        >
+                          <span className="text-base leading-none shrink-0">{style.shape}</span>
+                          <span className="flex-1">{opt}</span>
+                          {showCorrect && <span className="shrink-0">✓</span>}
+                        </div>
+                      );
+                    })}
                   </div>
+                  <div className="text-sm rounded-lg p-3 bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400">
+                    <div className="font-medium mb-1">Completed</div>
+                    <div>{q.explanation}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4">
+              {mod.checks.length > 1 && (
+                <div className="text-xs text-zinc-400 mb-1">Question {questionIndex + 1} of {mod.checks.length}</div>
+              )}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="text-sm font-medium">{question.prompt}</div>
+                {roundActive && (
+                  <div className="shrink-0 text-right">
+                    <div className={`text-lg font-mono font-bold leading-none ${timeLeft <= 5 ? "text-red-600 dark:text-red-400" : ""}`}>
+                      {timeLeft}s
+                    </div>
+                  </div>
+                )}
+              </div>
+              {roundActive && (
+                <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden mb-3">
+                  <div
+                    className={`h-full rounded-full transition-all duration-1000 ease-linear ${
+                      timeLeft <= 5 ? "bg-red-500" : "bg-zinc-900 dark:bg-zinc-100"
+                    }`}
+                    style={{ width: `${timerPct}%` }}
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                {question.options.map((opt, oi) => {
+                  const style = ANSWER_STYLES[oi];
+                  const isSelected = selected === oi;
+                  const showCorrect = revealed && oi === question.correctIndex;
+                  const showWrongSelected = revealed && isSelected && oi !== question.correctIndex;
+                  const dimmed = revealed && !showCorrect && !showWrongSelected;
+                  return (
+                    <button
+                      key={oi}
+                      onClick={() => pickAnswer(oi)}
+                      disabled={revealed || !open}
+                      className={`flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium text-white text-left transition-opacity ${style.bg} ${
+                        dimmed ? "opacity-40" : ""
+                      } ${showCorrect ? "ring-4 ring-zinc-900 dark:ring-white" : ""} disabled:cursor-default`}
+                    >
+                      <span className="text-base leading-none shrink-0">{style.shape}</span>
+                      <span className="flex-1">{opt}</span>
+                      {showCorrect && <span className="shrink-0">✓</span>}
+                      {showWrongSelected && <span className="shrink-0">✕</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {submitted && (
+                <div
+                  className={`text-sm rounded-lg p-3 ${
+                    isCorrect
+                      ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
+                      : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+                  }`}
+                >
+                  <div className="font-medium mb-1">
+                    {isCorrect ? `Correct! +${awardedXp} XP` : timedOut ? "Time's up!" : "Not quite — try again"}
+                  </div>
+                  {isCorrect ? (
+                    <>
+                      <div>{question.explanation}</div>
+                      {!isLastQuestion && (
+                        <button
+                          onClick={nextQuestion}
+                          className="mt-2 text-xs font-medium underline underline-offset-2 hover:no-underline"
+                        >
+                          Next question →
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      onClick={retry}
+                      className="mt-1 text-xs font-medium underline underline-offset-2 hover:no-underline"
+                    >
+                      Try again
+                    </button>
+                  )}
                 </div>
               )}
             </div>
-            {roundActive && (
-              <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden mb-3">
-                <div
-                  className={`h-full rounded-full transition-all duration-1000 ease-linear ${
-                    timeLeft <= 5 ? "bg-red-500" : "bg-zinc-900 dark:bg-zinc-100"
-                  }`}
-                  style={{ width: `${timerPct}%` }}
-                />
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-              {question.options.map((opt, oi) => {
-                const style = ANSWER_STYLES[oi];
-                const isSelected = selected === oi;
-                const showCorrect = revealed && oi === question.correctIndex;
-                const showWrongSelected = revealed && isSelected && oi !== question.correctIndex;
-                const dimmed = revealed && !showCorrect && !showWrongSelected;
-                return (
-                  <button
-                    key={oi}
-                    onClick={() => pickAnswer(oi)}
-                    disabled={revealed || !open}
-                    className={`flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium text-white text-left transition-opacity ${style.bg} ${
-                      dimmed ? "opacity-40" : ""
-                    } ${showCorrect ? "ring-4 ring-zinc-900 dark:ring-white" : ""} disabled:cursor-default`}
-                  >
-                    <span className="text-base leading-none shrink-0">{style.shape}</span>
-                    <span className="flex-1">{opt}</span>
-                    {showCorrect && <span className="shrink-0">✓</span>}
-                    {showWrongSelected && <span className="shrink-0">✕</span>}
-                  </button>
-                );
-              })}
-            </div>
-
-            {submitted && !completed && (
-              <div
-                className={`text-sm rounded-lg p-3 ${
-                  isCorrect
-                    ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-                    : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
-                }`}
-              >
-                <div className="font-medium mb-1">
-                  {isCorrect ? `Correct! +${awardedXp} XP` : timedOut ? "Time's up!" : "Not quite — try again"}
-                </div>
-                {isCorrect ? (
-                  <div>{question.explanation}</div>
-                ) : (
-                  <button
-                    onClick={retry}
-                    className="mt-1 text-xs font-medium underline underline-offset-2 hover:no-underline"
-                  >
-                    Try again
-                  </button>
-                )}
-              </div>
-            )}
-            {completed && (
-              <div className="text-sm rounded-lg p-3 bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400">
-                <div className="font-medium mb-1">Completed</div>
-                <div>{question.explanation}</div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
     </div>

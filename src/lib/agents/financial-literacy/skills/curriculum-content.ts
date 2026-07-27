@@ -355,6 +355,288 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     ],
   },
 
+  {
+    id: "beginner-10",
+    tier: "beginner",
+    order: 10,
+    title: "Credit scores and credit reports",
+    body: "A credit score (usually a FICO score, 300-850) is a single number summarizing how risky you look to a lender. It's built mostly from two things: payment history (about 35%, whether you pay on time) and credit utilization (about 30%, how much of your available credit you're actually using). Length of credit history, new credit applications, and the mix of account types make up smaller shares.\n\nYour credit report is different from your score — it's the full underlying record of every account, balance, and payment that the score gets calculated from. You're entitled to check it for free (in the US, via AnnualCreditReport.com), and doing so regularly is how you catch errors or fraud before they cost you a loan approval.",
+    tryIt: null,
+    checks: [
+      {
+        prompt: "Which factor makes up the largest single share of a typical FICO credit score?",
+        options: ["Length of credit history", "Payment history", "Number of recent credit inquiries", "Types of credit used"],
+        correctIndex: 1,
+        explanation: "Payment history is roughly 35% of a FICO score — the single biggest factor, which is why even one 30-day-late payment can meaningfully hurt your score.",
+      },
+      {
+        prompt: "You have a credit card with a $10,000 limit and currently carry a $6,000 balance. What is this called, and why does it matter?",
+        options: [
+          "Credit utilization, 60% here — high utilization can lower your score",
+          "APR, and it has no effect on your credit score",
+          "Minimum payment ratio, which only matters for late fees",
+          "Credit mix, which isn't actually tracked",
+        ],
+        correctIndex: 0,
+        explanation: "Utilization is the share of your available credit you're using — 60% here is high, and utilization is roughly 30% of a FICO score, second only to payment history.",
+      },
+      {
+        prompt: "What's the actual difference between a credit score and a credit report?",
+        options: [
+          "They're the same thing under different names",
+          "A credit report is the full history of your accounts; a credit score is a single number calculated from that report",
+          "A credit score only tracks late payments; the report tracks nothing else",
+          "The report always costs money; the score is always free",
+        ],
+        correctIndex: 1,
+        explanation: "The report is the raw data — every account, balance, and payment on file; the score is a single summary number computed from that data.",
+      },
+    ],
+  },
+  {
+    id: "beginner-11",
+    tier: "beginner",
+    order: 11,
+    title: "Paying off multiple debts: avalanche vs. snowball",
+    body: "If you're carrying more than one debt, there are two well-known payoff orders. The avalanche method pays extra toward whichever debt has the highest interest rate first, while paying only the minimum on everything else — mathematically, this minimizes the total interest you pay over time.\n\nThe snowball method instead pays extra toward whichever debt has the smallest balance first, regardless of its interest rate. It's not the cheapest method on paper, but the fast, visible wins from fully clearing a small balance can keep someone motivated to stick with the plan — some behavioral research has actually found people are more likely to eliminate all their debt using snowball, even though avalanche should in theory save more money.",
+    tryIt: null,
+    checks: [
+      {
+        prompt: "You have three debts: a $2,000 card at 24% APR, a $500 card at 18% APR, and an $8,000 student loan at 6% APR. Under the avalanche method, which do you attack first (beyond minimums)?",
+        options: ["The $2,000 card at 24% APR", "The $500 card at 18% APR", "The $8,000 student loan at 6% APR", "Whichever has the largest balance"],
+        correctIndex: 0,
+        explanation: "Avalanche always targets the highest interest rate first — here that's the 24% APR card, regardless of its balance size.",
+      },
+      {
+        prompt: "Same three debts as above. Under the snowball method, which do you attack first?",
+        options: ["The $2,000 card at 24% APR", "The $500 card at 18% APR", "The $8,000 student loan at 6% APR", "Whichever has the highest interest rate"],
+        correctIndex: 1,
+        explanation: "Snowball ignores interest rate entirely and targets the smallest balance first — here that's the $500 card, even though it isn't the highest-rate debt.",
+      },
+      {
+        prompt: "What's the main reason someone might choose snowball over avalanche, even though avalanche typically saves more money?",
+        options: [
+          "Snowball is required by law in most states",
+          "Quick, visible wins from clearing a small balance can keep someone motivated to stay on the plan",
+          "Snowball always carries a lower interest rate",
+          "There's no real practical difference between the two methods",
+        ],
+        correctIndex: 1,
+        explanation: "This is a behavioral, not mathematical, advantage — early wins build momentum, and some research has found that momentum leads to higher real-world completion rates.",
+      },
+    ],
+  },
+  {
+    id: "beginner-12",
+    tier: "beginner",
+    order: 12,
+    title: "Retirement accounts: 401(k), IRA, and Roth",
+    body: "A 401(k) is a retirement account offered through an employer; many employers match part of what you contribute, which is effectively free money you forfeit by not contributing enough to capture the full match. A Traditional IRA is a similar individual account you open yourself, generally with lower contribution limits than a 401(k).\n\nBoth of those are typically \"pre-tax\" — you don't pay income tax on the money going in, but you do pay tax when you withdraw it in retirement. A Roth account (Roth IRA or Roth 401(k)) flips that: you contribute money you've already paid tax on, but qualified withdrawals in retirement are completely tax-free. Roth tends to make more sense if you expect to be in a higher tax bracket later than you are today.",
+    tryIt: null,
+    checks: [
+      {
+        prompt: "Your employer matches 50% of your 401(k) contributions up to 6% of your salary. You earn $60,000/year and currently contribute nothing. How much free match money are you leaving on the table each year?",
+        options: ["$0 — matches don't actually add up to much", "$1,800", "$3,600", "$6,000"],
+        correctIndex: 1,
+        explanation: "6% of $60,000 is $3,600; a 50% match on that is $1,800 in free money you're not collecting by contributing $0.",
+      },
+      {
+        prompt: "What's the core difference between a Traditional IRA and a Roth IRA?",
+        options: [
+          "There's no real difference between them",
+          "Traditional contributions are pre-tax with taxed withdrawals later; Roth contributions are after-tax with tax-free withdrawals later",
+          "A Roth IRA can only be opened through an employer",
+          "A Traditional IRA has no contribution limits at all",
+        ],
+        correctIndex: 1,
+        explanation: "The tax timing is the whole distinction — Traditional defers tax to withdrawal, Roth pays tax up front so withdrawals later are tax-free.",
+      },
+      {
+        prompt: "You're early in your career and expect to be in a meaningfully higher tax bracket by the time you retire. Which structure generally makes more sense to prioritize?",
+        options: [
+          "Traditional, since you avoid paying any tax right now",
+          "Roth, since you pay tax at your current lower rate and withdrawals later are tax-free at your future higher rate",
+          "Neither — tax brackets don't actually matter for this decision",
+          "A regular taxable brokerage account only",
+        ],
+        correctIndex: 1,
+        explanation: "Paying tax now at a lower rate, then withdrawing tax-free later at a higher rate, is the classic case for favoring Roth over Traditional.",
+      },
+    ],
+  },
+  {
+    id: "beginner-13",
+    tier: "beginner",
+    order: 13,
+    title: "Index funds and ETFs",
+    body: "An index fund doesn't try to pick winning stocks — it simply holds all (or a representative sample of) the companies in a market index, like the S&P 500, in proportion to their size, aiming to match that index's return rather than beat it. Historically, most actively-managed funds that DO try to beat the market underperform their benchmark index after fees over long stretches of time — which is the core case for just owning the whole market cheaply instead.\n\nAn ETF (exchange-traded fund) and a traditional mutual fund can both track the same index, but they trade differently: an ETF trades throughout the day like a stock, while a mutual fund is priced once, at the end of the trading day. The expense ratio — the fund's annual fee — matters more than it looks; a 1% fee versus a 0.05% fee sounds small, but compounded over decades it's the difference between very different ending balances.",
+    tryIt: null,
+    checks: [
+      {
+        prompt: "What does an S&P 500 index fund actually do?",
+        options: [
+          "A team of managers hand-picks the best stocks in the S&P 500",
+          "It holds all 500 companies in the index in proportion to their weight, aiming to match the index's return",
+          "It holds only the single best-performing stock in the index",
+          "It guarantees a fixed annual return regardless of the market",
+        ],
+        correctIndex: 1,
+        explanation: "Index funds are passive by design — they replicate the index itself rather than trying to outguess it.",
+      },
+      {
+        prompt: "Fund A charges a 1.0% annual expense ratio; Fund B tracks the same index and charges 0.05%. On $10,000 growing at 7% before fees over 30 years, what's the likely outcome?",
+        options: [
+          "Fund A, since a higher fee means more active management and better results",
+          "Fund B — a lower expense ratio leaves more of your return compounding every single year",
+          "It makes essentially no difference over 30 years",
+          "Fund A, because it's guaranteed to beat the index",
+        ],
+        correctIndex: 1,
+        explanation: "Fees compound against you the same way returns compound for you — a ~0.95 percentage point annual gap adds up to a large dollar difference over 30 years.",
+      },
+      {
+        prompt: "What's the main structural difference between an ETF and a traditional mutual fund tracking the same index?",
+        options: [
+          "ETFs trade throughout the day like a stock; mutual funds are priced once, at the end of the trading day",
+          "Mutual funds are always the cheaper option",
+          "ETFs can only be bought once per year",
+          "There is no structural difference between them",
+        ],
+        correctIndex: 0,
+        explanation: "That intraday tradability is the defining structural difference — the underlying holdings and index tracking can be functionally identical.",
+      },
+    ],
+  },
+  {
+    id: "beginner-14",
+    tier: "beginner",
+    order: 14,
+    title: "Insurance basics",
+    body: "Insurance is a way of pooling risk: a large group of people all pay a regular premium, so that when a rare, expensive event happens to one of them, the pooled money covers it instead of bankrupting that one person. Your deductible is the amount you pay out of pocket before your insurance starts covering a claim — generally, choosing a higher deductible lowers your premium, since you're absorbing more of the smaller stuff yourself.\n\nCommon types include health, auto (often legally required to drive), homeowners or renters, and life insurance. Life insurance itself splits into two very different products: term life covers a fixed period (say, 20 years) and is comparatively cheap, while whole life lasts your entire life and bundles in an investment/cash-value component — which makes it dramatically more expensive.",
+    tryIt: null,
+    checks: [
+      {
+        prompt: "What does choosing a higher deductible generally do to your insurance premium?",
+        options: [
+          "It raises the premium",
+          "It generally lowers the premium, since you're covering more of the smaller costs yourself",
+          "Deductible and premium have no relationship to each other",
+          "Deductible only applies to life insurance",
+        ],
+        correctIndex: 1,
+        explanation: "You and the insurer are splitting risk — take on more of the small stuff via a higher deductible, and the insurer typically charges less for the coverage.",
+      },
+      {
+        prompt: "What is the fundamental purpose of insurance?",
+        options: [
+          "To guarantee you'll come out ahead financially",
+          "To pool risk across many people so a rare, expensive event doesn't financially ruin any one individual",
+          "To avoid ever having to pay for anything",
+          "It's a form of investment with a guaranteed high return",
+        ],
+        correctIndex: 1,
+        explanation: "Insurance is risk-pooling, not an investment — most people who pay premiums never file a large claim, and that's actually the system working as intended.",
+      },
+      {
+        prompt: "What's the main practical difference between term life insurance and whole life insurance?",
+        options: [
+          "There's no real difference between them",
+          "Term covers a fixed period and is much cheaper; whole life lasts your entire life and includes a built-in investment component at a much higher cost",
+          "Term life insurance never actually pays out",
+          "Whole life is always the cheaper of the two",
+        ],
+        correctIndex: 1,
+        explanation: "Term is pure, temporary protection at a low cost; whole life bundles in a savings/investment component, which is why it costs many times more for the same death benefit.",
+      },
+    ],
+  },
+  {
+    id: "beginner-15",
+    tier: "beginner",
+    order: 15,
+    title: "Mortgages and buying a home",
+    body: "A mortgage is a loan to buy a home, secured by the home itself — if you stop paying, the lender can foreclose and take the property. Your down payment reduces how much you actually need to borrow; putting down less than 20% typically means you'll also pay for private mortgage insurance (PMI) until you build enough equity.\n\nA fixed-rate mortgage keeps the same interest rate for the entire loan term, while an adjustable-rate mortgage (ARM) usually starts lower but can rise later, increasing your payment. And comparing loan lengths: a 30-year mortgage has a lower monthly payment than a 15-year mortgage on the same loan amount, but you'll pay dramatically more total interest over the life of the loan.",
+    tryIt: null,
+    checks: [
+      {
+        prompt: "You put 10% down on a home instead of 20%. What's a likely consequence?",
+        options: [
+          "Nothing changes",
+          "You'll likely have to pay for private mortgage insurance (PMI) on top of your regular payment",
+          "Your interest rate automatically drops",
+          "The loan term automatically gets shorter",
+        ],
+        correctIndex: 1,
+        explanation: "Lenders typically require PMI below the 20%-down threshold, since a smaller down payment means more of their money is at risk if you default.",
+      },
+      {
+        prompt: "What's the key risk of an adjustable-rate mortgage (ARM) compared to a fixed-rate mortgage?",
+        options: [
+          "ARMs are illegal in most states",
+          "An ARM's rate can rise after an initial period, increasing your monthly payment, while a fixed rate never changes",
+          "ARMs always start with a higher rate than fixed loans",
+          "There's no real risk difference between them",
+        ],
+        correctIndex: 1,
+        explanation: "The whole tradeoff of an ARM is a lower initial rate in exchange for the risk that your payment rises later — a fixed-rate loan removes that uncertainty entirely.",
+      },
+      {
+        prompt: "Compared to a 15-year mortgage at the same rate on the same loan amount, what's true of a 30-year mortgage?",
+        options: [
+          "Lower monthly payments, but significantly more total interest paid over the life of the loan",
+          "Higher monthly payments and less total interest paid",
+          "Identical total interest paid either way",
+          "It's always the worse choice in every respect",
+        ],
+        correctIndex: 0,
+        explanation: "Stretching the same loan over twice as many years lowers the monthly payment but means you're paying interest for far longer — the total interest cost rises substantially.",
+      },
+    ],
+  },
+  {
+    id: "beginner-16",
+    tier: "beginner",
+    order: 16,
+    title: "Student loans",
+    body: "Federal student loans (issued by the government) generally come with protections private loans don't — income-driven repayment plans that cap your payment based on what you earn, and forgiveness programs like Public Service Loan Forgiveness for certain careers. Private loans, issued by banks or other lenders, typically offer fewer of those borrower protections.\n\nAmong federal loans, a subsidized loan doesn't accrue interest while you're still in school — the government covers it — while an unsubsidized loan accrues interest the entire time, even before you've graduated. One more thing worth knowing: refinancing federal loans into a private loan can lower your interest rate, but it permanently gives up federal protections and forgiveness eligibility — there's no going back once you've refinanced.",
+    tryIt: null,
+    checks: [
+      {
+        prompt: "What's a key advantage federal student loans generally have over private student loans?",
+        options: [
+          "Federal loans always charge zero interest",
+          "Federal loans generally offer income-driven repayment plans and forgiveness programs private loans don't",
+          "Federal loans have no repayment obligation at all",
+          "There's no meaningful difference between them",
+        ],
+        correctIndex: 1,
+        explanation: "Income-driven repayment and forgiveness programs are federal-loan-specific protections — private lenders generally don't offer either.",
+      },
+      {
+        prompt: "What's the difference between a subsidized and an unsubsidized federal loan?",
+        options: [
+          "There's no real difference",
+          "A subsidized loan doesn't accrue interest while you're in school; an unsubsidized loan accrues interest the entire time",
+          "Unsubsidized loans are always interest-free",
+          "Subsidized loans are only available to graduate students",
+        ],
+        correctIndex: 1,
+        explanation: "\"Subsidized\" specifically means the government pays the interest while you're in school — that gap is exactly what separates the two loan types.",
+      },
+      {
+        prompt: "You refinance your federal student loans into a private loan to get a lower rate. What do you permanently give up?",
+        options: [
+          "Nothing — refinancing has no real downside",
+          "Access to federal income-driven repayment plans and forgiveness programs like Public Service Loan Forgiveness",
+          "Your ability to ever borrow money again",
+          "Your credit score, permanently",
+        ],
+        correctIndex: 1,
+        explanation: "Refinancing federal debt into a private loan is a one-way door — you trade away every federal protection and forgiveness path in exchange for the new rate.",
+      },
+    ],
+  },
+
   // ---------- INTERMEDIATE ----------
   {
     id: "intermediate-01",
