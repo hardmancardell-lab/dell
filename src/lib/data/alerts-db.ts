@@ -57,6 +57,7 @@ interface SubscriptionRow {
   unsubscribe_token: string;
   active: boolean;
   created_at: string;
+  session_id: string | null;
 }
 
 function toSubscription(row: SubscriptionRow): AlertSubscription {
@@ -69,6 +70,7 @@ function toSubscription(row: SubscriptionRow): AlertSubscription {
     unsubscribeToken: row.unsubscribe_token,
     active: row.active,
     createdAt: row.created_at,
+    sessionId: row.session_id ?? null,
   };
 }
 
@@ -106,12 +108,19 @@ export async function createSubscription(input: {
   email: string | null;
   phone: string | null;
   channel: AlertChannel;
+  sessionId: string | null;
 }): Promise<AlertSubscription> {
   const unsubscribeToken = crypto.randomUUID();
   const rows = await supabaseRequest<SubscriptionRow[]>("alert_subscriptions", {
     method: "POST",
     prefer: "return=representation",
-    body: { email: input.email, phone: input.phone, channel: input.channel, unsubscribe_token: unsubscribeToken },
+    body: {
+      email: input.email,
+      phone: input.phone,
+      channel: input.channel,
+      unsubscribe_token: unsubscribeToken,
+      session_id: input.sessionId,
+    },
   });
   return toSubscription(rows[0]);
 }

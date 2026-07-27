@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { isTierUnlocked, deriveBadges, useLiteracyProgress } from "@/lib/agents/financial-literacy/literacy-storage";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import {
   GOAL_OPTIONS,
   LITERACY_MODULES,
@@ -42,6 +43,7 @@ function PlacementFlow({ onComplete }: { onComplete: (tier: LiteracyTier, goal: 
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [goal, setGoal] = useState<LearnerGoal | null>(null);
   const [showValidation, setShowValidation] = useState(false);
+  const { track } = useTrackEvent();
 
   const allAnswered = PLACEMENT_QUESTIONS.every((_, i) => answers[i] !== undefined);
 
@@ -58,6 +60,7 @@ function PlacementFlow({ onComplete }: { onComplete: (tier: LiteracyTier, goal: 
     for (const tier of LITERACY_TIER_ORDER) {
       if (correctByTier[tier] >= 2) placedTier = tier;
     }
+    track("literacy_placement_completed", { agent: "literacy", tab: "Placement", metadata: { tier: placedTier, goal } });
     onComplete(placedTier, goal);
   }
 
@@ -162,6 +165,7 @@ function ModuleCard({
   const [timedOut, setTimedOut] = useState(false);
   const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_SECONDS);
   const [awardedXp, setAwardedXp] = useState<number | null>(null);
+  const { track } = useTrackEvent();
 
   // A fresh, timed round only runs for a not-yet-completed module while
   // open and not yet answered — an already-completed module just reviews
@@ -176,6 +180,7 @@ function ModuleCard({
     if (timeLeft <= 0) {
       setSubmitted(true);
       setTimedOut(true);
+      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, correct: false, timedOut: true } });
       onWrongAnswer();
       return;
     }
@@ -205,8 +210,10 @@ function ModuleCard({
     if (oi === question.correctIndex) {
       const xp = speedScaledXp(timeLeft);
       setAwardedXp(xp);
+      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, correct: true, timedOut: false, xpAwarded: xp } });
       onComplete(xp);
     } else {
+      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, correct: false, timedOut: false } });
       onWrongAnswer();
     }
   }
@@ -393,6 +400,7 @@ function QuizMode({
   const [roundStreak, setRoundStreak] = useState(0);
   const [bestRoundStreak, setBestRoundStreak] = useState(0);
   const [isNewBest, setIsNewBest] = useState(false);
+  const { track } = useTrackEvent();
 
   const availableScopes: (LiteracyTier | "all")[] = ["all", ...unlockedTiers];
   const poolPreview = buildQuizPool(scope, unlockedTiers);
@@ -423,6 +431,9 @@ function QuizMode({
       setSubmitted(true);
       setTimedOut(true);
       setRoundStreak(0);
+      if (current) {
+        track("literacy_answer", { agent: "literacy", tab: "Quiz Mode", metadata: { mode: "quiz", moduleId: current.moduleId, correct: false, timedOut: true } });
+      }
       recordWrongAnswer();
       return;
     }
@@ -444,9 +455,11 @@ function QuizMode({
         setBestRoundStreak((b) => Math.max(b, next));
         return next;
       });
+      track("literacy_answer", { agent: "literacy", tab: "Quiz Mode", metadata: { mode: "quiz", moduleId: current.moduleId, correct: true, timedOut: false, xpAwarded: pts } });
       recordQuizAnswer(pts);
     } else {
       setRoundStreak(0);
+      track("literacy_answer", { agent: "literacy", tab: "Quiz Mode", metadata: { mode: "quiz", moduleId: current.moduleId, correct: false, timedOut: false } });
       recordWrongAnswer();
     }
   }
@@ -456,6 +469,7 @@ function QuizMode({
       const finalCorrect = correctCount;
       const finalScore = roundScore;
       setIsNewBest(finalScore > progress.bestRoundScore);
+      track("literacy_quiz_round_completed", { agent: "literacy", tab: "Quiz Mode", metadata: { scope, correctCount: finalCorrect, totalCount: questions.length, pointsScored: finalScore } });
       recordQuizRoundResult({ correctCount: finalCorrect, totalCount: questions.length, pointsScored: finalScore });
       setStage("results");
       return;

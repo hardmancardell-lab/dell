@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import type { AlertChannel, AlertConditionType, AlertRuleInput, AssetClass } from "@/lib/agents/trading-agent/types";
 
 const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
@@ -108,6 +109,7 @@ export function AlertsSubscribeTab() {
           channel,
           consent: true,
           rules: ruleInputs,
+          sessionId: getOrCreateSessionId(),
         }),
       });
       const json = await res.json();

@@ -19,21 +19,36 @@ education tool.
 **Usage analytics** (via `/api/track`, stored in Supabase):
 - A randomly generated session identifier (`crypto.randomUUID()`), stored in your browser's
   local storage. It is not tied to your name, email, account, or any other identifier we hold —
-  we don't have accounts at all today.
+  we don't have accounts at all today. It persists indefinitely on your device (not regenerated
+  per visit), so it can indicate a returning browser, though never a returning *person*.
 - Which tab/section of the app you view (`tab_view` events).
 - Which ticker symbols you look up or analyze (`ticker_analyzed` events) — the symbol only
   (e.g. "AAPL"), never quantities, dollar amounts, or portfolio contents.
+- **Financial Literacy**: whether a quiz question was answered correctly, timed out, which module
+  it belonged to, and module/round completion stats (`literacy_answer`,
+  `literacy_quiz_round_completed`, `literacy_placement_completed` events) — the question ID/module
+  ID and a correct/incorrect flag only, never the question text or your specific answer choice.
+- **Assistant chat**: that a message was sent, how many turns into the conversation, the
+  character length of your question and the reply, and which internal tools the assistant used
+  to answer it (`assistant_message_sent`/`assistant_message_failed` events) — **never the actual
+  text of your question or the assistant's reply**.
+- **Referral/first-touch source**: the first time your browser visits, any `utm_source`/
+  `utm_medium`/`utm_campaign` URL parameters present, the referring page (if any), and the landing
+  path (`session_start` event, fired once per browser).
 - Small structured technical metadata attached to the above (e.g. which lookback period you
   selected) — never free-text input.
 
-**What we do NOT collect**: names, emails, addresses, government IDs, account numbers, passwords,
-portfolio holdings, dollar amounts, brokerage credentials, or any data typed into a form field
-(portfolio holdings you enter live only in your browser's local storage, on your device — they
-are never sent to our servers).
+**What we do NOT collect**: names, addresses, government IDs, account numbers, passwords,
+portfolio holdings, dollar amounts, brokerage credentials, the literal text of anything you type
+into the Assistant chat or a Financial Literacy question, or any other data typed into a form
+field (portfolio holdings you enter live only in your browser's local storage, on your device —
+they are never sent to our servers).
 
-**If/when the alerts feature ships**: email address and/or phone number, only if you explicitly
-opt in via the alerts signup form, with a separate unchecked-by-default consent checkbox. [Fill in
-once that feature is live — see `ALERTS_INTEGRATION_NOTES.md`.]
+**Alerts feature (live)**: email address and/or phone number, only if you explicitly opt in via
+the alerts signup form, with a separate unchecked-by-default consent checkbox — see
+`ALERTS_INTEGRATION_NOTES.md`. Your anonymous session identifier (above) is stored alongside your
+subscription so we can understand what a subscriber did in the app before signing up; it is never
+used to identify you beyond the email/phone you already gave us directly.
 
 ## 3. How we use it
 

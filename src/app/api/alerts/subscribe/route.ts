@@ -29,7 +29,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const subscription = await createSubscription({ email: body.email, phone: body.phone, channel: body.channel });
+    const subscription = await createSubscription({
+      email: body.email,
+      phone: body.phone,
+      channel: body.channel,
+      sessionId: body.sessionId ?? null,
+    });
     const rules = await createRules(subscription.id, body.rules);
     return NextResponse.json({ subscription, rules });
   } catch (error) {

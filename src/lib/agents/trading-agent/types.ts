@@ -743,6 +743,11 @@ export interface AlertSubscription {
   unsubscribeToken: string;
   active: boolean;
   createdAt: string;
+  // Anonymous analytics session id, so this identified conversion can be
+  // joined to the rest of that session's anonymous usage. Nullable — never
+  // required, and never used to re-identify a person beyond what they
+  // already gave us directly (email/phone).
+  sessionId: string | null;
 }
 
 export interface AlertRule {
@@ -773,6 +778,7 @@ export interface AlertSubscribeRequest {
   channel: AlertChannel;
   consent: boolean;
   rules: AlertRuleInput[];
+  sessionId: string | null;
 }
 
 export interface AlertEvaluation {

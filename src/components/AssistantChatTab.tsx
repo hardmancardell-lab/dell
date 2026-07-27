@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getOrCreateSessionId } from "@/lib/analytics/use-track";
+import { getOrCreateSessionId, useTrackEvent } from "@/lib/analytics/use-track";
 import type { AssistantMessage } from "@/lib/agents/assistant/types";
 
 interface DisplayMessage extends AssistantMessage {
@@ -47,6 +47,7 @@ export function AssistantChatTab() {
   const [speechOutputSupported, setSpeechOutputSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { track } = useTrackEvent();
 
   useEffect(() => {
     setVoiceSupported(getSpeechRecognitionCtor() !== null);
@@ -108,6 +109,7 @@ export function AssistantChatTab() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? `Request failed (${res.status}).`);
+        track("assistant_message_failed", { agent: "assistant", tab: "Assistant", metadata: { status: res.status } });
         return;
       }
       setMessages((prev) => [
@@ -115,8 +117,20 @@ export function AssistantChatTab() {
         { role: "assistant", content: data.reply, toolsUsed: data.toolsUsed, dataLimitations: data.dataLimitations },
       ]);
       speak(data.reply);
+      // Message length/tool names only — never the raw question or reply text.
+      track("assistant_message_sent", {
+        agent: "assistant",
+        tab: "Assistant",
+        metadata: {
+          turnCount: nextMessages.length,
+          questionLength: trimmed.length,
+          replyLength: typeof data.reply === "string" ? data.reply.length : null,
+          toolsUsed: Array.isArray(data.toolsUsed) ? data.toolsUsed : [],
+        },
+      });
     } catch {
       setError("Network error reaching the assistant.");
+      track("assistant_message_failed", { agent: "assistant", tab: "Assistant", metadata: { status: "network_error" } });
     } finally {
       setLoading(false);
     }
