@@ -760,15 +760,15 @@ export default async function Home() {
                   <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Portfolio Tracker</div>
                   <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Portfolio Tracker</h1>
                   <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                    <video
-                      controls
-                      preload="metadata"
-                      poster="/videos/portfolio-tracker-agent-poster.svg"
-                      className="w-full aspect-video bg-black"
-                      src="/videos/portfolio-tracker-agent.mp4"
-                    >
-                      Your browser does not support embedded video.
-                    </video>
+                    <div className="aspect-video">
+                      <iframe
+                        className="w-full h-full"
+                        src="https://www.youtube-nocookie.com/embed/9gM8_K201Dk"
+                        title="Portfolio Tracker Agent"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      />
+                    </div>
                     <div className="px-4 py-2 text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800">
                       New here? This ~5-minute walkthrough explains every tab below, with real-world examples.
                     </div>
