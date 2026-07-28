@@ -510,15 +510,15 @@ export default async function Home() {
               content: (
                 <WatchlistProvider>
                 <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                  <video
-                    controls
-                    preload="metadata"
-                    poster="/videos/illusion-of-patterns-poster.svg"
-                    className="w-full aspect-video bg-black"
-                    src="/videos/illusion-of-patterns.mp4"
-                  >
-                    Your browser does not support embedded video.
-                  </video>
+                  <div className="aspect-video">
+                    <iframe
+                      className="w-full h-full"
+                      src="https://www.youtube-nocookie.com/embed/v02p4kI9Hyo"
+                      title="The Illusion of Patterns"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
                   <div className="px-4 py-2 text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800">
                     New here? This walkthrough explains why not every backtested pattern is a real edge — and how this app tells the difference.
                   </div>
