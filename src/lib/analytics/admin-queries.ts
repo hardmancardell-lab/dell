@@ -127,6 +127,43 @@ export interface AdminAnalyticsSummary {
     maxEventsInASession: number | null;
     avgSessionSpanMinutes: number | null;
   };
+  trading: {
+    backtestsRun: number;
+    backtestPassRatePct: number | null;
+    calendarEffectsRuns: number;
+    calendarEffectsPassRatePct: number | null;
+    orbWatchlistScans: number;
+    orbBacktestsRun: number;
+    orbBacktestPassRatePct: number | null;
+    pmVolumeChecks: number;
+    pmVolumeAnomalyRatePct: number | null;
+    pmVolumeScans: number;
+    optionsCalcRuns: number;
+    pegBacktestsRun: number;
+    pegBacktestPassRatePct: number | null;
+    alertSubscriptions: number;
+    watchlistAdds: number;
+    watchlistRemoves: number;
+    topSymbolsBacktested: { key: string; count: number }[];
+  };
+  research: {
+    watchlistRemoves: number;
+    screenerRuns: number;
+    sectorStockAnalysisRuns: number;
+    sectorStockForecastRatePct: number | null;
+  };
+  portfolio: {
+    scenarioSimulationsRun: number;
+    rebalancingComputations: number;
+    hedgeCalculatorUses: number;
+    correlationFinderRuns: number;
+    traditionalCandidatesAdded: number;
+    mptAnalysesRun: number;
+  };
+  systemHealth: {
+    totalApiErrors: number;
+    topFailingEndpoints: { key: string; count: number }[];
+  };
 }
 
 export async function getAdminAnalyticsSummary(): Promise<AdminAnalyticsSummary> {
@@ -214,6 +251,34 @@ export async function getAdminAnalyticsSummary(): Promise<AdminAnalyticsSummary>
 
   const subscriptionsWithSession = subscriptions.filter((s) => s.session_id && sessionIds.has(s.session_id));
 
+  const passRatePct = (rows: EventRow[]): number | null =>
+    rows.length > 0 ? Number(((rows.filter((e) => metaBool(e, "passesAllThreeBars") === true).length / rows.length) * 100).toFixed(1)) : null;
+
+  const backtests = events.filter((e) => e.event_name === "backtest_run");
+  const calendarEffects = events.filter((e) => e.event_name === "calendar_effects_run");
+  const orbWatchlistScans = events.filter((e) => e.event_name === "orb_watchlist_scan");
+  const orbBacktests = events.filter((e) => e.event_name === "orb_backtest_run");
+  const pmVolumeChecks = events.filter((e) => e.event_name === "pm_volume_check");
+  const pmVolumeScans = events.filter((e) => e.event_name === "pm_volume_scan");
+  const optionsCalcRuns = events.filter((e) => e.event_name === "options_calc_run");
+  const pegBacktests = events.filter((e) => e.event_name === "peg_backtest_run");
+  const alertSubscribedEvents = events.filter((e) => e.event_name === "alert_subscribed");
+  const watchlistAdds = events.filter((e) => e.event_name === "watchlist_entry_added");
+  const watchlistRemoves = events.filter((e) => e.event_name === "watchlist_entry_removed");
+
+  const researchWatchlistRemoves = events.filter((e) => e.event_name === "research_watchlist_removed");
+  const screenerRuns = events.filter((e) => e.event_name === "screener_run");
+  const sectorStockRuns = events.filter((e) => e.event_name === "sector_stock_analysis_run");
+
+  const scenarioSims = events.filter((e) => e.event_name === "scenario_simulation_run");
+  const rebalancing = events.filter((e) => e.event_name === "rebalancing_computed");
+  const hedgeCalc = events.filter((e) => e.event_name === "hedge_calc_used");
+  const correlationFinder = events.filter((e) => e.event_name === "correlation_finder_run");
+  const traditionalAdds = events.filter((e) => e.event_name === "traditional_candidate_added");
+  const mptRuns = events.filter((e) => e.event_name === "mpt_analysis_run");
+
+  const apiErrors = events.filter((e) => e.event_name === "api_error");
+
   return {
     generatedAt: new Date().toISOString(),
     dataLimitations,
@@ -281,6 +346,49 @@ export async function getAdminAnalyticsSummary(): Promise<AdminAnalyticsSummary>
           : null,
       maxEventsInASession: perSessionCounts.length > 0 ? perSessionCounts[perSessionCounts.length - 1] : null,
       avgSessionSpanMinutes: spans.length > 0 ? Number((spans.reduce((a, b) => a + b, 0) / spans.length).toFixed(1)) : null,
+    },
+    trading: {
+      backtestsRun: backtests.length,
+      backtestPassRatePct: passRatePct(backtests),
+      calendarEffectsRuns: calendarEffects.length,
+      calendarEffectsPassRatePct: passRatePct(calendarEffects),
+      orbWatchlistScans: orbWatchlistScans.length,
+      orbBacktestsRun: orbBacktests.length,
+      orbBacktestPassRatePct: passRatePct(orbBacktests),
+      pmVolumeChecks: pmVolumeChecks.length,
+      pmVolumeAnomalyRatePct:
+        pmVolumeChecks.length > 0
+          ? Number(((pmVolumeChecks.filter((e) => metaBool(e, "isAnomaly") === true).length / pmVolumeChecks.length) * 100).toFixed(1))
+          : null,
+      pmVolumeScans: pmVolumeScans.length,
+      optionsCalcRuns: optionsCalcRuns.length,
+      pegBacktestsRun: pegBacktests.length,
+      pegBacktestPassRatePct: passRatePct(pegBacktests),
+      alertSubscriptions: alertSubscribedEvents.length,
+      watchlistAdds: watchlistAdds.length,
+      watchlistRemoves: watchlistRemoves.length,
+      topSymbolsBacktested: countBy(backtests, (e) => e.symbol),
+    },
+    research: {
+      watchlistRemoves: researchWatchlistRemoves.length,
+      screenerRuns: screenerRuns.length,
+      sectorStockAnalysisRuns: sectorStockRuns.length,
+      sectorStockForecastRatePct:
+        sectorStockRuns.length > 0
+          ? Number(((sectorStockRuns.filter((e) => metaBool(e, "forecast") === true).length / sectorStockRuns.length) * 100).toFixed(1))
+          : null,
+    },
+    portfolio: {
+      scenarioSimulationsRun: scenarioSims.length,
+      rebalancingComputations: rebalancing.length,
+      hedgeCalculatorUses: hedgeCalc.length,
+      correlationFinderRuns: correlationFinder.length,
+      traditionalCandidatesAdded: traditionalAdds.length,
+      mptAnalysesRun: mptRuns.length,
+    },
+    systemHealth: {
+      totalApiErrors: apiErrors.length,
+      topFailingEndpoints: countBy(apiErrors, (e) => metaStr(e, "endpoint")),
     },
   };
 }

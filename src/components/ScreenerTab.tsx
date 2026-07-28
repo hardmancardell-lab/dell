@@ -29,10 +29,16 @@ export function ScreenerTab() {
         watchlistedSymbols.length > 0 ? `?watchlisted=${encodeURIComponent(watchlistedSymbols.join(","))}` : "";
       const res = await fetch(`/api/research-screener${watchlistedParam}`);
       const json = await res.json();
-      if (!res.ok) setError(json.error ?? "Unknown error");
-      else setResult(json as ScreenerResult);
+      if (!res.ok) {
+        setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Screener", metadata: { endpoint: "research-screener", status: res.status } });
+      } else {
+        setResult(json as ScreenerResult);
+        track("screener_run", { tab: "Screener" });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Screener", metadata: { endpoint: "research-screener", status: 0 } });
     } finally {
       setLoading(false);
     }

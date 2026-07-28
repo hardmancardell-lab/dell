@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useResearchWatchlist } from "@/lib/agents/research-agent/watchlist-storage";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { WatchlistOverviewResult } from "@/lib/agents/research-agent/types";
 
 export function ResearchWatchlistTab() {
   const { symbols, hydrated, removeSymbol } = useResearchWatchlist();
+  const { track } = useTrackEvent();
   const [result, setResult] = useState<WatchlistOverviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -105,7 +107,10 @@ export function ResearchWatchlistTab() {
                   </div>
                 )}
                 <button
-                  onClick={() => removeSymbol(e.symbol)}
+                  onClick={() => {
+                    removeSymbol(e.symbol);
+                    track("research_watchlist_removed", { tab: "Research Watchlist", symbol: e.symbol });
+                  }}
                   style={{ color: "var(--text-2)" }}
                   aria-label={`Remove ${e.symbol}`}
                 >

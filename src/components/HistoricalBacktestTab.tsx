@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { GlossaryTerm } from "./GlossaryTerm";
 import { PriceChart } from "./PriceChart";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { EquityBacktestResult, EquityBacktestSignalType } from "@/lib/agents/trading-agent/types";
 
 const SIGNAL_OPTIONS: { value: EquityBacktestSignalType; label: string }[] = [
@@ -57,6 +58,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL" }: { defaultTicke
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [focusedDate, setFocusedDate] = useState<string | null>(null);
+  const { track } = useTrackEvent();
 
   async function runBacktest(e: React.FormEvent) {
     e.preventDefault();
@@ -72,11 +74,16 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL" }: { defaultTicke
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Backtest", symbol: ticker, metadata: { endpoint: "historical-backtest", status: res.status } });
       } else {
-        setResult(json as EquityBacktestResult);
+        const r = json as EquityBacktestResult;
+        setResult(r);
+        const passesAllThreeBars = r.horizons?.some((h) => h.passesAllThreeBars) ?? false;
+        track("backtest_run", { tab: "Backtest", symbol: ticker, metadata: { signal, years, passesAllThreeBars } });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Backtest", symbol: ticker, metadata: { endpoint: "historical-backtest", status: 0 } });
     } finally {
       setLoading(false);
     }

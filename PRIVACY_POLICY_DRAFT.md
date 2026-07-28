@@ -24,25 +24,49 @@ education tool.
 - Which tab/section of the app you view (`tab_view` events).
 - Which ticker symbols you look up or analyze (`ticker_analyzed` events) — the symbol only
   (e.g. "AAPL"), never quantities, dollar amounts, or portfolio contents.
+- **Trading Agent tools**: which ticker/pair you run a backtest, calendar-effects study, Opening
+  Range Breakout scan, PM-volume anomaly check, options calculator, or currency-peg backtest on;
+  the parameters you chose (e.g. lookback window, opening-range length); whether the result
+  cleared this app's statistical-significance bar (FDR correction + bootstrap confidence interval
+  + out-of-sample check, all three); and whether you add/remove a symbol on your watchlist
+  (`backtest_run`, `calendar_effects_run`, `orb_watchlist_scan`, `orb_backtest_run`,
+  `pm_volume_check`, `pm_volume_scan`, `options_calc_run`, `peg_backtest_run`,
+  `watchlist_entry_added`/`_removed`, `alert_subscribed` events) — never the dollar P&L or share
+  counts of any position.
+- **Research Agent tools**: that you removed a symbol from your research watchlist, ran the
+  sector screener, or ran a sector/stock analysis and whether you turned on its AI forecast
+  (`research_watchlist_removed`, `screener_run`, `sector_stock_analysis_run` events).
+- **Portfolio Tracker tools**: that you ran a scenario simulation, a rebalancing calculation, the
+  options hedge calculator, the correlation finder, a Modern Portfolio Theory analysis, or added a
+  candidate from the Traditional screen — and structural metadata only, such as how many symbols
+  or years were involved (`scenario_simulation_run`, `rebalancing_computed`, `hedge_calc_used`,
+  `correlation_finder_run`, `mpt_analysis_run`, `traditional_candidate_added` events) — **never
+  the share counts, cost basis, or dollar values you enter for any holding.**
 - **Financial Literacy**: whether a quiz question was answered correctly, timed out, which module
-  it belonged to, and module/round completion stats (`literacy_answer`,
-  `literacy_quiz_round_completed`, `literacy_placement_completed` events) — the question ID/module
-  ID and a correct/incorrect flag only, never the question text or your specific answer choice.
+  it belonged to, whether you opened a module, and module/round completion stats
+  (`literacy_answer`, `literacy_module_opened`, `literacy_quiz_round_completed`,
+  `literacy_placement_completed` events) — the question ID/module ID and a correct/incorrect flag
+  only, never the question text or your specific answer choice.
 - **Assistant chat**: that a message was sent, how many turns into the conversation, the
-  character length of your question and the reply, and which internal tools the assistant used
-  to answer it (`assistant_message_sent`/`assistant_message_failed` events) — **never the actual
-  text of your question or the assistant's reply**.
+  character length of your question and the reply, which internal tools the assistant used to
+  answer it, whether you used the microphone to ask it, and whether you turned on spoken replies
+  (`assistant_message_sent`/`assistant_message_failed`, `assistant_voice_input_used`,
+  `assistant_speak_replies_toggled` events) — **never the actual text of your question or the
+  assistant's reply**.
 - **Referral/first-touch source**: the first time your browser visits, any `utm_source`/
   `utm_medium`/`utm_campaign` URL parameters present, the referring page (if any), and the landing
   path (`session_start` event, fired once per browser).
+- **Errors**: when a feature's request to our servers fails, which endpoint and what kind of
+  failure, so we can find and fix bugs (`api_error` events) — never any data you had entered when
+  the failure happened.
 - Small structured technical metadata attached to the above (e.g. which lookback period you
   selected) — never free-text input.
 
 **What we do NOT collect**: names, addresses, government IDs, account numbers, passwords,
-portfolio holdings, dollar amounts, brokerage credentials, the literal text of anything you type
-into the Assistant chat or a Financial Literacy question, or any other data typed into a form
-field (portfolio holdings you enter live only in your browser's local storage, on your device —
-they are never sent to our servers).
+portfolio holdings, share counts, cost basis, dollar amounts, brokerage credentials, the literal
+text of anything you type into the Assistant chat or a Financial Literacy question, the values you
+type into a calculator, or any other data typed into a form field (portfolio holdings you enter
+live only in your browser's local storage, on your device — they are never sent to our servers).
 
 **Alerts feature (live)**: email address and/or phone number, only if you explicitly opt in via
 the alerts signup form, with a separate unchecked-by-default consent checkbox — see
@@ -108,6 +132,6 @@ with counsel.]
 ---
 
 _Engineering note (remove before publishing): this draft was generated to reflect the actual,
-current data-collection surface of the app as of 2026-07-22 — cross-check it against the code
+current data-collection surface of the app as of 2026-07-28 — cross-check it against the code
 again before publishing if the analytics pipeline changes (new event types, the alerts feature
 going live, any future account system) since it will go stale otherwise._

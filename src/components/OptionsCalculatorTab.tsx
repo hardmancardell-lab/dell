@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { OptionsCalculatorResult, RiskFreeRateResult } from "@/lib/agents/trading-agent/types";
 
 function StatCard({ label, value }: { label: string; value: string }) {
@@ -46,6 +47,7 @@ export function OptionsCalculatorTab() {
   const [data, setData] = useState<OptionsCalculatorResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { track } = useTrackEvent();
 
   // Live 3-month Treasury yield as the starting value — not a hardcoded
   // guess. Still a plain editable field afterward; this only sets the default.
@@ -77,11 +79,14 @@ export function OptionsCalculatorTab() {
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Options Calculator", metadata: { endpoint: "options-calculator", status: res.status } });
       } else {
         setData(json as OptionsCalculatorResult);
+        track("options_calc_run", { tab: "Options Calculator", metadata: { dte: Number(dte), iv: Number(iv) } });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Options Calculator", metadata: { endpoint: "options-calculator", status: 0 } });
     } finally {
       setLoading(false);
     }

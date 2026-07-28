@@ -178,6 +178,43 @@ function Dashboard({ data }: { data: AdminAnalyticsSummary }) {
         </div>
       </Section>
 
+      <Section title="Trading Agent">
+        <StatCard label="Backtests Run" value={data.trading.backtestsRun} sub={data.trading.backtestPassRatePct !== null ? `${data.trading.backtestPassRatePct}% passed all 3 statistical bars` : undefined} />
+        <StatCard label="Calendar Effects Runs" value={data.trading.calendarEffectsRuns} sub={data.trading.calendarEffectsPassRatePct !== null ? `${data.trading.calendarEffectsPassRatePct}% passed all 3 bars` : undefined} />
+        <StatCard label="ORB Backtests Run" value={data.trading.orbBacktestsRun} sub={data.trading.orbBacktestPassRatePct !== null ? `${data.trading.orbBacktestPassRatePct}% passed all 3 bars` : undefined} />
+        <StatCard label="ORB Watchlist Scans" value={data.trading.orbWatchlistScans} />
+        <StatCard label="PM-Volume Checks" value={data.trading.pmVolumeChecks} sub={data.trading.pmVolumeAnomalyRatePct !== null ? `${data.trading.pmVolumeAnomalyRatePct}% flagged anomaly` : undefined} />
+        <StatCard label="PM-Volume Sector/Market Scans" value={data.trading.pmVolumeScans} />
+        <StatCard label="Options Calculator Runs" value={data.trading.optionsCalcRuns} />
+        <StatCard label="Currency Peg Backtests" value={data.trading.pegBacktestsRun} sub={data.trading.pegBacktestPassRatePct !== null ? `${data.trading.pegBacktestPassRatePct}% passed all 3 bars` : undefined} />
+        <StatCard label="Watchlist Adds / Removes" value={`${data.trading.watchlistAdds} / ${data.trading.watchlistRemoves}`} />
+        <div className="sm:col-span-2 lg:col-span-3">
+          <BreakdownTable title="Most-Backtested Symbols" rows={data.trading.topSymbolsBacktested} />
+        </div>
+      </Section>
+
+      <Section title="Research Agent">
+        <StatCard label="Screener Runs" value={data.research.screenerRuns} />
+        <StatCard label="Sector Stock Analysis Runs" value={data.research.sectorStockAnalysisRuns} sub={data.research.sectorStockForecastRatePct !== null ? `${data.research.sectorStockForecastRatePct}% with AI forecast on` : undefined} />
+        <StatCard label="Watchlist Removes" value={data.research.watchlistRemoves} />
+      </Section>
+
+      <Section title="Portfolio Tracker">
+        <StatCard label="Scenario Simulations Run" value={data.portfolio.scenarioSimulationsRun} />
+        <StatCard label="Modern Portfolio Theory Runs" value={data.portfolio.mptAnalysesRun} />
+        <StatCard label="Correlation Finder Runs" value={data.portfolio.correlationFinderRuns} />
+        <StatCard label="Rebalancing Target Edits" value={data.portfolio.rebalancingComputations} />
+        <StatCard label="Hedge Calculator Uses" value={data.portfolio.hedgeCalculatorUses} />
+        <StatCard label="Traditional Candidates Added" value={data.portfolio.traditionalCandidatesAdded} />
+      </Section>
+
+      <Section title="System Health">
+        <StatCard label="Total API Errors" value={data.systemHealth.totalApiErrors} sub="client-visible fetch failures across every agent" />
+        <div className="sm:col-span-2 lg:col-span-2">
+          <BreakdownTable title="Top Failing Endpoints" rows={data.systemHealth.topFailingEndpoints} />
+        </div>
+      </Section>
+
       <Section title="Alerts Conversions">
         <StatCard label="Total Subscriptions" value={data.alerts.totalSubscriptions} sub={`${data.alerts.activeCount} active`} />
         <StatCard

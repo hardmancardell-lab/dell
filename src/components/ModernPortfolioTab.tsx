@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CartesianGrid, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { PortfolioAnalyticsResult } from "@/lib/agents/trading-agent/types";
 
 function fmtPct(v: number | null): string {
@@ -23,6 +24,7 @@ export function ModernPortfolioTab() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState(false);
+  const { track } = useTrackEvent();
 
   const runAnalytics = useCallback(async () => {
     if (holdings.length === 0) return;
@@ -35,10 +37,16 @@ export function ModernPortfolioTab() {
         body: JSON.stringify({ holdings }),
       });
       const json = await res.json();
-      if (!res.ok) setError(json.error ?? "Unknown error");
-      else setResult(json as PortfolioAnalyticsResult);
+      if (!res.ok) {
+        setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Modern Portfolio Theory", metadata: { endpoint: "portfolio-analytics", status: res.status } });
+      } else {
+        setResult(json as PortfolioAnalyticsResult);
+        track("mpt_analysis_run", { tab: "Modern Portfolio Theory", metadata: { holdingCount: holdings.length } });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Modern Portfolio Theory", metadata: { endpoint: "portfolio-analytics", status: 0 } });
     } finally {
       setLoading(false);
     }

@@ -204,6 +204,9 @@ function ModuleCard({
         setAwardedXp(null);
         setTimeLeft(QUESTION_TIME_SECONDS);
       }
+      if (next) {
+        track("literacy_module_opened", { agent: "literacy", tab: "Learn", metadata: { moduleId: mod.id, tier: mod.tier, alreadyCompleted: completed } });
+      }
       return next;
     });
   }

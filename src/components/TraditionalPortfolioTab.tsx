@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { TraditionalCandidatesResult } from "@/lib/agents/trading-agent/types";
 
 const READ_STYLES: Record<string, string> = {
@@ -16,6 +17,7 @@ export function TraditionalPortfolioTab() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState(false);
+  const { track } = useTrackEvent();
 
   const heldSymbols = holdings.map((h) => h.symbol);
 
@@ -26,10 +28,15 @@ export function TraditionalPortfolioTab() {
       const heldParam = heldSymbols.length > 0 ? `?held=${encodeURIComponent(heldSymbols.join(","))}` : "";
       const res = await fetch(`/api/traditional-candidates${heldParam}`);
       const json = await res.json();
-      if (!res.ok) setError(json.error ?? "Unknown error");
-      else setResult(json as TraditionalCandidatesResult);
+      if (!res.ok) {
+        setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Traditional Portfolio", metadata: { endpoint: "traditional-candidates", status: res.status } });
+      } else {
+        setResult(json as TraditionalCandidatesResult);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Traditional Portfolio", metadata: { endpoint: "traditional-candidates", status: 0 } });
     } finally {
       setLoading(false);
     }
@@ -111,7 +118,10 @@ export function TraditionalPortfolioTab() {
                       </div>
                       {!c.error && !c.alreadyHeld && (
                         <button
-                          onClick={() => addHolding(c.ticker, "equity", 1, 0, new Date().toISOString().slice(0, 10))}
+                          onClick={() => {
+                            addHolding(c.ticker, "equity", 1, 0, new Date().toISOString().slice(0, 10));
+                            track("traditional_candidate_added", { tab: "Traditional Portfolio", symbol: c.ticker, metadata: { assetClass: "equity" } });
+                          }}
                           className="shrink-0 rounded-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-3 py-1 text-xs font-medium"
                         >
                           + Add

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import { computeRebalancing } from "@/lib/agents/trading-agent/skills/portfolio-rebalancing";
 import { computeHedge } from "@/lib/agents/trading-agent/skills/hedge-calculator";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { OptionType } from "@/lib/agents/trading-agent/black-scholes";
 import type { PortfolioSummary } from "@/lib/agents/trading-agent/types";
 
@@ -15,6 +16,7 @@ function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
   const { holdings } = usePortfolio();
   const uniqueSymbols = useMemo(() => [...new Set(holdings.map((h) => h.symbol))], [holdings]);
   const [targets, setTargets] = useState<Record<string, string>>({});
+  const { track } = useTrackEvent();
 
   const currentValues = useMemo(() => {
     const bySymbol = new Map<string, { currentValue: number; currentPrice: number | null }>();
@@ -69,6 +71,7 @@ function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
                     step="any"
                     value={targets[r.symbol] ?? ""}
                     onChange={(e) => setTargets((prev) => ({ ...prev, [r.symbol]: e.target.value }))}
+                    onBlur={() => track("rebalancing_computed", { tab: "Rebalancing", metadata: { symbolCount: uniqueSymbols.length } })}
                     placeholder="0"
                     className="w-20 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1 text-sm"
                   />
@@ -111,6 +114,7 @@ function HedgeCalculatorSection() {
   const [iv, setIv] = useState("30");
   const [riskFreeRate, setRiskFreeRate] = useState("4");
   const [targetHedgeRatio, setTargetHedgeRatio] = useState("1");
+  const { track } = useTrackEvent();
 
   const result = useMemo(
     () =>
@@ -135,14 +139,24 @@ function HedgeCalculatorSection() {
         (Options Calculator) to find the option&apos;s delta, then solves for the contract count that offsets your
         target share of the position&apos;s directional exposure.
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div
+        className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6"
+        onBlur={() => track("hedge_calc_used", { tab: "Rebalancing", metadata: { optionType } })}
+      >
         <label className="flex flex-col gap-1">
           <span className="text-xs uppercase tracking-wide text-zinc-500">Position (shares, + long / - short)</span>
           <input type="number" step="any" value={positionShares} onChange={(e) => setPositionShares(e.target.value)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm" />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs uppercase tracking-wide text-zinc-500">Option Type</span>
-          <select value={optionType} onChange={(e) => setOptionType(e.target.value as OptionType)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm">
+          <select
+            value={optionType}
+            onChange={(e) => {
+              setOptionType(e.target.value as OptionType);
+              track("hedge_calc_used", { tab: "Rebalancing", metadata: { optionType: e.target.value } });
+            }}
+            className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+          >
             <option value="put">Put</option>
             <option value="call">Call</option>
           </select>

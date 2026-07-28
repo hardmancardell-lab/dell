@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { GlossaryTerm } from "./GlossaryTerm";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type {
   CurrencyPeg,
   PegDeviationSnapshot,
@@ -172,6 +173,7 @@ export function CurrencyPegsTab() {
   const [result, setResult] = useState<PegReversionResult | null>(null);
   const [backtestError, setBacktestError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { track } = useTrackEvent();
 
   useEffect(() => {
     fetch("/api/currency-pegs")
@@ -199,11 +201,22 @@ export function CurrencyPegsTab() {
       const json = await res.json();
       if (!res.ok) {
         setBacktestError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Currency Pegs", symbol: selectedPair, metadata: { endpoint: "peg-reversion-backtest", status: res.status } });
       } else {
-        setResult(json as PegReversionResult);
+        const r = json as PegReversionResult;
+        setResult(r);
+        const passesAllThreeBars =
+          (r.aboveTarget?.horizons?.some((h) => h.passesAllThreeBars) ?? false) ||
+          (r.belowTarget?.horizons?.some((h) => h.passesAllThreeBars) ?? false);
+        track("peg_backtest_run", {
+          tab: "Currency Pegs",
+          symbol: selectedPair,
+          metadata: { lookbackYears, passesAllThreeBars },
+        });
       }
     } catch (err) {
       setBacktestError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Currency Pegs", symbol: selectedPair, metadata: { endpoint: "peg-reversion-backtest", status: 0 } });
     } finally {
       setLoading(false);
     }

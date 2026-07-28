@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ORB_LOOKBACK_MONTH_OPTIONS } from "@/lib/agents/trading-agent/constants";
 import { GlossaryTerm } from "./GlossaryTerm";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { OrbTickerResult } from "@/lib/agents/trading-agent/types";
 
 const RANGE_OPTIONS: (5 | 15 | 30)[] = [5, 15, 30];
@@ -55,6 +56,7 @@ export function OrbDetailTab({ defaultTicker = "AAPL" }: { defaultTicker?: strin
   const [result, setResult] = useState<OrbTickerResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { track } = useTrackEvent();
 
   async function runBacktest(e: React.FormEvent) {
     e.preventDefault();
@@ -67,10 +69,17 @@ export function OrbDetailTab({ defaultTicker = "AAPL" }: { defaultTicker?: strin
         `/api/orb-backtest?ticker=${encodeURIComponent(ticker)}&openingRangeMinutes=${openingRangeMinutes}&lookbackMonths=${lookbackMonths}`
       );
       const json = await res.json();
-      if (!res.ok) setError(json.error ?? "Unknown error");
-      else setResult(json as OrbTickerResult);
+      if (!res.ok) {
+        setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "ORB Ticker Detail", symbol: ticker, metadata: { endpoint: "orb-backtest", status: res.status } });
+      } else {
+        const r = json as OrbTickerResult;
+        setResult(r);
+        track("orb_backtest_run", { tab: "ORB Ticker Detail", symbol: ticker, metadata: { openingRangeMinutes, lookbackMonths, passesAllThreeBars: r.horizons?.some((h) => h.passesAllThreeBars) ?? false } });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "ORB Ticker Detail", symbol: ticker, metadata: { endpoint: "orb-backtest", status: 0 } });
     } finally {
       setLoading(false);
     }

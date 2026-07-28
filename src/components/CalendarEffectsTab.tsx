@@ -8,6 +8,7 @@ import {
 } from "@/lib/agents/trading-agent/constants";
 import { GlossaryTerm } from "./GlossaryTerm";
 import { PriceChart } from "./PriceChart";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type {
   CalendarDayOfWeekResult,
   CalendarTimeOfDayResult,
@@ -126,6 +127,7 @@ export function CalendarEffectsTab({ defaultTicker = "AAPL" }: { defaultTicker?:
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [focusedDate, setFocusedDate] = useState<string | null>(null);
+  const { track } = useTrackEvent();
 
   async function runAnalysis(e: React.FormEvent) {
     e.preventDefault();
@@ -140,23 +142,41 @@ export function CalendarEffectsTab({ defaultTicker = "AAPL" }: { defaultTicker?:
       if (mode === "dayOfWeek") {
         const res = await fetch(`/api/calendar-day-of-week?ticker=${encodeURIComponent(ticker)}&years=${years}`);
         const json = await res.json();
-        if (!res.ok) setError(json.error ?? "Unknown error");
-        else setDowResult(json as CalendarDayOfWeekResult);
+        if (!res.ok) {
+          setError(json.error ?? "Unknown error");
+          track("api_error", { tab: "Calendar Effects", symbol: ticker, metadata: { endpoint: "calendar-day-of-week", status: res.status } });
+        } else {
+          const r = json as CalendarDayOfWeekResult;
+          setDowResult(r);
+          track("calendar_effects_run", { tab: "Calendar Effects", symbol: ticker, metadata: { mode, years, passesAllThreeBars: r.days?.some((x) => x.passesAllThreeBars) ?? false } });
+        }
       } else if (mode === "timeOfDay") {
         const res = await fetch(`/api/calendar-time-of-day?ticker=${encodeURIComponent(ticker)}&lookbackDays=${lookbackDays}`);
         const json = await res.json();
-        if (!res.ok) setError(json.error ?? "Unknown error");
-        else setTodResult(json as CalendarTimeOfDayResult);
+        if (!res.ok) {
+          setError(json.error ?? "Unknown error");
+          track("api_error", { tab: "Calendar Effects", symbol: ticker, metadata: { endpoint: "calendar-time-of-day", status: res.status } });
+        } else {
+          const r = json as CalendarTimeOfDayResult;
+          setTodResult(r);
+          track("calendar_effects_run", { tab: "Calendar Effects", symbol: ticker, metadata: { mode, lookbackDays, passesAllThreeBars: r.checkpoints?.some((x) => x.passesAllThreeBars) ?? false } });
+        }
       } else {
         const res = await fetch(
           `/api/calendar-single-weekday?ticker=${encodeURIComponent(ticker)}&dayOfWeek=${singleWeekday}&occurrences=${occurrences}`
         );
         const json = await res.json();
-        if (!res.ok) setError(json.error ?? "Unknown error");
-        else setSwResult(json as SingleWeekdayResult);
+        if (!res.ok) {
+          setError(json.error ?? "Unknown error");
+          track("api_error", { tab: "Calendar Effects", symbol: ticker, metadata: { endpoint: "calendar-single-weekday", status: res.status } });
+        } else {
+          setSwResult(json as SingleWeekdayResult);
+          track("calendar_effects_run", { tab: "Calendar Effects", symbol: ticker, metadata: { mode, singleWeekday, occurrences } });
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Calendar Effects", symbol: ticker, metadata: { endpoint: "calendar-effects", status: 0 } });
     } finally {
       setLoading(false);
     }

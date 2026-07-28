@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
 import { WatchlistSelector } from "./WatchlistSelector";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { AssetClass, WatchlistScanSummary } from "@/lib/agents/trading-agent/types";
 
 const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
@@ -41,13 +42,21 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [autoScanned, setAutoScanned] = useState(false);
+  const { track } = useTrackEvent();
 
   const filteredEntries = filterAssetClass ? entries.filter((e) => e.assetClass === filterAssetClass) : entries;
 
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    addEntry(symbolInput, filterAssetClass ?? assetClass);
+    const cls = filterAssetClass ?? assetClass;
+    addEntry(symbolInput, cls);
+    track("watchlist_entry_added", { tab: "Dashboard", symbol: symbolInput.trim().toUpperCase(), metadata: { assetClass: cls } });
     setSymbolInput("");
+  }
+
+  function handleRemove(symbol: string, cls: AssetClass) {
+    removeEntry(symbol, cls);
+    track("watchlist_entry_removed", { tab: "Dashboard", symbol, metadata: { assetClass: cls } });
   }
 
   const runScan = useCallback(async () => {
@@ -132,7 +141,7 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
                 {e.symbol}
               </span>
               <span style={{ color: "var(--text-2)" }}>{assetClassLabel(e.assetClass)}</span>
-              <button onClick={() => removeEntry(e.symbol, e.assetClass)} aria-label={`Remove ${e.symbol} (${assetClassLabel(e.assetClass)})`}>
+              <button onClick={() => handleRemove(e.symbol, e.assetClass)} aria-label={`Remove ${e.symbol} (${assetClassLabel(e.assetClass)})`}>
                 &times;
               </button>
             </span>

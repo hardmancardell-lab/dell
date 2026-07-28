@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { SectorStockAnalysisResult } from "@/lib/agents/research-agent/types";
 
 // Hardcoded rather than imported from sector-fundamentals.ts, same
@@ -41,6 +42,7 @@ export function SectorStockAnalysisTab() {
   const [data, setData] = useState<SectorStockAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { track } = useTrackEvent();
 
   async function run() {
     setLoading(true);
@@ -51,11 +53,14 @@ export function SectorStockAnalysisTab() {
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Sector Stock Picks", metadata: { endpoint: "sector-stock-analysis", status: res.status } });
       } else {
         setData(json as SectorStockAnalysisResult);
+        track("sector_stock_analysis_run", { tab: "Sector Stock Picks", metadata: { sector, forecast } });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Sector Stock Picks", metadata: { endpoint: "sector-stock-analysis", status: 0 } });
     } finally {
       setLoading(false);
     }

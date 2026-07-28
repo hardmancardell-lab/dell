@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getOrCreateSessionId } from "@/lib/analytics/use-track";
+import { getOrCreateSessionId, useTrackEvent } from "@/lib/analytics/use-track";
 import type { AlertChannel, AlertConditionType, AlertRuleInput, AssetClass } from "@/lib/agents/trading-agent/types";
 
 const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
@@ -69,6 +69,7 @@ export function AlertsSubscribeTab() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const { track } = useTrackEvent();
 
   function updateRow(key: string, patch: Partial<RuleRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -115,12 +116,22 @@ export function AlertsSubscribeTab() {
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Alerts", metadata: { endpoint: "alerts/subscribe", status: res.status } });
       } else {
         setSuccess(true);
+        track("alert_subscribed", {
+          tab: "Alerts",
+          metadata: {
+            channel,
+            ruleCount: ruleInputs.length,
+            conditionTypes: Array.from(new Set(ruleInputs.map((r) => r.conditionType))),
+          },
+        });
         setRows([newRow()]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Alerts", metadata: { endpoint: "alerts/subscribe", status: 0 } });
     } finally {
       setSubmitting(false);
     }

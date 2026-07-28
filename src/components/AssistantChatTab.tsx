@@ -74,6 +74,7 @@ export function AssistantChatTab() {
     recognitionRef.current = recognition;
     recognition.start();
     setListening(true);
+    track("assistant_voice_input_used", { agent: "assistant", tab: "Assistant" });
   }
 
   function speak(text: string) {
@@ -206,7 +207,14 @@ export function AssistantChatTab() {
       <div className="flex items-center gap-3 mb-2 text-xs text-zinc-500">
         {speechOutputSupported && (
           <label className="flex items-center gap-1.5 cursor-pointer">
-            <input type="checkbox" checked={speakReplies} onChange={(e) => setSpeakReplies(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={speakReplies}
+              onChange={(e) => {
+                setSpeakReplies(e.target.checked);
+                track("assistant_speak_replies_toggled", { agent: "assistant", tab: "Assistant", metadata: { enabled: e.target.checked } });
+              }}
+            />
             Read replies aloud
           </label>
         )}

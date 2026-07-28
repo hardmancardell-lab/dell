@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { SECTOR_CONSTITUENTS } from "@/lib/agents/research-agent/skills/sector-fundamentals";
 import { GlossaryTerm } from "./GlossaryTerm";
 import { PriceChart } from "./PriceChart";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type {
   OptionsChainSummary,
   PmVolumeAnomalyReport,
@@ -70,6 +71,7 @@ export function PmVolumeTab() {
   const [sectorSummaries, setSectorSummaries] = useState<SectorScanSummary[] | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
+  const { track } = useTrackEvent();
 
   async function runSectorScan() {
     if (!selectedSector) return;
@@ -81,11 +83,15 @@ export function PmVolumeTab() {
       const json = await res.json();
       if (!res.ok) {
         setScanError(json.error ?? "Unknown error");
+        track("api_error", { tab: "PM-Volume Tracker", metadata: { endpoint: "pm-volume-scan", status: res.status } });
       } else {
-        setSectorSummaries([json as SectorScanSummary]);
+        const s = json as SectorScanSummary;
+        setSectorSummaries([s]);
+        track("pm_volume_scan", { tab: "PM-Volume Tracker", metadata: { scope: "sector", sector: selectedSector, tickersScanned: s.tickersScanned, tickersFlagged: s.tickersFlagged } });
       }
     } catch (err) {
       setScanError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "PM-Volume Tracker", metadata: { endpoint: "pm-volume-scan", status: 0 } });
     } finally {
       setScanLoading(false);
     }
@@ -100,11 +106,22 @@ export function PmVolumeTab() {
       const json = await res.json();
       if (!res.ok) {
         setScanError(json.error ?? "Unknown error");
+        track("api_error", { tab: "PM-Volume Tracker", metadata: { endpoint: "pm-volume-scan", status: res.status } });
       } else {
-        setSectorSummaries(json.summaries as SectorScanSummary[]);
+        const summaries = json.summaries as SectorScanSummary[];
+        setSectorSummaries(summaries);
+        track("pm_volume_scan", {
+          tab: "PM-Volume Tracker",
+          metadata: {
+            scope: "market",
+            tickersScanned: summaries.reduce((s, x) => s + x.tickersScanned, 0),
+            tickersFlagged: summaries.reduce((s, x) => s + x.tickersFlagged, 0),
+          },
+        });
       }
     } catch (err) {
       setScanError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "PM-Volume Tracker", metadata: { endpoint: "pm-volume-scan", status: 0 } });
     } finally {
       setScanLoading(false);
     }
@@ -128,8 +145,11 @@ export function PmVolumeTab() {
       const reportJson = await reportRes.json();
       if (!reportRes.ok) {
         setError(reportJson.error ?? "Unknown error");
+        track("api_error", { tab: "PM-Volume Tracker", symbol: ticker, metadata: { endpoint: "pm-volume", status: reportRes.status } });
       } else {
-        setReport(reportJson as PmVolumeAnomalyReport);
+        const r = reportJson as PmVolumeAnomalyReport;
+        setReport(r);
+        track("pm_volume_check", { tab: "PM-Volume Tracker", symbol: ticker, metadata: { isAnomaly: r.snapshot.isAnomaly, multiple: r.snapshot.multiple } });
       }
       const chainJson = await chainRes.json();
       if (chainRes.ok) {
@@ -137,6 +157,7 @@ export function PmVolumeTab() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "PM-Volume Tracker", symbol: ticker, metadata: { endpoint: "pm-volume", status: 0 } });
     } finally {
       setLoading(false);
     }

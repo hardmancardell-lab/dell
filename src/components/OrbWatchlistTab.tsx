@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { ORB_LOOKBACK_MONTH_OPTIONS } from "@/lib/agents/trading-agent/constants";
 import { WatchlistSelector } from "./WatchlistSelector";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { AssetClass, OrbWatchlistSummary } from "@/lib/agents/trading-agent/types";
 
 const RANGE_OPTIONS: (5 | 15 | 30)[] = [5, 15, 30];
@@ -28,6 +29,7 @@ export function OrbWatchlistTab({ filterAssetClass = "equity" }: { filterAssetCl
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [autoScanned, setAutoScanned] = useState(false);
+  const { track } = useTrackEvent();
 
   const runScan = useCallback(async () => {
     if (scopedEntries.length === 0) return;
@@ -46,10 +48,17 @@ export function OrbWatchlistTab({ filterAssetClass = "equity" }: { filterAssetCl
         }),
       });
       const json = await res.json();
-      if (!res.ok) setError(json.error ?? "Unknown error");
-      else setSummary(json as OrbWatchlistSummary);
+      if (!res.ok) {
+        setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "ORB Watchlist", metadata: { endpoint: "orb-watchlist-scan", status: res.status } });
+      } else {
+        const r = json as OrbWatchlistSummary;
+        setSummary(r);
+        track("orb_watchlist_scan", { tab: "ORB Watchlist", metadata: { assetClass: filterAssetClass, openingRangeMinutes, lookbackMonths, tickersScanned: r.tickersScanned, tickersWithBreakoutToday: r.tickersWithBreakoutToday } });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "ORB Watchlist", metadata: { endpoint: "orb-watchlist-scan", status: 0 } });
     } finally {
       setLoading(false);
     }

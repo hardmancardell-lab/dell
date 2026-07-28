@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, Tooltip, XAxis, YAxis } from "recharts";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { MarketScenarioLabel, ScenarioSimulationResult } from "@/lib/agents/trading-agent/types";
 
 const HORIZON_OPTIONS = [1, 3, 5, 10, 20];
@@ -28,6 +29,7 @@ export function ScenarioSimulationTab() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState(false);
+  const { track } = useTrackEvent();
 
   const runSimulation = useCallback(
     async (years: number) => {
@@ -41,10 +43,16 @@ export function ScenarioSimulationTab() {
           body: JSON.stringify({ holdings, horizonYears: years }),
         });
         const json = await res.json();
-        if (!res.ok) setError(json.error ?? "Unknown error");
-        else setResult(json as ScenarioSimulationResult);
+        if (!res.ok) {
+          setError(json.error ?? "Unknown error");
+          track("api_error", { tab: "Scenario Simulation", metadata: { endpoint: "scenario-simulation", status: res.status } });
+        } else {
+          setResult(json as ScenarioSimulationResult);
+          track("scenario_simulation_run", { tab: "Scenario Simulation", metadata: { horizonYears: years } });
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
+        track("api_error", { tab: "Scenario Simulation", metadata: { endpoint: "scenario-simulation", status: 0 } });
       } finally {
         setLoading(false);
       }

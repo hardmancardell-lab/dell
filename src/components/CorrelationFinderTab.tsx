@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { CorrelationFinderResult } from "@/lib/agents/trading-agent/types";
 
 function fmtCorrelation(v: number | null): string {
@@ -21,6 +22,7 @@ export function CorrelationFinderTab() {
   const [result, setResult] = useState<CorrelationFinderResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { track } = useTrackEvent();
 
   async function runSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -33,10 +35,16 @@ export function CorrelationFinderTab() {
       if (candidates.trim()) params.set("candidates", candidates);
       const res = await fetch(`/api/correlation-finder?${params.toString()}`);
       const json = await res.json();
-      if (!res.ok) setError(json.error ?? "Unknown error");
-      else setResult(json as CorrelationFinderResult);
+      if (!res.ok) {
+        setError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Correlation Finder", symbol: base, metadata: { endpoint: "correlation-finder", status: res.status } });
+      } else {
+        setResult(json as CorrelationFinderResult);
+        track("correlation_finder_run", { tab: "Correlation Finder", symbol: base, metadata: { hasCustomCandidates: candidates.trim().length > 0 } });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      track("api_error", { tab: "Correlation Finder", symbol: base, metadata: { endpoint: "correlation-finder", status: 0 } });
     } finally {
       setLoading(false);
     }
