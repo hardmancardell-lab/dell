@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
 import { WatchlistSelector } from "./WatchlistSelector";
+import { WatchlistNewsPanel } from "./WatchlistNewsPanel";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { AssetClass, WatchlistScanSummary } from "@/lib/agents/trading-agent/types";
 
@@ -254,7 +255,7 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
                         {r.meanReversion!.direction}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <StatCard
                         label="Z-Score"
                         value={r.meanReversion!.zScore !== null ? r.meanReversion!.zScore.toFixed(2) : "N/A"}
@@ -264,6 +265,11 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
                       <StatCard
                         label="Rolling Mean"
                         value={r.meanReversion!.rollingMean !== null ? `$${r.meanReversion!.rollingMean.toFixed(2)}` : "N/A"}
+                        sub={`${r.meanReversion!.lookbackDays}-day`}
+                      />
+                      <StatCard
+                        label="Rolling Std Dev"
+                        value={r.meanReversion!.rollingStdDev !== null ? `$${r.meanReversion!.rollingStdDev.toFixed(2)}` : "N/A"}
                         sub={`${r.meanReversion!.lookbackDays}-day`}
                       />
                     </div>
@@ -290,6 +296,9 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
           )}
         </div>
       )}
+
+      {filterAssetClass === "equity" && <WatchlistNewsPanel kind="company" entries={entries} />}
+      {filterAssetClass === "forex" && <WatchlistNewsPanel kind="currency" entries={entries} />}
     </div>
   );
 }

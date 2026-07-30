@@ -45,12 +45,26 @@ async function fetchGdelt<T>(params: Record<string, string>): Promise<T> {
 
 type GdeltFetchResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
+// GDELT's real-world latency runs well past the ~6s this file originally
+// assumed (confirmed live: single requests have taken 15-20s, occasionally
+// timing out outright) — one bare attempt was failing often enough to blank
+// the whole macro-news section. One retry after a short backoff recovers
+// most of those transient failures without adding much wall-clock time on
+// top of the deliberate 5.5s rate-limit gap already between calls.
 async function safeFetchGdelt<T>(params: Record<string, string>): Promise<GdeltFetchResult<T>> {
   try {
     const value = await fetchGdelt<T>(params);
     return { ok: true, value };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "unknown error" };
+  } catch (firstError) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try {
+      const value = await fetchGdelt<T>(params);
+      return { ok: true, value };
+    } catch (secondError) {
+      const message = secondError instanceof Error ? secondError.message : "unknown error";
+      const firstMessage = firstError instanceof Error ? firstError.message : "unknown error";
+      return { ok: false, error: `${message} (retry also failed; first attempt: ${firstMessage})` };
+    }
   }
 }
 
@@ -114,6 +128,34 @@ export const MAJOR_PAIR_KEYWORDS: { pair: string; query: string; mechanismNote: 
       "CAD is an oil-proxy currency (Canada is a major oil exporter) — crude oil price moves and Bank of Canada policy are the two dominant drivers.",
   },
 ];
+
+/**
+ * Article-list-only variant (no TimelineVol second call) — half the latency
+ * and half the rate-limit budget of getGeopoliticalNews. Built for
+ * per-watchlist-entry news (a company or currency pair just wants real
+ * headlines, not a coverage-volume chart per item), where the caller may be
+ * looping over several entries already paying the 5.5s inter-call gap.
+ */
+export async function getArticlesOnly(query: string, maxrecords: number = 5): Promise<{ articles: GeopoliticalArticle[]; error: string | null }> {
+  const result = await safeFetchGdelt<GdeltArtListResponse>({
+    query,
+    mode: "ArtList",
+    maxrecords: String(maxrecords),
+    sort: "DateDesc",
+    timespan: "3d",
+  });
+  if (!result.ok) {
+    return { articles: [], error: result.error };
+  }
+  const articles = (result.value.articles ?? []).map((a) => ({
+    title: a.title,
+    url: a.url,
+    domain: a.domain,
+    date: a.seendate,
+    sourceCountry: a.sourcecountry ?? null,
+  }));
+  return { articles, error: articles.length === 0 ? "No articles returned for this query." : null };
+}
 
 export async function getGeopoliticalNews(
   query: string,

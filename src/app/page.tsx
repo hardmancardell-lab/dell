@@ -5,6 +5,7 @@ import { getSectorOverview } from "@/lib/agents/research-agent/skills/sector-ove
 import { Tabs } from "@/components/Tabs";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
 import { IndustryImpactTab } from "@/components/IndustryImpactTab";
+import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
 import { SectorFundamentalsTab } from "@/components/SectorFundamentalsTab";
 import { SectorRecommendationsTab } from "@/components/SectorRecommendationsTab";
 import { SectorStockAnalysisTab } from "@/components/SectorStockAnalysisTab";
@@ -20,7 +21,6 @@ import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
 import { OrbDetailTab } from "@/components/OrbDetailTab";
 import { OrbWatchlistTab } from "@/components/OrbWatchlistTab";
 import { TradingDashboardTab } from "@/components/TradingDashboardTab";
-import { WatchlistProvider } from "@/lib/agents/trading-agent/watchlist-storage";
 import { GlossaryTab } from "@/components/GlossaryTab";
 import { AlertsSubscribeTab } from "@/components/AlertsSubscribeTab";
 import { InternationalEconomicsTab } from "@/components/InternationalEconomicsTab";
@@ -433,6 +433,7 @@ export default async function Home() {
                               { id: "dashboard", label: "Dashboard", content: <MacroDashboardTab /> },
                               { id: "stance", label: "Stance & Details", content: macroStanceContent },
                               { id: "industry", label: "Industry Impact", content: <IndustryImpactTab /> },
+                              { id: "global-news", label: "Global News", content: <GlobalFinancialNewsTab /> },
                             ]}
                           />
                         </div>
@@ -508,7 +509,7 @@ export default async function Home() {
               id: "trading",
               label: "Trading Analysis",
               content: (
-                <WatchlistProvider>
+                <div>
                 <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
                   <div className="aspect-video">
                     <iframe
@@ -749,7 +750,7 @@ export default async function Home() {
                     },
                   ]}
                 />
-                </WatchlistProvider>
+                </div>
               ),
             },
             {

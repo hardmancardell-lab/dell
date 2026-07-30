@@ -73,24 +73,44 @@ export function Tabs({
 
   return (
     <div>
+      {/* Narrow screens: a dropdown, so a 7-8-tab row never has to be
+          discovered by scrolling sideways. Swapped for the button row at
+          the sm breakpoint and up, where there's room for it. */}
+      <div className={`sm:hidden ${isPrimary ? "mb-8" : "mb-6"}`}>
+        <select
+          value={activeTab?.id}
+          onChange={(e) => {
+            const t = tabs.find((tab) => tab.id === e.target.value);
+            if (t) selectTab(t.id, t.label);
+          }}
+          className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm font-medium"
+        >
+          {tabs.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div
-        className={`flex gap-1 border-b border-zinc-200 dark:border-zinc-800 ${
-          isPrimary ? "mb-8" : "mb-6"
-        }`}
+        className={`hidden sm:block overflow-x-auto overscroll-x-contain ${isPrimary ? "mb-8" : "mb-6"}`}
       >
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => selectTab(t.id, t.label)}
-            className={`${isPrimary ? "px-5 py-3 text-base" : "px-4 py-2 text-sm"} font-medium border-b-2 -mb-px transition-colors ${
-              t.id === activeTab?.id
-                ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
-                : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+        <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800 w-max min-w-full">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => selectTab(t.id, t.label)}
+              className={`${isPrimary ? "px-5 py-3 text-base" : "px-4 py-2 text-sm"} shrink-0 whitespace-nowrap font-medium border-b-2 -mb-px transition-colors ${
+                t.id === activeTab?.id
+                  ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
+                  : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div>{activeTab?.content}</div>
     </div>

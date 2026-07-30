@@ -5,6 +5,7 @@ import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { PriceChart } from "./PriceChart";
 import { TickerNewsPanel } from "./TickerNewsPanel";
+import { WatchlistNewsPanel } from "./WatchlistNewsPanel";
 import { WatchlistSelector } from "./WatchlistSelector";
 
 export function EquityChartsTab() {
@@ -84,6 +85,8 @@ export function EquityChartsTab() {
       ) : (
         <p className="text-sm text-zinc-500">Enter a ticker above to load a chart.</p>
       )}
+
+      <WatchlistNewsPanel kind="company" entries={entries} />
     </div>
   );
 }

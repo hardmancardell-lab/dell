@@ -847,6 +847,50 @@ export interface TickerNewsPanelResult {
   dataLimitations: string[];
 }
 
+export interface GlobalNewsHeadline {
+  title: string;
+  url: string;
+  publishedAt: string | null; // raw pubDate string from the feed, unparsed — formats vary too much across outlets to normalize reliably
+}
+
+/**
+ * One entry per country's leading financial news outlet. rssUrl is null for
+ * outlets where no working public RSS feed could be found/verified — those
+ * render as a reference-only card (name + link to the site), never a live
+ * headline list, per the same "never fake data" rule as every other source
+ * in this app.
+ */
+export interface GlobalNewsSource {
+  country: string;
+  outletName: string;
+  websiteUrl: string;
+  rssUrl: string | null;
+}
+
+export interface GlobalNewsSourceResult {
+  source: GlobalNewsSource;
+  headlines: GlobalNewsHeadline[]; // empty if rssUrl is null, or if the live fetch failed
+  error: string | null;
+}
+
+export interface GlobalFinancialNewsResult {
+  results: GlobalNewsSourceResult[];
+  dataLimitations: string[];
+}
+
+export interface WatchlistNewsItem {
+  symbol: string;
+  label: string; // real company name for equities, pair label for forex
+  curated: boolean; // true if a hand-tuned query exists (forex majors); false for a generic fallback query
+  articles: GeopoliticalArticle[];
+  error: string | null;
+}
+
+export interface WatchlistNewsResult {
+  items: WatchlistNewsItem[];
+  dataLimitations: string[];
+}
+
 export interface ScenarioSimulationResult {
   currentPortfolioValue: number;
   portfolioBeta: number | null;

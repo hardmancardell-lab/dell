@@ -1,60 +1,50 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import type { ResearchWatchlistEntry } from "./types";
 
-const STORAGE_KEY = "research-agent-watchlist";
-
-function readStoredWatchlist(): ResearchWatchlistEntry[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
+const LEGACY_STORAGE_KEY = "research-agent-watchlist";
 
 /**
- * Client-side-only persistence, same pattern as
- * trading-agent/watchlist-storage.ts — this app has no backend database or
- * auth. Simpler than the trading-agent version: Research Agent is
- * equity-only, so entries are just a ticker symbol, no asset class.
+ * Research Agent has no watchlist store of its own — it reads/writes the
+ * same shared, multi-list watchlist Trading Agent's Dashboard tab uses
+ * (WatchlistProvider, mounted once at the app root in page.tsx), filtered to
+ * equities since Research Agent is equity-only. A ticker added from either
+ * agent shows up in both, in whichever watchlist is currently active.
  */
 export function useResearchWatchlist() {
-  const [symbols, setSymbolsState] = useState<ResearchWatchlistEntry[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const { entries, hydrated, addEntry, removeEntry } = useWatchlist();
+  const migrated = useRef(false);
 
+  // One-time migration for anyone with data under the old, Research-only
+  // watchlist key: fold it into the shared watchlist, then clear the old key.
   useEffect(() => {
-    setSymbolsState(readStoredWatchlist());
-    setHydrated(true);
-  }, []);
+    if (!hydrated || migrated.current) return;
+    migrated.current = true;
+    try {
+      const raw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (raw) {
+        const legacy = JSON.parse(raw) as ResearchWatchlistEntry[];
+        if (Array.isArray(legacy)) {
+          for (const e of legacy) {
+            if (e?.symbol) addEntry(e.symbol, "equity");
+          }
+        }
+        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+      }
+    } catch {
+      // Malformed legacy data — nothing to migrate.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
 
-  const persist = useCallback((next: ResearchWatchlistEntry[]) => {
-    setSymbolsState(next);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  }, []);
+  const symbols: ResearchWatchlistEntry[] = entries
+    .filter((e) => e.assetClass === "equity")
+    .map((e) => ({ symbol: e.symbol }));
 
-  const addSymbol = useCallback((symbol: string) => {
-    const trimmed = symbol.trim().toUpperCase();
-    if (!trimmed) return;
-    setSymbolsState((current) => {
-      if (current.some((e) => e.symbol === trimmed)) return current;
-      const next = [...current, { symbol: trimmed }];
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
+  const addSymbol = useCallback((symbol: string) => addEntry(symbol, "equity"), [addEntry]);
+  const removeSymbol = useCallback((symbol: string) => removeEntry(symbol, "equity"), [removeEntry]);
 
-  const removeSymbol = useCallback((symbol: string) => {
-    setSymbolsState((current) => {
-      const next = current.filter((e) => e.symbol !== symbol);
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  return { symbols, hydrated, addSymbol, removeSymbol, setSymbols: persist };
+  return { symbols, hydrated, addSymbol, removeSymbol };
 }

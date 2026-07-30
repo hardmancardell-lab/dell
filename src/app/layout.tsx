@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { NavBar } from "@/components/NavBar";
 import { PrivacyFooter } from "@/components/PrivacyFooter";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { WatchlistProvider } from "@/lib/agents/trading-agent/watchlist-storage";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,6 +31,12 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#09090b",
+  // A custom viewport export replaces Next.js's built-in default entirely —
+  // width/initialScale aren't merged in for free, so omitting them here was
+  // rendering the whole app at desktop width (~980px) and shrinking it to
+  // fit on phones instead of laying out at the real device width.
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -45,7 +52,16 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ServiceWorkerRegister />
         <NavBar />
-        <div className="flex-1">{children}</div>
+        {/* Every route gets one shared watchlist — not just the main tabbed
+            page.tsx SPA. A standalone route (e.g. /security) rendering a
+            component that calls useWatchlist()/useResearchWatchlist()
+            without this ancestor fails at build time (confirmed live: the
+            /security page's static prerender threw
+            "useWatchlist() must be used within a WatchlistProvider"),
+            so this lives at the true root rather than inside page.tsx. */}
+        <WatchlistProvider>
+          <div className="flex-1">{children}</div>
+        </WatchlistProvider>
         <PrivacyFooter />
       </body>
     </html>
