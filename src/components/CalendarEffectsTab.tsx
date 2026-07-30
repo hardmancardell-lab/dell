@@ -7,6 +7,7 @@ import {
   TIME_OF_DAY_LOOKBACK_DAY_OPTIONS,
 } from "@/lib/agents/trading-agent/constants";
 import { GlossaryTerm } from "./GlossaryTerm";
+import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { PriceChart } from "./PriceChart";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type {
@@ -184,6 +185,7 @@ export function CalendarEffectsTab({ defaultTicker = "AAPL" }: { defaultTicker?:
 
   return (
     <div className="jarvis">
+      <MacroRegimeBanner />
       <p className="jv-lede">
         Does this ticker tend to move on specific days of the week, or at specific times of day — or is any
         apparent pattern just noise? Same statistical rigor as the Backtest tab (Benjamini-Hochberg FDR

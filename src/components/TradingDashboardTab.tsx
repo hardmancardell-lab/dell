@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
 import { WatchlistSelector } from "./WatchlistSelector";
+import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { WatchlistNewsPanel } from "./WatchlistNewsPanel";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { AssetClass, WatchlistScanSummary } from "@/lib/agents/trading-agent/types";
@@ -232,6 +233,7 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
           </section>
 
           <section>
+            <MacroRegimeBanner />
             <div className="jv-strip-title">Mean Reversion ({meanReversionFlagged.length} flagged)</div>
             <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
               Rolling z-score of price vs. its trailing 20-day mean — flags &plusmn;2 standard-deviation

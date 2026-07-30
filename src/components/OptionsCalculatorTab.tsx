@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
+import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import type { OptionsCalculatorResult, RiskFreeRateResult } from "@/lib/agents/trading-agent/types";
 
 function StatCard({ label, value }: { label: string; value: string }) {
@@ -94,6 +95,7 @@ export function OptionsCalculatorTab() {
 
   return (
     <div className="jarvis">
+      <MacroRegimeBanner />
       <p className="jv-lede">Theoretical price and Greeks for a call and put at the same strike/expiration.</p>
 
       <form onSubmit={calculate} className="grid grid-cols-2 sm:grid-cols-5 gap-4 items-end">

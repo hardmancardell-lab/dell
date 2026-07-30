@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GlossaryTerm } from "./GlossaryTerm";
+import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { PriceChart } from "./PriceChart";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { EquityBacktestResult, EquityBacktestSignalType } from "@/lib/agents/trading-agent/types";
@@ -91,6 +92,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL" }: { defaultTicke
 
   return (
     <div className="jarvis">
+      <MacroRegimeBanner />
       <p className="jv-lede">
         Walks real historical daily bars, computing the chosen signal at each past day (using only data
         available as of that day) and measuring what actually happened afterward at several horizons — with

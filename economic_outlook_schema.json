@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Economic Outlook - Top-Down Macro Schema",
+  "description": "Structure for a standing 'Economic Outlook' workstream, modeled on the mock-FOMC format used in the College Fed Challenge (see fed_challenge_dataset.json for worked examples). This is the top layer of a top-down pipeline: it produces a regime read and a set of trading parameters that the per-ticker research workflow consumes, rather than re-deriving a macro view per ticker.",
+  "type": "object",
+  "required": ["meta", "regime_tag", "dual_mandate_scorecard", "growth_and_financial_conditions", "policy_stance", "risk_balance", "self_qa", "trading_parameters", "output_layers"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "description": "Versioning info. Every refresh is a new snapshot, never an overwrite -- this is what makes the scorecard log possible later.",
+      "required": ["version_id", "as_of_date", "refresh_reason", "prior_version_id", "next_scheduled_refresh"],
+      "properties": {
+        "version_id": {"type": "string", "description": "e.g. '2026-08-FOMC' or '2026-07-30-CPI-trigger'"},
+        "as_of_date": {"type": "string", "format": "date"},
+        "refresh_reason": {"type": "string", "enum": ["scheduled_fomc_cycle", "cpi_print", "nfp_print", "fomc_statement", "ad_hoc_material_change"], "description": "Why this version exists. Ad hoc refreshes should be rare -- if you're refreshing weekly 'just because,' the cadence is wrong."},
+        "prior_version_id": {"type": ["string", "null"]},
+        "next_scheduled_refresh": {"type": "string", "format": "date", "description": "Default: next FOMC meeting date. Full narrative refresh cadence should track the 8/year FOMC schedule; the glance layer updates continuously between refreshes."}
+      }
+    },
+    "regime_tag": {
+      "type": "object",
+      "description": "The single most-referenced field in the whole document -- this is what the ticker-level workflow reads first. Keep it short and stable between refreshes; if it changes every version, it isn't a regime, it's noise.",
+      "required": ["label", "cycle_phase", "dual_mandate_balance", "financial_conditions_stance"],
+      "properties": {
+        "label": {"type": "string", "description": "One-line regime name, e.g. 'late-cycle, disinflationary, easing bias, r-star elevated'"},
+        "cycle_phase": {"type": "string", "enum": ["early_expansion", "mid_expansion", "late_expansion", "slowdown", "contraction", "recovery"]},
+        "dual_mandate_balance": {"type": "string", "description": "Which side of the mandate is currently binding, e.g. 'labor risk now dominates inflation risk' -- this should read like the risk-balance line at the end of a Fed Challenge presentation."},
+        "financial_conditions_stance": {"type": "string", "enum": ["tight", "neutral", "loose", "mixed"]}
+      }
+    },
+    "dual_mandate_scorecard": {
+      "type": "object",
+      "required": ["labor", "inflation"],
+      "properties": {
+        "labor": {"type": "array", "items": {"$ref": "#/definitions/indicator"}},
+        "inflation": {"type": "array", "items": {"$ref": "#/definitions/indicator"}}
+      }
+    },
+    "growth_and_financial_conditions": {
+      "type": "array",
+      "description": "GDP/potential, r-star, credit spreads, NFCI, valuations -- whatever tells you if policy is actually restrictive/accommodative in practice, not just on paper.",
+      "items": {"$ref": "#/definitions/indicator"}
+    },
+    "policy_stance": {
+      "type": "object",
+      "required": ["current_target_range", "house_view_path", "market_implied_path", "gap_analysis"],
+      "properties": {
+        "current_target_range": {"type": "string"},
+        "house_view_path": {"type": "string", "description": "Your own forward rate-path call, stated as explicitly as a mock-FOMC vote (e.g. '-25bp next meeting, hold after')."},
+        "market_implied_path": {"type": "string", "description": "What futures/OIS pricing currently implies. Always state this alongside the house view -- the gap between the two is usually the actual trade."},
+        "gap_analysis": {"type": "string", "description": "Why you differ from the market, if you do. If you don't differ, say so explicitly -- 'no edge here, priced in' is a valid and useful conclusion."}
+      }
+    },
+    "risk_balance": {
+      "type": "object",
+      "required": ["upside_risks", "downside_risks"],
+      "properties": {
+        "upside_risks": {"type": "array", "items": {"$ref": "#/definitions/risk_scenario"}},
+        "downside_risks": {"type": "array", "items": {"$ref": "#/definitions/risk_scenario"}}
+      }
+    },
+    "self_qa": {
+      "type": "array",
+      "description": "The adversarial layer. Modeled directly on the judge follow-ups in the Fed Challenge transcripts (e.g. 'what would have to change for you to think inflation was a bigger problem than the labor market'). Write these BEFORE you need them, not after the thesis breaks.",
+      "items": {
+        "type": "object",
+        "required": ["question", "answer", "falsification_trigger"],
+        "properties": {
+          "question": {"type": "string", "description": "Ask yourself the hardest question a skeptical judge/PM would ask about this outlook."},
+          "answer": {"type": "string"},
+          "falsification_trigger": {"type": "string", "description": "The specific, checkable data print or event that would flip this view. Must be concrete -- 'if inflation stays high' is not a trigger, 'if 3mo annualized core PCE prints above 3.5% for two consecutive months' is."}
+        }
+      }
+    },
+    "trading_parameters": {
+      "type": "object",
+      "description": "This is the interface to the per-ticker workflow -- the only part of this document other sessions/tabs actually need to consume programmatically.",
+      "required": ["vol_regime", "calendar_effects_priority", "event_vol_catalysts", "mean_reversion_window_confidence"],
+      "properties": {
+        "vol_regime": {"type": "string", "enum": ["low_vol_grind", "elevated_event_risk", "high_vol_regime_break"]},
+        "calendar_effects_priority": {"type": "array", "items": {"type": "string"}, "description": "Ranked list of which recurring calendar effects matter most right now, e.g. ['FOMC day', 'CPI print', 'NFP print'] -- ranking should shift with cycle phase (e.g. NFP matters more late-cycle when labor risk dominates)."},
+        "event_vol_catalysts": {
+          "type": "array",
+          "description": "Forward calendar of known catalysts feeding the event-vol straddle edge.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "date": {"type": "string", "format": "date"},
+              "event": {"type": "string"},
+              "expected_vol_sensitivity": {"type": "string", "enum": ["low", "medium", "high"]}
+            }
+          }
+        },
+        "mean_reversion_window_confidence": {"type": "string", "description": "Whether current regime supports trusting the standard mean-reversion backtest window, or whether it needs shortening/flagging given a regime change."}
+      }
+    },
+    "output_layers": {
+      "type": "object",
+      "description": "Same underlying model, three different packagings for three different consumption moments -- don't re-derive, just re-render.",
+      "required": ["glance", "narrative_ref", "trigger_feed"],
+      "properties": {
+        "glance": {"type": "string", "description": "Pre-market, <30 second read: regime tag + delta since last version only. What changed, nothing else."},
+        "narrative_ref": {"type": "string", "description": "Pointer/filename to the full mock-FOMC-style writeup for this version (see economic_outlook_template.md)."},
+        "trigger_feed": {"type": "array", "items": {"type": "string"}, "description": "Event-driven one-liners generated on CPI/NFP/FOMC days: 'here's what just happened relative to what this outlook predicted.'"}
+      }
+    },
+    "scorecard_log_ref": {
+      "type": "string",
+      "description": "Pointer to the append-only scorecard log (see scorecard_log_template.json) where this version's calls get graded after the fact against what markets/tickers actually did."
+    }
+  },
+  "definitions": {
+    "indicator": {
+      "type": "object",
+      "required": ["indicator", "current_reading", "role_in_outlook", "how_derived", "source"],
+      "properties": {
+        "indicator": {"type": "string"},
+        "current_reading": {"type": "string", "description": "The actual current value/level. Always fill this from a real source at refresh time -- never carry a stale number forward silently."},
+        "role_in_outlook": {"type": "string", "description": "What this reading implies for the regime call."},
+        "how_derived": {"type": "string", "description": "MANDATORY, non-empty. The mechanism connecting the raw number to the conclusion. This is the single field the Fed Challenge dataset showed separates a good macro call from a cited-but-unexamined number. If you can't fill this in, the indicator doesn't belong in the outlook yet."},
+        "source": {"type": "string", "description": "Where the reading came from (BLS, BEA, Fed H.15, NY Fed survey, etc.) and as-of date."},
+        "last_changed_meaningfully": {"type": "string", "format": "date", "description": "Optional. Helps the 'glance' layer know whether this indicator is part of this version's delta."}
+      }
+    },
+    "risk_scenario": {
+      "type": "object",
+      "required": ["scenario", "trigger", "market_implication"],
+      "properties": {
+        "scenario": {"type": "string"},
+        "trigger": {"type": "string", "description": "Concrete, checkable condition -- same discipline as self_qa.falsification_trigger."},
+        "market_implication": {"type": "string", "description": "What this would mean for the ticker-level workflow if it materializes -- sector/asset-class implications, not just macro commentary."}
+      }
+    }
+  }
+}

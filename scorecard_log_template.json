@@ -1,0 +1,25 @@
+{
+  "$schema_note": "Append-only log. Never edit a past entry -- add a new one. This is what turns 'macro opinion' into a graded, falsifiable track record, the same discipline as the mean-reversion backtest step in the ticker workflow. Grade each entry roughly 6-8 weeks after it's logged, once enough market/ticker outcome data exists to score it honestly.",
+  "entries": [
+    {
+      "version_id": "EXAMPLE-2026-08-FOMC",
+      "logged_date": "2026-08-01",
+      "regime_tag_at_call": "e.g. late-cycle, disinflationary, easing bias",
+      "house_view_path_at_call": "e.g. -25bp Sept, hold Oct, data-dependent after",
+      "key_falsification_triggers": [
+        "e.g. 3mo annualized core PCE > 3.5% for two straight months",
+        "e.g. NFP three-month average turns negative"
+      ],
+      "grading": {
+        "graded_date": null,
+        "did_triggers_fire": null,
+        "actual_fed_action": null,
+        "actual_market_reaction": null,
+        "was_regime_tag_correct": null,
+        "was_house_view_path_correct": null,
+        "notes_on_what_broke_or_held": null,
+        "lesson_for_next_version": null
+      }
+    }
+  ]
+}

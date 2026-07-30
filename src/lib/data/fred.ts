@@ -88,3 +88,22 @@ export function yoyPercentChange(
   if (prior === 0) return null;
   return ((current - prior) / Math.abs(prior)) * 100;
 }
+
+/**
+ * Annualized percent change over the trailing N months of a monthly series
+ * (e.g. months=3 for "3mo annualized core PCE") — compounds the N-month
+ * change up to a 12-month rate: (current/prior)^(12/months) - 1. Same
+ * standard convention the Fed itself uses for "3mo/6mo annualized core PCE"
+ * commentary.
+ */
+export function annualizedPercentChange(
+  observations: FredObservation[],
+  months: number
+): number | null {
+  const clean = observations.filter((o) => o.value !== null);
+  if (clean.length <= months) return null;
+  const current = clean[clean.length - 1].value as number;
+  const prior = clean[clean.length - 1 - months].value as number;
+  if (prior <= 0 || current <= 0) return null;
+  return (Math.pow(current / prior, 12 / months) - 1) * 100;
+}

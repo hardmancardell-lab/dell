@@ -6,6 +6,7 @@ import { Tabs } from "@/components/Tabs";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
 import { IndustryImpactTab } from "@/components/IndustryImpactTab";
 import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
+import { EconomicOutlookTab } from "@/components/EconomicOutlookTab";
 import { SectorFundamentalsTab } from "@/components/SectorFundamentalsTab";
 import { SectorRecommendationsTab } from "@/components/SectorRecommendationsTab";
 import { SectorStockAnalysisTab } from "@/components/SectorStockAnalysisTab";
@@ -434,6 +435,7 @@ export default async function Home() {
                               { id: "stance", label: "Stance & Details", content: macroStanceContent },
                               { id: "industry", label: "Industry Impact", content: <IndustryImpactTab /> },
                               { id: "global-news", label: "Global News", content: <GlobalFinancialNewsTab /> },
+                              { id: "economic-outlook", label: "Economic Outlook", content: <EconomicOutlookTab /> },
                             ]}
                           />
                         </div>
