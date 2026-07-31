@@ -1,0 +1,20 @@
+{
+  "curriculum_addition": {
+    "version": "1.0",
+    "generated": "2026-07-30",
+    "mode": "ADDITIVE",
+    "integration_note": "This file is designed to be appended to the existing research-assistant agent's question bank, not to replace or restructure it. Each module_id is prefixed 'flc_' to avoid collisions with existing IDs. Existing Kahoot-style quiz items should be left untouched.",
+    "compatibility": {
+      "quiz_format": "Kahoot-style: question + 2-4 answer options + one or more correct answers + time_limit_sec + points. Matches Kahoot's standard question shape so it should drop into the same rendering path as your current quiz content.",
+      "extended_checkpoint_types": ["scenario", "commitment"],
+      "extension_note": "Kahoot itself only natively supports the 'quiz' shape. 'scenario' (multi-choice with per-option consequence feedback, no single graded answer) and 'commitment' (an in-app action + delayed follow-up, not a question at all) are NOT native Kahoot mechanics. If your agent's renderer can only handle standard Kahoot quiz objects, treat 'scenario' items as quiz items with feedback text, and treat 'commitment' items as a separate action-tracking feature outside the quiz engine. Flagged explicitly so nothing silently breaks on import."
+    },
+    "tracks": [
+      { "track_id": "track_1_foundation", "title": "Foundation", "modules": ["flc_01", "flc_02", "flc_03"] },
+      { "track_id": "track_2_surviving_the_system", "title": "Surviving the System", "modules": ["flc_04", "flc_05", "flc_06", "flc_07"] },
+      { "track_id": "track_3_managing_the_squeeze", "title": "Managing the Squeeze", "modules": ["flc_08", "flc_09", "flc_10"] },
+      { "track_id": "track_4_debt_credit_goals", "title": "Debt, Credit & Goals", "modules": ["flc_11", "flc_12", "flc_13", "flc_14"] }
+    ],
+    "note_from_integration": "Integrated into graham-research-agent's Financial Literacy tab as beginner-17 through beginner-30 in src/lib/agents/financial-literacy/skills/curriculum-content.ts (2026-07-30) -- schema converted from this file's checkpoint/track/gamification shape into the app's existing LiteracyModule/CheckQuestion shape (a single flat tier + 3 quiz-only checks per module). 'scenario' items with a single correct answer were converted directly to quiz checks; non-gradable scenarios and 'commitment' action-tracking checkpoints (no infra for those in this app) were folded into each module's teaching body instead of dropped silently. This raw file is kept as the original source content for reference."
+  }
+}
