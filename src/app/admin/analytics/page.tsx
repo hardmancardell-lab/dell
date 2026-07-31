@@ -1,10 +1,14 @@
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getAdminAnalyticsSummary, isAdminAnalyticsConfigured } from "@/lib/analytics/admin-queries";
 import type { AdminAnalyticsSummary } from "@/lib/analytics/admin-queries";
 
-// Hidden, secret-gated internal dashboard — not linked from anywhere in the
-// app's own navigation. Access via /admin/analytics?secret=<ADMIN_ANALYTICS_SECRET>.
-// Returns a plain 404 on any mismatch/missing secret rather than an
+// Hidden, cookie-gated internal dashboard — not linked from anywhere in the
+// app's own navigation. Sign in once at /admin/login (POST, never a URL
+// param) to get an httpOnly session cookie; this page only ever reads that
+// cookie, never a ?secret= query string, so the password can't end up
+// sitting in browser history, a shared link, or a server access log.
+// Returns a plain 404 on any missing/invalid session rather than an
 // "unauthorized" page, so it doesn't advertise its own existence to crawlers.
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -299,14 +303,11 @@ function Dashboard({ data }: { data: AdminAnalyticsSummary }) {
   );
 }
 
-export default async function AdminAnalyticsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ secret?: string }>;
-}) {
-  const { secret } = await searchParams;
+export default async function AdminAnalyticsPage() {
   const expected = process.env.ADMIN_ANALYTICS_SECRET;
-  if (!expected || !secret || secret !== expected) {
+  const cookieStore = await cookies();
+  const session = cookieStore.get("admin_session")?.value;
+  if (!expected || !session || session !== expected) {
     notFound();
   }
   if (!isAdminAnalyticsConfigured()) {
