@@ -120,3 +120,38 @@ export interface ScorecardEntry {
   keyFalsificationTriggers: string[];
   grading: ScorecardGrading;
 }
+
+// --- International central-bank rate-path registry (static reference content) ---
+
+/**
+ * Whether a central bank publishes its own forward policy-rate path, or something weaker.
+ * EXPLICIT_OWN_PATH: the bank publishes its own multi-year rate forecast (rare — e.g. RBNZ, Norges Bank).
+ * MARKET_CONDITIONED: GDP/inflation forecasts are conditioned on the market's own forward-rate curve,
+ * not the bank's view — most G10 central banks. Pull the market-implied path yourself (OIS/futures)
+ * rather than expecting the publication to hand you one.
+ * OPAQUE_OR_POLITICAL: little/no formal forward guidance (e.g. PBoC) — descriptive, not predictive.
+ */
+export type RatePathTransparency = "EXPLICIT_OWN_PATH" | "MARKET_CONDITIONED" | "OPAQUE_OR_POLITICAL";
+
+export interface CentralBankAccess {
+  method: string;
+  endpointOrSeriesId: string | null;
+  url: string | null;
+  authRequired: boolean;
+  cost: string;
+}
+
+export interface CentralBankEntry {
+  id: string;
+  countryOrArea: string;
+  institution: string;
+  publication: string;
+  forecasts: string[];
+  horizon: string;
+  cadence: string;
+  ratePathTransparency: RatePathTransparency;
+  methodology: string;
+  access: CentralBankAccess;
+  automationFeasibility: string;
+  pipelineRole: string;
+}

@@ -778,6 +778,7 @@ export default async function Home() {
                   </div>
                   <Tabs
                     size="secondary"
+                    mobileDropdown
                     tabs={[
                       { id: "dashboard", label: "Dashboard", content: <PortfolioDashboardTab /> },
                       { id: "traditional", label: "Traditional", content: <TraditionalPortfolioTab /> },

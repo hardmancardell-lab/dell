@@ -13,6 +13,7 @@ export function Tabs({
   tabs,
   size = "primary",
   theme = "default",
+  mobileDropdown = false,
 }: {
   tabs: TabItem[];
   size?: "primary" | "secondary" | "tertiary";
@@ -22,6 +23,13 @@ export function Tabs({
   // scope (globals.css), since the styling below leans on its custom
   // properties.
   theme?: "default" | "jarvis";
+  // Swap to a <select> below the sm breakpoint instead of the normal
+  // horizontally-scrollable button row. Opt-in per call site — only
+  // Portfolio Tracker's secondary tab bar actually has enough tabs to need
+  // this (7, reported as not fitting on mobile). Everywhere else, including
+  // the primary agent switcher, a hidden-by-default dropdown made it
+  // non-obvious that other agents existed at all, so it defaults off.
+  mobileDropdown?: boolean;
 }) {
   const [active, setActive] = useState(tabs[0]?.id);
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
@@ -71,6 +79,35 @@ export function Tabs({
 
   const isPrimary = size === "primary";
 
+  const buttonRow = (
+    <div className={`overflow-x-auto overscroll-x-contain ${isPrimary ? "mb-8" : "mb-6"}`}>
+      <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800 w-max min-w-full">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => selectTab(t.id, t.label)}
+            className={`${isPrimary ? "px-5 py-3 text-base" : "px-4 py-2 text-sm"} shrink-0 whitespace-nowrap font-medium border-b-2 -mb-px transition-colors ${
+              t.id === activeTab?.id
+                ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
+                : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (!mobileDropdown) {
+    return (
+      <div>
+        {buttonRow}
+        <div>{activeTab?.content}</div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Narrow screens: a dropdown, so a 7-8-tab row never has to be
@@ -93,25 +130,7 @@ export function Tabs({
         </select>
       </div>
 
-      <div
-        className={`hidden sm:block overflow-x-auto overscroll-x-contain ${isPrimary ? "mb-8" : "mb-6"}`}
-      >
-        <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800 w-max min-w-full">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => selectTab(t.id, t.label)}
-              className={`${isPrimary ? "px-5 py-3 text-base" : "px-4 py-2 text-sm"} shrink-0 whitespace-nowrap font-medium border-b-2 -mb-px transition-colors ${
-                t.id === activeTab?.id
-                  ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
-                  : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <div className="hidden sm:block">{buttonRow}</div>
       <div>{activeTab?.content}</div>
     </div>
   );

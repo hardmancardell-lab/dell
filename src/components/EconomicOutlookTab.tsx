@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
-import type { EconomicOutlook, OutlookIndicator, RefreshReason, ScorecardEntry, ScorecardGrading } from "@/lib/agents/economic-outlook/types";
+import { CENTRAL_BANKS, CENTRAL_BANK_COVERAGE_GAPS, CENTRAL_BANK_CRITICAL_DISTINCTION } from "@/lib/agents/economic-outlook/central-bank-registry";
+import type {
+  CentralBankEntry,
+  EconomicOutlook,
+  OutlookIndicator,
+  RatePathTransparency,
+  RefreshReason,
+  ScorecardEntry,
+  ScorecardGrading,
+} from "@/lib/agents/economic-outlook/types";
 
 const REFRESH_REASONS: { id: RefreshReason; label: string }[] = [
   { id: "scheduled_fomc_cycle", label: "Scheduled FOMC cycle" },
@@ -11,6 +20,86 @@ const REFRESH_REASONS: { id: RefreshReason; label: string }[] = [
   { id: "fomc_statement", label: "FOMC statement" },
   { id: "ad_hoc_material_change", label: "Ad hoc / material change" },
 ];
+
+const RATE_PATH_META: Record<RatePathTransparency, { label: string; classes: string }> = {
+  EXPLICIT_OWN_PATH: {
+    label: "Explicit own path",
+    classes: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400",
+  },
+  MARKET_CONDITIONED: {
+    label: "Market-conditioned",
+    classes: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
+  },
+  OPAQUE_OR_POLITICAL: {
+    label: "Opaque / political",
+    classes: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  },
+};
+
+function CentralBankCard({ bank }: { bank: CentralBankEntry }) {
+  const meta = RATE_PATH_META[bank.ratePathTransparency];
+  return (
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold">{bank.countryOrArea}</div>
+          <div className="text-xs text-zinc-500">{bank.institution}</div>
+        </div>
+        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${meta.classes}`}>{meta.label}</span>
+      </div>
+      <div className="text-xs text-zinc-500">
+        <span className="font-medium text-zinc-700 dark:text-zinc-300">{bank.publication}</span> — {bank.cadence}, {bank.horizon}
+      </div>
+      <p className="text-sm text-zinc-600 dark:text-zinc-300">{bank.methodology}</p>
+      <div className="text-xs text-zinc-500">
+        <span className="font-medium">Forecasts:</span> {bank.forecasts.join("; ")}
+      </div>
+      <div className="text-xs text-zinc-500">
+        <span className="font-medium">Access:</span> {bank.access.method}
+        {bank.access.cost ? ` (${bank.access.cost})` : ""} — automation: {bank.automationFeasibility}
+        {bank.access.url && (
+          <>
+            {" · "}
+            <a href={bank.access.url} target="_blank" rel="noopener noreferrer" className="underline">
+              source ↗
+            </a>
+          </>
+        )}
+      </div>
+      <p className="text-xs text-zinc-400 italic">{bank.pipelineRole}</p>
+    </div>
+  );
+}
+
+function InternationalCentralBanksView() {
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-zinc-500">
+        Static reference content extending this app&apos;s Fed-only Economic Outlook to 13 other central banks — real
+        institutions, real publications, and an honest read on how much to trust each one&apos;s rate-path signal.
+        Nothing here is fetched live; this is a lookup for where to go get real international rate data, not an
+        automated pipeline.
+      </p>
+      <div className="rounded-lg border-2 border-zinc-900 dark:border-zinc-100 p-4">
+        <h3 className="text-xs uppercase tracking-wide text-zinc-500 mb-1">The Critical Distinction</h3>
+        <p className="text-sm leading-relaxed">{CENTRAL_BANK_CRITICAL_DISTINCTION}</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {CENTRAL_BANKS.map((bank) => (
+          <CentralBankCard key={bank.id} bank={bank} />
+        ))}
+      </div>
+      {CENTRAL_BANK_COVERAGE_GAPS.map((g) => (
+        <div
+          key={g.slice(0, 40)}
+          className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
+        >
+          {g}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function fmtDate(d: string): string {
   const parsed = new Date(d);
@@ -179,7 +268,7 @@ export function EconomicOutlookTab() {
   const [checked, setChecked] = useState(false);
   const [refreshReason, setRefreshReason] = useState<RefreshReason>("ad_hoc_material_change");
   const [refreshing, setRefreshing] = useState(false);
-  const [view, setView] = useState<"narrative" | "scorecard">("narrative");
+  const [view, setView] = useState<"narrative" | "scorecard" | "international">("narrative");
   const [scorecard, setScorecard] = useState<ScorecardEntry[]>([]);
   const [loggingToScorecard, setLoggingToScorecard] = useState(false);
   const { track } = useTrackEvent();
@@ -303,6 +392,12 @@ export function EconomicOutlookTab() {
             className={`px-3 py-1.5 ${view === "scorecard" ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : ""}`}
           >
             Scorecard ({scorecard.length})
+          </button>
+          <button
+            onClick={() => setView("international")}
+            className={`px-3 py-1.5 ${view === "international" ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : ""}`}
+          >
+            International
           </button>
         </div>
       </div>
@@ -505,6 +600,8 @@ export function EconomicOutlookTab() {
           )}
         </Section>
       )}
+
+      {view === "international" && <InternationalCentralBanksView />}
     </div>
   );
 }
