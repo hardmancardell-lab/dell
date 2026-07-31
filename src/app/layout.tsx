@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NavBar } from "@/components/NavBar";
 import { PrivacyFooter } from "@/components/PrivacyFooter";
+import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { WatchlistProvider } from "@/lib/agents/trading-agent/watchlist-storage";
 import "./globals.css";
@@ -63,6 +64,7 @@ export default function RootLayout({
           <div className="flex-1">{children}</div>
         </WatchlistProvider>
         <PrivacyFooter />
+        <FeedbackWidget />
       </body>
     </html>
   );

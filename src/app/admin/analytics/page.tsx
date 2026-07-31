@@ -235,6 +235,62 @@ function Dashboard({ data }: { data: AdminAnalyticsSummary }) {
         </div>
       </Section>
 
+      <Section title="Beta Feedback">
+        <StatCard label="Total Submissions" value={data.feedback.totalSubmissions} />
+        <StatCard label="Avg Experience Rating" value={data.feedback.avgExperienceRating ?? "—"} sub="out of 5" />
+        <BreakdownTable title="Rating Distribution" rows={data.feedback.ratingDistribution} />
+        <BreakdownTable title="Source Breakdown" rows={data.feedback.sourceBreakdown} />
+        <div className="sm:col-span-2 lg:col-span-3">
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
+            <div className="text-sm font-medium mb-3">What Testers Compare This To</div>
+            {data.feedback.recentComparableProducts.length === 0 ? (
+              <div className="text-sm text-zinc-500">No data yet.</div>
+            ) : (
+              <ul className="flex flex-col gap-1.5 text-sm">
+                {data.feedback.recentComparableProducts.map((c, i) => (
+                  <li key={i} className="border-t border-zinc-100 dark:border-zinc-900 pt-1.5 first:border-t-0 first:pt-0">
+                    {c.text} <span className="text-xs text-zinc-400">— {fmtDate(c.createdAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        <div className="sm:col-span-2 lg:col-span-3">
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
+            <div className="text-sm font-medium mb-3">Recent Submissions</div>
+            {data.feedback.recentSubmissions.length === 0 ? (
+              <div className="text-sm text-zinc-500">No data yet.</div>
+            ) : (
+              <ul className="flex flex-col gap-2 text-sm">
+                {data.feedback.recentSubmissions.map((s, i) => (
+                  <li key={i} className="border-t border-zinc-100 dark:border-zinc-900 pt-2 first:border-t-0 first:pt-0">
+                    <div className="flex items-center gap-2 text-xs text-zinc-400">
+                      <span>{fmtDate(s.createdAt)}</span>
+                      <span>·</span>
+                      <span>{s.source}</span>
+                      {s.rating !== null && (
+                        <>
+                          <span>·</span>
+                          <span>{s.rating}/5</span>
+                        </>
+                      )}
+                      {s.contextTab && (
+                        <>
+                          <span>·</span>
+                          <span className="truncate max-w-[200px]">{s.contextTab}</span>
+                        </>
+                      )}
+                    </div>
+                    <div>{s.message}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </Section>
+
       <p className="text-xs text-zinc-500 mt-4">
         Tag outbound links with <code>?utm_source=...&amp;utm_medium=...&amp;utm_campaign=...</code> to show up in Acquisition above —
         first-touch only, captured once per browser.

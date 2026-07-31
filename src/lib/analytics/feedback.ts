@@ -7,20 +7,31 @@ function isSupabaseConfigured(): boolean {
 
 export type FeedbackCategory = "suggestion" | "problem" | "other";
 
+/** Where a feedback row originated — lets the admin dashboard and any query separate
+ * chat-captured asides from the dedicated widget and from an outbound survey blast. */
+export type FeedbackSource = "assistant_chat" | "in_app_widget" | "survey_broadcast";
+
 export interface FeedbackSubmission {
   sessionId: string;
   category: FeedbackCategory;
   message: string;
   contextTab?: string | null;
+  /** 1-5, "how's your experience been" — optional since the Assistant's chat capture never asks this. */
+  experienceRating?: number | null;
+  /** Free text: what they compare this app to (other apps/tools). */
+  comparableProducts?: string | null;
+  source?: FeedbackSource;
 }
 
 /**
- * Feedback the Assistant captures from the chat itself (see submit_feedback
- * in tools.ts) — same plain-fetch Supabase REST pattern as
- * analytics/supabase.ts, kept in a separate file/table since this is
- * user-authored free text, not structured anonymous usage events. Returns
- * {stored: false} rather than throwing when Supabase isn't configured, so
- * the assistant can tell the user honestly instead of erroring the turn.
+ * Feedback capture, shared by three entry points: the Assistant's chat-driven
+ * submit_feedback tool (tools.ts, unstructured aside), the always-visible
+ * FeedbackWidget (structured: rating + comparability + message), and a
+ * one-time survey broadcast reusing the same 3 questions. Same plain-fetch
+ * Supabase REST pattern as analytics/supabase.ts, kept in a separate
+ * file/table since this is user-authored free text, not anonymous usage
+ * events. Returns {stored: false} rather than throwing when Supabase isn't
+ * configured, so callers can tell the user honestly instead of erroring.
  */
 export async function submitFeedback(entry: FeedbackSubmission): Promise<{ stored: boolean }> {
   if (!isSupabaseConfigured()) return { stored: false };
@@ -37,6 +48,9 @@ export async function submitFeedback(entry: FeedbackSubmission): Promise<{ store
       category: entry.category,
       message: entry.message,
       context_tab: entry.contextTab ?? null,
+      experience_rating: entry.experienceRating ?? null,
+      comparable_products: entry.comparableProducts ?? null,
+      source: entry.source ?? "assistant_chat",
     }),
   });
   if (!res.ok) {

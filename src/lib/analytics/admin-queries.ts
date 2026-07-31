@@ -33,6 +33,18 @@ interface AlertSubscriptionRow {
   session_id: string | null;
 }
 
+interface FeedbackRow {
+  id: string;
+  session_id: string;
+  category: string;
+  message: string;
+  context_tab: string | null;
+  experience_rating: number | null;
+  comparable_products: string | null;
+  source: string | null;
+  created_at: string;
+}
+
 async function fetchAll<T>(table: string, params: string): Promise<T[]> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
     headers: {
@@ -164,12 +176,21 @@ export interface AdminAnalyticsSummary {
     totalApiErrors: number;
     topFailingEndpoints: { key: string; count: number }[];
   };
+  feedback: {
+    totalSubmissions: number;
+    avgExperienceRating: number | null;
+    ratingDistribution: { key: string; count: number }[];
+    sourceBreakdown: { key: string; count: number }[];
+    recentComparableProducts: { text: string; createdAt: string }[];
+    recentSubmissions: { category: string; message: string; rating: number | null; source: string; contextTab: string | null; createdAt: string }[];
+  };
 }
 
 export async function getAdminAnalyticsSummary(): Promise<AdminAnalyticsSummary> {
-  const [events, subscriptions] = await Promise.all([
+  const [events, subscriptions, feedbackRows] = await Promise.all([
     fetchAll<EventRow>("events", "select=*&order=created_at.asc&limit=10000"),
     fetchAll<AlertSubscriptionRow>("alert_subscriptions", "select=id,channel,active,created_at,session_id&limit=10000"),
+    fetchAll<FeedbackRow>("feedback", "select=*&order=created_at.desc&limit=500"),
   ]);
 
   const dataLimitations: string[] = [];
@@ -278,6 +299,8 @@ export async function getAdminAnalyticsSummary(): Promise<AdminAnalyticsSummary>
   const mptRuns = events.filter((e) => e.event_name === "mpt_analysis_run");
 
   const apiErrors = events.filter((e) => e.event_name === "api_error");
+
+  const ratedFeedback = feedbackRows.filter((f): f is FeedbackRow & { experience_rating: number } => f.experience_rating !== null);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -389,6 +412,25 @@ export async function getAdminAnalyticsSummary(): Promise<AdminAnalyticsSummary>
     systemHealth: {
       totalApiErrors: apiErrors.length,
       topFailingEndpoints: countBy(apiErrors, (e) => metaStr(e, "endpoint")),
+    },
+    feedback: {
+      totalSubmissions: feedbackRows.length,
+      avgExperienceRating:
+        ratedFeedback.length > 0 ? Number((ratedFeedback.reduce((a, f) => a + f.experience_rating, 0) / ratedFeedback.length).toFixed(2)) : null,
+      ratingDistribution: countBy(ratedFeedback, (f) => String(f.experience_rating)),
+      sourceBreakdown: countBy(feedbackRows, (f) => f.source ?? "assistant_chat"),
+      recentComparableProducts: feedbackRows
+        .filter((f) => f.comparable_products && f.comparable_products.trim().length > 0)
+        .slice(0, 30)
+        .map((f) => ({ text: f.comparable_products as string, createdAt: f.created_at })),
+      recentSubmissions: feedbackRows.slice(0, 30).map((f) => ({
+        category: f.category,
+        message: f.message,
+        rating: f.experience_rating,
+        source: f.source ?? "assistant_chat",
+        contextTab: f.context_tab,
+        createdAt: f.created_at,
+      })),
     },
   };
 }

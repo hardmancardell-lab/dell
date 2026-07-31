@@ -125,6 +125,15 @@ export async function createSubscription(input: {
   return toSubscription(rows[0]);
 }
 
+/** All active subscribers, deduped (unlike getActiveRulesWithSubscriptions, which is per-rule) — for a one-off broadcast like the beta survey, not the per-condition cron evaluation. */
+export async function getActiveSubscriptions(): Promise<AlertSubscription[]> {
+  const rows = await supabaseRequest<SubscriptionRow[]>("alert_subscriptions?active=eq.true&select=*", {
+    method: "GET",
+    prefer: "return=representation",
+  });
+  return rows.map(toSubscription);
+}
+
 export async function createRules(subscriptionId: string, rules: AlertRuleInput[]): Promise<AlertRule[]> {
   const rows = await supabaseRequest<RuleRow[]>("alert_rules", {
     method: "POST",
