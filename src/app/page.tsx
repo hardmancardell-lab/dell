@@ -799,6 +799,20 @@ export default async function Home() {
                 <div>
                   <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Financial Literacy</div>
                   <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Financial Literacy</h1>
+                  <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                    <video
+                      controls
+                      preload="metadata"
+                      poster="/videos/shielding-your-finances-poster.svg"
+                      className="w-full aspect-video bg-black"
+                      src="/videos/shielding-your-finances.mp4"
+                    >
+                      Your browser does not support embedded video.
+                    </video>
+                    <div className="px-4 py-2 text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800">
+                      Shielding Your Finances — a short primer before you start the curriculum below.
+                    </div>
+                  </div>
                   <FinancialLiteracyTab />
                 </div>
               ),
