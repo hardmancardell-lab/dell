@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { isTierUnlocked, deriveBadges, useLiteracyProgress } from "@/lib/agents/financial-literacy/literacy-storage";
 import { scaffoldedWrongAnswerFeedback, placementExplanation } from "@/lib/agents/financial-literacy/teaching-persona";
 import { useTrackEvent } from "@/lib/analytics/use-track";
@@ -51,6 +52,14 @@ const BADGE_LABEL: Record<BadgeId, string> = {
 // produces exactly this failure mode.
 const TARGET_TIER_BAR = 5; // out of 6
 const LOWER_TIER_BAR = 4; // out of 6
+
+// Phaser touches window/navigator at module-eval time — ssr:false keeps it
+// out of any server-rendered pass of this "use client" file.
+const SaveSpendEarnGame = dynamic(
+  () => import("@/components/literacy/SaveSpendEarnGame").then((m) => m.SaveSpendEarnGame),
+  { ssr: false, loading: () => <div className="text-sm text-zinc-400 py-6">Loading game…</div> }
+);
+const SAVE_SPEND_EARN_MODULE_ID = "beginner-game-save-spend-earn";
 
 function PlacementFlow({
   onComplete,
@@ -894,6 +903,21 @@ function CurriculumView({
             <p className="text-sm text-zinc-500 mb-4">{TIER_PREMISE[tier]}</p>
             {unlocked ? (
               <div className="space-y-2">
+                {tier === "beginner" && (
+                  <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 mb-2">
+                    <div className="text-sm font-medium mb-1">
+                      Piggy Bank Quest {progress.completedModuleIds.includes(SAVE_SPEND_EARN_MODULE_ID) && (
+                        <span className="text-xs font-mono text-zinc-400 ml-2">completed</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 mb-3">
+                      A save/spend/earn simulation, not another quiz — make 6 weekly choices and see whether they add up to the goal.
+                    </p>
+                    <SaveSpendEarnGame
+                      onComplete={(xp) => completeModule(SAVE_SPEND_EARN_MODULE_ID, xp)}
+                    />
+                  </div>
+                )}
                 {modules.map((m) => (
                   <ModuleCard
                     key={m.id}
