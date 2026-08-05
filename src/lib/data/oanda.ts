@@ -98,6 +98,24 @@ function toCandle(c: OandaCandle): MarketCandle {
   };
 }
 
+// OANDA's real, documented cap: at most 5000 candles per request (confirmed
+// live — a from/to range implying more than this returns a 400 "Maximum
+// value for 'count' exceeded"). GRANULARITY_MS lets fetchBarsForTimeframe
+// chunk a wide date range into multiple sequential requests instead of
+// silently failing on e.g. a 90-day 1-minute request (129,600 implied bars).
+const GRANULARITY_MS: Record<string, number> = {
+  M1: 60_000,
+  M5: 5 * 60_000,
+  M10: 10 * 60_000,
+  M15: 15 * 60_000,
+  M30: 30 * 60_000,
+  H1: 3_600_000,
+  H4: 4 * 3_600_000,
+  D: 86_400_000,
+  W: 7 * 86_400_000,
+};
+const MAX_CANDLES_PER_REQUEST = 5000;
+
 export async function fetchBarsForTimeframe(
   symbol: string,
   timeframe: string,
@@ -107,21 +125,30 @@ export async function fetchBarsForTimeframe(
 ): Promise<MarketCandle[]> {
   const granularity = GRANULARITY_MAP[timeframe] ?? "D";
   const instrument = toOandaInstrument(symbol);
+  const barMs = GRANULARITY_MS[granularity] ?? 86_400_000;
+  const chunkMs = MAX_CANDLES_PER_REQUEST * barMs;
 
-  const data = await fetchOanda<OandaCandlesResponse>(
-    `/v3/instruments/${instrument}/candles`,
-    {
-      granularity,
-      price: "M", // mid prices
-      from: new Date(startMs).toISOString(),
-      to: new Date(endMs).toISOString(),
-    },
-    revalidateSeconds
-  );
+  const allCandles: OandaCandle[] = [];
+  let chunkStart = startMs;
+  while (chunkStart < endMs) {
+    const chunkEnd = Math.min(chunkStart + chunkMs, endMs);
+    const data = await fetchOanda<OandaCandlesResponse>(
+      `/v3/instruments/${instrument}/candles`,
+      {
+        granularity,
+        price: "M", // mid prices
+        from: new Date(chunkStart).toISOString(),
+        to: new Date(chunkEnd).toISOString(),
+      },
+      revalidateSeconds
+    );
+    allCandles.push(...(data.candles ?? []));
+    chunkStart = chunkEnd;
+  }
 
   // Only fully-closed candles — the in-progress "current" candle (complete:
   // false) would otherwise show a misleading partial bar.
-  return (data.candles ?? []).filter((c) => c.complete).map(toCandle);
+  return allCandles.filter((c) => c.complete).map(toCandle);
 }
 
 export async function fetchMinuteBars(

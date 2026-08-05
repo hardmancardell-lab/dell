@@ -5,16 +5,20 @@ import {
   CandlestickSeries,
   ColorType,
   createChart,
+  createSeriesMarkers,
   HistogramSeries,
   LineSeries,
   LineStyle,
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   type SeriesType,
+  type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
 import { TIMEFRAME_PRESETS } from "@/lib/agents/trading-agent/skills/timeframe-presets";
+import { SESSIONS, toUtcParts } from "@/lib/agents/trading-agent/skills/time-windows";
 import type { ChartBarsResult } from "@/lib/agents/trading-agent/skills/chart-bars";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { PaperOrderForm } from "./PaperOrderForm";
@@ -130,6 +134,7 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
   const extraPriceLinesRef = useRef<IPriceLine[]>([]);
   const positionLineRef = useRef<IPriceLine | null>(null);
   const orderLinesRef = useRef<IPriceLine[]>([]);
+  const sessionMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const assetClassRef = useRef<AssetClass>(assetClass);
   assetClassRef.current = assetClass;
 
@@ -315,6 +320,53 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
 
     chartRef.current?.timeScale().fitContent();
   }, [data, showSma20, showSma50]);
+
+  // Real session-boundary markers (Asian/London/New York, UTC — see
+  // time-windows.ts's SESSIONS) on intraday forex/futures charts, inferred
+  // from the actual bar spacing in the returned data rather than the
+  // timeframe preset id, so it self-gates correctly regardless of preset
+  // naming. Markers use lightweight-charts v5's real createSeriesMarkers
+  // primitive (verified against the installed package's typings — v5
+  // removed series.setMarkers() in favor of this plugin-style API).
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    if (!candleSeries) return;
+    const plugin = sessionMarkersRef.current ?? createSeriesMarkers(candleSeries, []);
+    sessionMarkersRef.current = plugin;
+
+    const candles = data?.candles ?? [];
+    if (candles.length < 2 || (assetClass !== "forex" && assetClass !== "future")) {
+      plugin.setMarkers([]);
+      return;
+    }
+    const avgSpacingMs = (candles[candles.length - 1].datetime - candles[0].datetime) / (candles.length - 1);
+    if (avgSpacingMs >= 20 * 60 * 60 * 1000) {
+      plugin.setMarkers([]); // daily+ bars — session boundaries within a bar aren't meaningful
+      return;
+    }
+
+    const SESSION_MARKS: { id: "asian" | "london" | "newYork"; startMinute: number; color: string; text: string }[] = [
+      { id: "asian", startMinute: SESSIONS.ASIAN.start, color: JARVIS.text1, text: "Asian" },
+      { id: "london", startMinute: SESSIONS.LONDON.start, color: JARVIS.signal, text: "London" },
+      { id: "newYork", startMinute: SESSIONS.NEW_YORK.start, color: JARVIS.verdict, text: "NY" },
+    ];
+    let prevMinutes: number | null = null;
+    const markers: { time: UTCTimestamp; position: "aboveBar"; color: string; shape: "circle"; text: string }[] = [];
+    for (const c of candles) {
+      const { minutesSinceMidnight } = toUtcParts(c.datetime);
+      for (const s of SESSION_MARKS) {
+        const crossedIntoSession =
+          prevMinutes === null
+            ? minutesSinceMidnight === s.startMinute
+            : prevMinutes < s.startMinute && minutesSinceMidnight >= s.startMinute;
+        if (crossedIntoSession) {
+          markers.push({ time: toSeconds(c.datetime), position: "aboveBar", color: s.color, shape: "circle", text: s.text });
+        }
+      }
+      prevMinutes = minutesSinceMidnight;
+    }
+    plugin.setMarkers(markers);
+  }, [data, assetClass]);
 
   // Rebuild every "extra" overlay/oscillator series from scratch whenever the
   // data or the enabled-indicator sets change — simpler and less error-prone

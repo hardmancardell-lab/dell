@@ -951,6 +951,68 @@ export interface CalendarDayOfWeekResult {
   dataLimitations: string[];
 }
 
+// --- Trading session distinction + session-sequence analysis ---
+// Sessions are defined in UTC (the standard, widely-cited convention for
+// FX/futures trading hours), not Eastern Time like WINDOWS above — see
+// time-windows.ts's SESSIONS constant and session-sequence-analysis.ts.
+
+export type SessionId = "asian" | "london" | "newYork";
+export type SessionSequenceEdgeId = "asianToLondon" | "londonToNewYork" | "newYorkToNextAsian";
+export type PriorSessionDirection = "up" | "down";
+
+/** Field set mirrors DayOfWeekEffectResult exactly (same statistical pipeline), bucketed by the prior session's real direction instead of by weekday. */
+export interface SessionSequenceBucketResult {
+  edgeId: SessionSequenceEdgeId;
+  edgeLabel: string;
+  priorDirection: PriorSessionDirection;
+  sampleSize: number;
+  meanReturnPct: number | null;
+  medianReturnPct: number | null;
+  pValue: number | null;
+  pValueFdrAdjusted: number | null;
+  significantAfterFdr: boolean;
+  bootstrapCiLower: number | null;
+  bootstrapCiUpper: number | null;
+  ciExcludesZero: boolean;
+  trainMeanReturnPct: number | null;
+  testMeanReturnPct: number | null;
+  sameSignOutOfSample: boolean | null;
+  passesAllThreeBars: boolean;
+  winRate: number | null;
+  avgWinPct: number | null;
+  avgLossPct: number | null;
+  profitFactor: number | null;
+  expectancy: number | null;
+  maxDrawdownPct: number | null;
+  largestWinPct: number | null;
+  largestLossPct: number | null;
+}
+
+export interface SessionStats {
+  sessionId: SessionId;
+  label: string;
+  sampleSize: number;
+  meanReturnPct: number | null;
+  meanRangePct: number | null;
+}
+
+export interface SessionSequenceTradeLogRow {
+  dateKey: string; // UTC calendar date the follow-on session fell on
+  edgeId: SessionSequenceEdgeId;
+  priorDirection: PriorSessionDirection;
+  followOnReturnPct: number;
+  isWin: boolean;
+}
+
+export interface SessionAnalysisResult {
+  ticker: string;
+  lookbackDays: number;
+  sessionStats: SessionStats[];
+  sequenceBuckets: SessionSequenceBucketResult[];
+  tradeLog: SessionSequenceTradeLogRow[];
+  dataLimitations: string[];
+}
+
 /**
  * Single-weekday, occurrence-count-based variant of CalendarDayOfWeekResult
  * — "last N Fridays" instead of "last N years of all 5 weekdays". Lets a

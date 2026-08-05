@@ -40,6 +40,7 @@ import { FxResearchSourcesTab } from "@/components/FxResearchSourcesTab";
 import { CurrencyDriversTab } from "@/components/CurrencyDriversTab";
 import { CurrencyPegsTab } from "@/components/CurrencyPegsTab";
 import { RollingMoveStatsTab } from "@/components/RollingMoveStatsTab";
+import { SessionAnalysisTab } from "@/components/SessionAnalysisTab";
 import { FuturesCommoditiesResearchSourcesTab } from "@/components/FuturesCommoditiesResearchSourcesTab";
 import { PortfolioDashboardTab } from "@/components/PortfolioDashboardTab";
 import { TraditionalPortfolioTab } from "@/components/TraditionalPortfolioTab";
@@ -640,6 +641,11 @@ export default async function Home() {
                                 label: "Rolling Move Stats",
                                 content: <RollingMoveStatsTab defaultTicker="EUR/USD" defaultAssetClass="forex" />,
                               },
+                              {
+                                id: "session-analysis",
+                                label: "Session Analysis",
+                                content: <SessionAnalysisTab defaultTicker="EUR/USD" />,
+                              },
                             ]}
                           />
                         </div>
@@ -683,6 +689,11 @@ export default async function Home() {
                                 id: "rolling-move-stats",
                                 label: "Rolling Move Stats",
                                 content: <RollingMoveStatsTab defaultTicker="SPY" defaultAssetClass="future" />,
+                              },
+                              {
+                                id: "session-analysis",
+                                label: "Session Analysis",
+                                content: <SessionAnalysisTab defaultTicker="SPY" />,
                               },
                               {
                                 id: "sources",

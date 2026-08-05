@@ -53,6 +53,40 @@ export const WINDOWS = {
   NEXT_DAY_FOLLOW_THROUGH: { start: minutes(9, 30), end: minutes(10, 0) },
 } as const;
 
+export interface UtcTimeParts {
+  dateKey: string; // YYYY-MM-DD in UTC
+  minutesSinceMidnight: number; // UTC
+}
+
+/** UTC equivalent of toEasternParts — used for session windows below, since FX/futures trading-session hours are conventionally quoted in UTC, not a single equity-market timezone. */
+export function toUtcParts(epochMs: number): UtcTimeParts {
+  const d = new Date(epochMs);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return {
+    dateKey: `${y}-${m}-${day}`,
+    minutesSinceMidnight: d.getUTCHours() * 60 + d.getUTCMinutes(),
+  };
+}
+
+/**
+ * Real, standard FX/futures trading-session windows in UTC — the widely-
+ * cited industry convention (e.g. OANDA's and Investopedia's own "forex
+ * market hours" references): Asian/Tokyo 00:00-09:00 UTC, London
+ * 08:00-17:00 UTC, New York 13:00-22:00 UTC, with 13:00-17:00 UTC being the
+ * well-documented London/New York overlap (the day's highest-liquidity
+ * window). None of these wrap past midnight in UTC terms, unlike their ET
+ * equivalents would — deliberately using UTC as the reference frame here
+ * rather than forcing session hours into the ET-based WINDOWS above.
+ */
+export const SESSIONS = {
+  ASIAN: { start: minutes(0, 0), end: minutes(9, 0) },
+  LONDON: { start: minutes(8, 0), end: minutes(17, 0) },
+  NEW_YORK: { start: minutes(13, 0), end: minutes(22, 0) },
+  LONDON_NY_OVERLAP: { start: minutes(13, 0), end: minutes(17, 0) },
+} as const;
+
 /** The opening-range window an ORB strategy is defined against — the first N minutes after the open. */
 export function openingRangeWindow(rangeMinutes: 5 | 15 | 30): { start: number; end: number } {
   return { start: minutes(9, 30), end: minutes(9, 30) + rangeMinutes };
