@@ -51,6 +51,18 @@ depth or bid/ask-tagged tick data. Researched in Phase 5: Polygon has no L2 at a
 Cloud shut down in 2024, Databento is the real option ($179/mo+ after a one-time free credit).
 No free path exists. Revisit only if paying for Databento becomes worthwhile.
 
+### Real-time (sub-second/websocket) portfolio pricing (Portfolio Tracker, Trading Agent)
+**Why blocked:** this app has zero websocket/SSE infrastructure anywhere, and runs on Vercel's
+Hobby plan with a single shared cron job already spoken for by the alerts sweep and the paper-order
+evaluation sweep — there's no standing connection for a browser tab to hold open, and Hobby doesn't
+support long-lived serverless connections in the first place. Everywhere Phase 18 touched pricing
+(Portfolio Tracker's risk analytics), 10-15s client-side polling is used instead — the same pattern
+already proven for Currency's Live Rates. A real streaming upgrade needs its own infra/cost decision
+(a paid host supporting persistent connections, or a third-party streaming-quote provider) — flagged
+explicitly rather than faked with tighter polling that only looks real-time.
+**Status:** confirmed with the user during Phase 18 scoping as an explicit, separate decision — not
+assumed or built as part of that phase.
+
 ### Real-time futures data (Trading Agent)
 Already resolved via ETF proxies for both Futures and Commodities (user-approved). True futures
 tick data needs a CQG (~$10/mo) or Rithmic (~$25/mo) feed even with an active Tradier Futures
@@ -79,9 +91,6 @@ still open:
   buildable on the same data, just not built.
 - **Unusual options flow scanner (Trading Agent)** — a dedicated "unusual activity" view distinct
   from the existing GEX/skew signals; those signals already compute most of the needed inputs.
-- **Paper/simulated trading** — originally scoped under Trading Agent in the competitive
-  analysis. Redirected to Portfolio Tracker per direct instruction; see the scenario-simulation
-  plan built in this same session.
 - **Dividend tracking (Portfolio Tracker)** — Research Agent's Security Analyst now has a
   dividend growth-trend read (Phase 7), but Portfolio Tracker itself has no dividend-income
   view across actual held positions (yield-on-cost, upcoming ex-dates, income total). Buildable
@@ -90,8 +99,6 @@ still open:
 - **Tax-lot accounting (Portfolio Tracker)** — `PortfolioHolding` already has `acquiredDate` and
   `costBasisPerShare` per lot; short/long-term gain classification and a realized-gains ledger
   are a natural extension, not yet built.
-- **Multi-leg options P&L visualizer (Trading Agent)** — the Options Strategy Guide explains
-  strategies conceptually; a payoff-diagram calculator for a specific position isn't built.
 - **Community/social feed** — flagged as a broad competitor feature (shared watchlists,
   discussion). No design work has started; would also raise the same multi-user/backend
   questions as the data-sharing goal being scoped now.
