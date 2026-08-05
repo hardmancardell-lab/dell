@@ -1,7 +1,8 @@
 import { getDailyBars } from "./daily-bars";
 import { fetchQuote } from "@/lib/data/market-data";
 import { getCurrentRiskFreeRate } from "./options-calculator";
-import { correlation, covariance, linearRegression, mean, stdDev } from "../stats";
+import { valuatePortfolio } from "./portfolio-valuation";
+import { correlation, covariance, linearRegression, maxDrawdownFromReturns, mean, stdDev } from "../stats";
 import type {
   CorrelationMatrixResult,
   EfficientFrontierPoint,
@@ -220,6 +221,9 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
     minVolatility: null,
     current: null,
   };
+  let portfolioSortinoRatioAnnualized: number | null = null;
+  let portfolioMaxDrawdownPct: number | null = null;
+  let portfolioHistoricalVaR95Pct: number | null = null;
 
   if (includedSymbols.length > 0) {
     const expectedReturns = includedSymbols.map((s) => (mean(returnSeriesBySymbol.get(s)!) ?? 0) * TRADING_DAYS_PER_YEAR);
@@ -234,33 +238,72 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
     const maxSharpe = simulatedPortfolios.reduce((best, p) => (p.sharpeRatio > best.sharpeRatio ? p : best), simulatedPortfolios[0]);
     const minVolatility = simulatedPortfolios.reduce((best, p) => (p.volatility < best.volatility ? p : best), simulatedPortfolios[0]);
 
-    // Current portfolio's actual weights, restricted to the included symbols
-    // (weighted by cost basis — a live-price-independent, always-available
-    // weighting; current-market-value weighting would need this skill to
-    // also fetch quotes, duplicating portfolio-valuation.ts).
-    const costBasisBySymbol = new Map<string, number>();
-    for (const h of holdings) {
-      if (!includedSymbols.includes(h.symbol)) continue;
-      costBasisBySymbol.set(h.symbol, (costBasisBySymbol.get(h.symbol) ?? 0) + h.shares * h.costBasisPerShare);
+    // Current portfolio's actual weights, restricted to the included
+    // symbols — weighted by real live market value (reusing
+    // portfolio-valuation.ts's already-proven valuation, same request) for
+    // an accurate current-allocation read rather than a cost-basis
+    // approximation. Falls back to cost-basis weighting if the live
+    // valuation call fails, so a pricing hiccup doesn't blank the frontier.
+    let marketValueBySymbol = new Map<string, number>();
+    try {
+      const valuation = await valuatePortfolio(holdings);
+      for (const v of valuation.valuations) {
+        if (!includedSymbols.includes(v.holding.symbol) || v.currentValue === null) continue;
+        marketValueBySymbol.set(v.holding.symbol, (marketValueBySymbol.get(v.holding.symbol) ?? 0) + v.currentValue);
+      }
+    } catch {
+      dataLimitations.push("Could not load live market values for current-allocation weighting — fell back to cost basis.");
     }
-    const includedCostBasis = [...costBasisBySymbol.values()].reduce((s, v) => s + v, 0);
-    const current =
-      includedCostBasis > 0
-        ? toPoint(
-            includedSymbols,
-            includedSymbols.map((s) => (costBasisBySymbol.get(s) ?? 0) / includedCostBasis),
-            expectedReturns,
-            covMatrix,
-            annualRiskFreeRate
-          )
-        : null;
+    if (marketValueBySymbol.size === 0) {
+      const costBasisBySymbol = new Map<string, number>();
+      for (const h of holdings) {
+        if (!includedSymbols.includes(h.symbol)) continue;
+        costBasisBySymbol.set(h.symbol, (costBasisBySymbol.get(h.symbol) ?? 0) + h.shares * h.costBasisPerShare);
+      }
+      marketValueBySymbol = costBasisBySymbol;
+    }
+    const includedMarketValue = [...marketValueBySymbol.values()].reduce((s, v) => s + v, 0);
+    const currentWeights = includedSymbols.map((s) => (marketValueBySymbol.get(s) ?? 0) / includedMarketValue);
+    const current = includedMarketValue > 0 ? toPoint(includedSymbols, currentWeights, expectedReturns, covMatrix, annualRiskFreeRate) : null;
     if (includedSymbols.length < uniqueSymbols.length) {
       dataLimitations.push(
-        "\"Current\" portfolio point and frontier are weighted by cost basis across symbols with sufficient return history only — symbols excluded above aren't represented."
+        "\"Current\" portfolio point and frontier are weighted by live market value across symbols with sufficient return history only — symbols excluded above aren't represented."
       );
     }
 
     frontier = { simulatedPortfolios, maxSharpe, minVolatility, current };
+
+    // Real portfolio-level risk metrics, built from the same current-weights
+    // synthetic daily-return series (Σ weight_i * return_i per common date)
+    // — no new data source, same aligned-returns matrix used for the
+    // covariance matrix above.
+    if (includedMarketValue > 0) {
+      const portfolioDailyReturnsPct = commonDates.map((_, dateIdx) =>
+        includedSymbols.reduce((sum, s, symIdx) => sum + currentWeights[symIdx] * (returnSeriesBySymbol.get(s)![dateIdx] ?? 0), 0) * 100
+      );
+
+      portfolioMaxDrawdownPct = maxDrawdownFromReturns(portfolioDailyReturnsPct);
+
+      const downsideReturns = portfolioDailyReturnsPct.filter((r) => r < 0);
+      const downsideDeviation = downsideReturns.length > 0 ? stdDev(downsideReturns) : null;
+      const meanDailyReturnPct = mean(portfolioDailyReturnsPct);
+      if (downsideDeviation !== null && downsideDeviation > 0 && meanDailyReturnPct !== null) {
+        const annualizedReturn = (meanDailyReturnPct / 100) * TRADING_DAYS_PER_YEAR;
+        const annualizedDownsideDeviation = (downsideDeviation / 100) * Math.sqrt(TRADING_DAYS_PER_YEAR);
+        portfolioSortinoRatioAnnualized = (annualizedReturn - annualRiskFreeRate) / annualizedDownsideDeviation;
+      }
+
+      // Historical-simulation VaR — the empirical 5th percentile of the
+      // real daily-return sample (not a parametric/normal-distribution
+      // approximation), reported as a positive percent of portfolio value.
+      const sorted = [...portfolioDailyReturnsPct].sort((a, b) => a - b);
+      if (sorted.length >= MIN_OVERLAPPING_DAYS) {
+        const idx = Math.floor(sorted.length * 0.05);
+        portfolioHistoricalVaR95Pct = -sorted[idx];
+      } else {
+        dataLimitations.push(`Only ${sorted.length} overlapping trading day(s) — too few for a reliable historical VaR (need ${MIN_OVERLAPPING_DAYS}+).`);
+      }
+    }
   }
 
   return {
@@ -269,6 +312,9 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
     betas,
     correlationMatrix,
     frontier,
+    portfolioSortinoRatioAnnualized,
+    portfolioMaxDrawdownPct,
+    portfolioHistoricalVaR95Pct,
     dataLimitations,
   };
 }

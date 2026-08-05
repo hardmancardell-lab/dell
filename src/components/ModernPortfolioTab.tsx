@@ -211,6 +211,24 @@ export function ModernPortfolioTab() {
                     </div>
                   </div>
                 )}
+                {(result.portfolioSortinoRatioAnnualized !== null ||
+                  result.portfolioMaxDrawdownPct !== null ||
+                  result.portfolioHistoricalVaR95Pct !== null) && (
+                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800 text-sm">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Sortino Ratio (ann.)</div>
+                      <div>{result.portfolioSortinoRatioAnnualized !== null ? result.portfolioSortinoRatioAnnualized.toFixed(2) : "N/A"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Max Drawdown</div>
+                      <div>{result.portfolioMaxDrawdownPct !== null ? `${result.portfolioMaxDrawdownPct.toFixed(2)}%` : "N/A"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">1-Day 95% VaR</div>
+                      <div>{result.portfolioHistoricalVaR95Pct !== null ? `${result.portfolioHistoricalVaR95Pct.toFixed(2)}%` : "N/A"}</div>
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <p className="text-sm text-zinc-500">Not enough overlapping history to simulate a frontier.</p>

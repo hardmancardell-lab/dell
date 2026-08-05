@@ -46,7 +46,8 @@ export function usePortfolio() {
       assetClass: AssetClass,
       shares: number,
       costBasisPerShare: number,
-      acquiredDate: string
+      acquiredDate: string,
+      extra?: Pick<PortfolioHolding, "optionRight" | "strikePrice" | "expirationDate" | "underlyingSymbol" | "contractMultiplier">
     ) => {
       const trimmed = symbol.trim().toUpperCase();
       if (!trimmed || !Number.isFinite(shares) || shares <= 0 || !Number.isFinite(costBasisPerShare)) return;
@@ -57,6 +58,7 @@ export function usePortfolio() {
         shares,
         costBasisPerShare,
         acquiredDate,
+        ...extra,
       };
       setHoldings((current) => {
         const next = [...current, holding];

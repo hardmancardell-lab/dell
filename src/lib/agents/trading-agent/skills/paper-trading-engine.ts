@@ -78,8 +78,8 @@ const MARKET_SLIPPAGE_PER_SHARE = 0.02;
 
 const STOP_LOOKBACK_CAP_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — bounds how far back a very old resting order re-scans
 
-/** 1 for every asset class except options, where 1 contract = 100 shares of notional exposure. */
-function notionalMultiplier(assetClass: AssetClass): number {
+/** 1 for every asset class except options, where 1 contract = 100 shares of notional exposure. Exported for reuse by portfolio-valuation.ts. */
+export function notionalMultiplier(assetClass: AssetClass): number {
   return assetClass === "option" ? OPTIONS_CONTRACT_MULTIPLIER : 1;
 }
 

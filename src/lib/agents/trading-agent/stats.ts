@@ -97,8 +97,8 @@ export interface WinLossMetrics {
   largestLossPct: number | null;
 }
 
-/** Simulates a compounding equity curve over the array IN ORDER — inherits the same overlapping-window autocorrelation caveat historical-backtest.ts already documents for its forward-return windows. */
-function maxDrawdownFromReturns(returnsPct: number[]): number | null {
+/** Simulates a compounding equity curve over the array IN ORDER — inherits the same overlapping-window autocorrelation caveat historical-backtest.ts already documents for its forward-return windows. Exported for reuse by portfolio-analytics.ts's portfolio-level drawdown. */
+export function maxDrawdownFromReturns(returnsPct: number[]): number | null {
   if (returnsPct.length === 0) return null;
   let equity = 1;
   let peak = 1;

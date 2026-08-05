@@ -59,6 +59,12 @@ export function PortfolioDashboardTab() {
   const [shares, setShares] = useState("");
   const [costBasis, setCostBasis] = useState("");
   const [acquiredDate, setAcquiredDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Asset-class-specific fields — mirrors PaperOrderForm.tsx's branch pattern.
+  const [optionRight, setOptionRight] = useState<"call" | "put">("call");
+  const [strikePrice, setStrikePrice] = useState("");
+  const [expirationDate, setExpirationDate] = useState("");
+  const [underlyingSymbol, setUnderlyingSymbol] = useState("");
+  const [contractMultiplier, setContractMultiplier] = useState("");
 
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,10 +76,25 @@ export function PortfolioDashboardTab() {
     const sharesNum = Number(shares);
     const costBasisNum = Number(costBasis);
     if (!symbolInput.trim() || !Number.isFinite(sharesNum) || sharesNum <= 0 || !Number.isFinite(costBasisNum)) return;
-    addHolding(symbolInput, assetClass, sharesNum, costBasisNum, acquiredDate);
+    const extra =
+      assetClass === "option"
+        ? {
+            optionRight,
+            strikePrice: Number(strikePrice) || null,
+            expirationDate: expirationDate || null,
+            underlyingSymbol: underlyingSymbol.trim().toUpperCase() || symbolInput.trim().toUpperCase(),
+          }
+        : assetClass === "future"
+          ? { contractMultiplier: Number(contractMultiplier) || null }
+          : undefined;
+    addHolding(symbolInput, assetClass, sharesNum, costBasisNum, acquiredDate, extra);
     setSymbolInput("");
     setShares("");
     setCostBasis("");
+    setStrikePrice("");
+    setExpirationDate("");
+    setUnderlyingSymbol("");
+    setContractMultiplier("");
   }
 
   const runValuation = useCallback(async () => {
@@ -130,10 +151,52 @@ export function PortfolioDashboardTab() {
             </option>
           ))}
         </select>
+        {assetClass === "option" && (
+          <>
+            <select
+              value={optionRight}
+              onChange={(e) => setOptionRight(e.target.value as "call" | "put")}
+              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+            >
+              <option value="call">Call</option>
+              <option value="put">Put</option>
+            </select>
+            <input
+              value={strikePrice}
+              onChange={(e) => setStrikePrice(e.target.value)}
+              placeholder="Strike"
+              type="number"
+              step="any"
+              className="w-24 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+            />
+            <input
+              value={expirationDate}
+              onChange={(e) => setExpirationDate(e.target.value)}
+              type="date"
+              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+            />
+            <input
+              value={underlyingSymbol}
+              onChange={(e) => setUnderlyingSymbol(e.target.value)}
+              placeholder="Underlying, e.g. AAPL"
+              className="w-36 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+            />
+          </>
+        )}
+        {assetClass === "future" && (
+          <input
+            value={contractMultiplier}
+            onChange={(e) => setContractMultiplier(e.target.value)}
+            placeholder="Contract multiplier"
+            type="number"
+            step="any"
+            className="w-36 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          />
+        )}
         <input
           value={shares}
           onChange={(e) => setShares(e.target.value)}
-          placeholder="Shares"
+          placeholder={assetClass === "option" ? "Contracts" : "Shares"}
           type="number"
           step="any"
           className="w-28 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"

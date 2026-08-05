@@ -593,9 +593,17 @@ export interface PortfolioHolding {
   id: string; // crypto.randomUUID() — multiple lots of the same symbol are separate entries
   symbol: string;
   assetClass: AssetClass;
-  shares: number;
+  shares: number; // contracts for options, base-currency units for forex (same convention as paper trading)
   costBasisPerShare: number;
   acquiredDate: string; // YYYY-MM-DD
+  // Optional, asset-class-specific fields. Options mirror paper-trading's
+  // PaperOptionFields exactly (reused convention, not reinvented). Futures
+  // get a real contract multiplier for correct notional sizing.
+  optionRight?: PaperOptionRight | null;
+  strikePrice?: number | null;
+  expirationDate?: string | null; // YYYY-MM-DD, options only — distinct from acquiredDate
+  underlyingSymbol?: string | null;
+  contractMultiplier?: number | null; // futures only
 }
 
 export interface PortfolioValuation {
@@ -664,6 +672,12 @@ export interface PortfolioAnalyticsResult {
     minVolatility: EfficientFrontierPoint | null;
     current: EfficientFrontierPoint | null;
   };
+  // Computed from the real, market-value-weighted daily-return series of
+  // the "current" portfolio point above (same aligned-returns matrix, no
+  // new data source). Null when there's no current point (see frontier.current).
+  portfolioSortinoRatioAnnualized: number | null;
+  portfolioMaxDrawdownPct: number | null;
+  portfolioHistoricalVaR95Pct: number | null; // 1-day 95% VaR, historical-simulation method, as a positive % of portfolio value
   dataLimitations: string[];
 }
 

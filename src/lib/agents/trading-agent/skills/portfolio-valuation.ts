@@ -1,14 +1,19 @@
 import { fetchQuote } from "@/lib/data/market-data";
 import { fetchProfile } from "@/lib/data/fmp";
 import { assetClassLabel } from "../asset-class-label";
+import { notionalMultiplier, getOptionContractQuote } from "./paper-trading-engine";
 import type { AllocationSlice, PortfolioHolding, PortfolioSummary, PortfolioValuation } from "../types";
 
 /**
  * Per-holding valuation, same scanOne-style isolation as watchlist-scan.ts —
- * one bad symbol never breaks the whole portfolio's valuation.
+ * one bad symbol never breaks the whole portfolio's valuation. Reuses the
+ * exact notionalMultiplier (options = 100x) and per-contract chain lookup
+ * already proven in paper-trading-engine.ts, rather than duplicating them.
  */
 async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation> {
-  const costBasisTotal = holding.shares * holding.costBasisPerShare;
+  const multiplier =
+    holding.assetClass === "future" && holding.contractMultiplier ? holding.contractMultiplier : notionalMultiplier(holding.assetClass);
+  const costBasisTotal = holding.shares * holding.costBasisPerShare * multiplier;
 
   let currentPrice: number | null = null;
   let sector: string | null = null;
@@ -19,8 +24,14 @@ async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation
   );
 
   try {
-    const quote = await fetchQuote(holding.symbol);
-    currentPrice = quote.lastPrice;
+    if (holding.assetClass === "option" && holding.underlyingSymbol && holding.expirationDate && holding.strikePrice && holding.optionRight) {
+      const contract = await getOptionContractQuote(holding.underlyingSymbol, holding.expirationDate, holding.strikePrice, holding.optionRight);
+      if (!contract) throw new Error(`No matching contract found for ${holding.symbol} (may have expired).`);
+      currentPrice = (contract.bid + contract.ask) / 2;
+    } else {
+      const quote = await fetchQuote(holding.symbol);
+      currentPrice = quote.lastPrice;
+    }
   } catch (error) {
     return {
       holding,
@@ -40,14 +51,16 @@ async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation
   // equities, so forex/future/commodity/option holdings simply have no
   // sector (bucketed by asset class instead in allocationBySector below),
   // and a lookup failure here isn't a valuation error.
-  try {
-    const profiles = await fetchProfile(holding.symbol);
-    sector = profiles[0]?.sector ?? null;
-  } catch {
-    sector = null;
+  if (holding.assetClass === "equity") {
+    try {
+      const profiles = await fetchProfile(holding.symbol);
+      sector = profiles[0]?.sector ?? null;
+    } catch {
+      sector = null;
+    }
   }
 
-  const currentValue = currentPrice * holding.shares;
+  const currentValue = currentPrice * holding.shares * multiplier;
   const unrealizedPL = currentValue - costBasisTotal;
   // Holding Period Return — total return over the holding period, no
   // dividends/income factored in (this app has no dividend-history source).
