@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { SECTOR_CONSTITUENTS } from "@/lib/agents/research-agent/skills/sector-fundamentals";
 import { GlossaryTerm } from "./GlossaryTerm";
 import { PriceChart } from "./PriceChart";
+import { StatCard } from "./StatCard";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type {
   AssetClass,
@@ -18,23 +19,6 @@ import type {
 const SCANNABLE_SECTORS = Object.keys(SECTOR_CONSTITUENTS).filter(
   (s) => SECTOR_CONSTITUENTS[s].length > 0
 );
-
-function StatCard({ label, value, sub }: { label: ReactNode; value: string; sub?: string }) {
-  return (
-    <div className="jv-card">
-      <div className="jv-br-b" />
-      <div className="jv-label">{label}</div>
-      <div className="jv-cond c-neutral" style={{ fontSize: 18 }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs" style={{ color: "var(--text-2)" }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function fmtDayContext(row: {
   overnightGapPct: number | null;

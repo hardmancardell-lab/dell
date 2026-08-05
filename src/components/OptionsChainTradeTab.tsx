@@ -16,6 +16,10 @@ interface StrikeRow {
   put?: MarketOptionContract;
 }
 
+interface ChainWithSpot extends MarketOptionsChain {
+  underlyingPrice: number;
+}
+
 function buildStrikeRows(chain: MarketOptionsChain): StrikeRow[] {
   const map = new Map<number, StrikeRow>();
   for (const c of chain.calls) {
@@ -27,19 +31,37 @@ function buildStrikeRows(chain: MarketOptionsChain): StrikeRow[] {
   return Array.from(map.values()).sort((a, b) => a.strike - b.strike);
 }
 
+/** The strike closest to the real spot price — the ATM divider row. */
+function findAtmStrike(rows: StrikeRow[], spot: number): number | null {
+  if (rows.length === 0) return null;
+  let closest = rows[0].strike;
+  let bestDiff = Math.abs(rows[0].strike - spot);
+  for (const row of rows) {
+    const diff = Math.abs(row.strike - spot);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      closest = row.strike;
+    }
+  }
+  return closest;
+}
+
 /**
  * The real "order chain" for options paper trading — a strike ladder of
  * actual tradeable contracts (real bid/ask/OI/volume/IV/delta via Tradier),
  * not the underlying's price chart (which can't identify a specific
- * contract). Clicking Trade on a row opens the same shared PaperOrderForm
- * used everywhere else, locked to a market order on that exact contract.
+ * contract). ITM strikes are shaded and the strike nearest the real spot
+ * price is marked, matching how a real options chain (Webull, etc.) reads.
+ * Clicking Trade on a row populates the docked ticket panel, which opens
+ * the same shared PaperOrderForm used everywhere else, locked to a market
+ * order on that exact contract.
  */
 export function OptionsChainTradeTab() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [ticker, setTicker] = useState("AAPL");
   const [expirations, setExpirations] = useState<string[]>([]);
   const [expiration, setExpiration] = useState<string>("");
-  const [chain, setChain] = useState<MarketOptionsChain | null>(null);
+  const [chain, setChain] = useState<ChainWithSpot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ right: "call" | "put"; contract: MarketOptionContract } | null>(null);
@@ -79,7 +101,7 @@ export function OptionsChainTradeTab() {
       const res = await fetch(`/api/option-chain-contracts?ticker=${encodeURIComponent(t)}&expiration=${encodeURIComponent(exp)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to load option chain.");
-      setChain(data as MarketOptionsChain);
+      setChain(data as ChainWithSpot);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -88,6 +110,8 @@ export function OptionsChainTradeTab() {
   }
 
   const rows = chain ? buildStrikeRows(chain) : [];
+  const spot = chain?.underlyingPrice ?? null;
+  const atmStrike = spot !== null ? findAtmStrike(rows, spot) : null;
 
   const prefillOption: PrefillOption | null = selected
     ? {
@@ -101,12 +125,13 @@ export function OptionsChainTradeTab() {
     : null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="jarvis flex flex-col gap-6">
       <p className="jv-lede" style={{ marginBottom: 0 }}>
-        Real per-contract bid/ask/OI/volume/IV/delta from this app&apos;s options-chain provider — pick a contract to
-        paper-trade it. Options are market-order-only (no historical intraday bar feed exists for individual
-        contracts to evaluate a resting limit/stop order against), and selling to open is only allowed when fully
-        collateralized (a covered call, or a cash-secured put) — this simulator has no margin model.
+        Real per-contract bid/ask/OI/volume/IV/delta from this app&apos;s options-chain provider. In-the-money strikes
+        are shaded; the row nearest the real current price is marked. Options are market-order-only (no historical
+        intraday bar feed exists for individual contracts to evaluate a resting limit/stop order against), and
+        selling to open is only allowed when fully collateralized (a covered call, or a cash-secured put) — this
+        simulator has no margin model.
       </p>
 
       <form
@@ -116,13 +141,7 @@ export function OptionsChainTradeTab() {
         }}
         className="flex gap-3 items-end"
       >
-        <input
-          value={ticker}
-          onChange={(e) => setTicker(e.target.value)}
-          placeholder="Ticker, e.g. AAPL"
-          className="px-3 py-2 text-sm"
-          style={{ background: "var(--ink-900)", border: "1px solid var(--line)", color: "var(--text-0)", fontFamily: "var(--font-mono)" }}
-        />
+        <input value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="Ticker, e.g. AAPL" className="jv-input" />
         {expirations.length > 0 && (
           <select
             value={expiration}
@@ -130,8 +149,7 @@ export function OptionsChainTradeTab() {
               setExpiration(e.target.value);
               loadChain(ticker.trim().toUpperCase(), e.target.value);
             }}
-            className="px-3 py-2 text-sm"
-            style={{ background: "var(--ink-900)", border: "1px solid var(--line)", color: "var(--text-0)" }}
+            className="jv-select"
           >
             {expirations.map((e) => (
               <option key={e} value={e}>
@@ -140,9 +158,14 @@ export function OptionsChainTradeTab() {
             ))}
           </select>
         )}
-        <button type="submit" disabled={loading} className="px-4 py-2 text-sm font-medium disabled:opacity-50" style={{ background: "var(--signal)", color: "var(--ink-950)" }}>
+        <button type="submit" disabled={loading} className="jv-btn">
           {loading ? "Loading…" : "Load Chain"}
         </button>
+        {spot !== null && (
+          <span className="jv-badge c-neutral">
+            {ticker.trim().toUpperCase()} {spot.toFixed(2)}
+          </span>
+        )}
       </form>
 
       {error && (
@@ -152,69 +175,87 @@ export function OptionsChainTradeTab() {
       )}
 
       {rows.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--line)" }}>
-                {["Call Bid", "Call Ask", "Call OI", "Call Vol", "Call Δ", "", "Strike", "", "Put Δ", "Put Vol", "Put OI", "Put Ask", "Put Bid"].map((h, i) => (
-                  <th key={`${h}-${i}`} className="text-center py-2 px-2 whitespace-nowrap" style={{ color: "var(--text-2)" }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.strike} style={{ borderBottom: "1px solid var(--line)" }}>
-                  <td className="text-center py-2 px-2">{fmt(row.call?.bid)}</td>
-                  <td className="text-center py-2 px-2">{fmt(row.call?.ask)}</td>
-                  <td className="text-center py-2 px-2">{row.call?.openInterest ?? "—"}</td>
-                  <td className="text-center py-2 px-2">{row.call?.totalVolume ?? "—"}</td>
-                  <td className="text-center py-2 px-2">{fmt(row.call?.delta, 3)}</td>
-                  <td className="text-center py-2 px-2">
-                    {row.call && (
-                      <button
-                        onClick={() => setSelected({ right: "call", contract: row.call! })}
-                        className="text-xs px-2 py-1"
-                        style={{ border: "1px solid var(--signal)", color: "var(--signal)" }}
-                      >
-                        Trade
-                      </button>
-                    )}
-                  </td>
-                  <td className="text-center py-2 px-2 font-medium" style={{ fontFamily: "var(--font-mono)" }}>
-                    {row.strike}
-                  </td>
-                  <td className="text-center py-2 px-2">
-                    {row.put && (
-                      <button
-                        onClick={() => setSelected({ right: "put", contract: row.put! })}
-                        className="text-xs px-2 py-1"
-                        style={{ border: "1px solid var(--danger)", color: "var(--danger)" }}
-                      >
-                        Trade
-                      </button>
-                    )}
-                  </td>
-                  <td className="text-center py-2 px-2">{fmt(row.put?.delta, 3)}</td>
-                  <td className="text-center py-2 px-2">{row.put?.totalVolume ?? "—"}</td>
-                  <td className="text-center py-2 px-2">{row.put?.openInterest ?? "—"}</td>
-                  <td className="text-center py-2 px-2">{fmt(row.put?.ask)}</td>
-                  <td className="text-center py-2 px-2">{fmt(row.put?.bid)}</td>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
+          <div className="overflow-x-auto">
+            <table className="jv-table">
+              <thead>
+                <tr>
+                  {["Call Bid", "Call Ask", "Call OI", "Call Vol", "Call Δ", "", "Strike", "", "Put Δ", "Put Vol", "Put OI", "Put Ask", "Put Bid"].map((h, i) => (
+                    <th key={`${h}-${i}`} className="text-center">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {prefillOption && sessionId && (
-        <section className="jv-card">
-          <div className="jv-strip-title">
-            Trade {ticker.trim().toUpperCase()} ${prefillOption.strikePrice} {prefillOption.optionRight === "call" ? "Call" : "Put"}
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const callItm = spot !== null && row.strike < spot;
+                  const putItm = spot !== null && row.strike > spot;
+                  const isAtm = row.strike === atmStrike;
+                  return (
+                    <tr key={row.strike} className={isAtm ? "jv-chain-atm" : undefined}>
+                      <td className={`text-center jv-num ${callItm ? "jv-chain-itm" : ""}`}>{fmt(row.call?.bid)}</td>
+                      <td className={`text-center jv-num ${callItm ? "jv-chain-itm" : ""}`}>{fmt(row.call?.ask)}</td>
+                      <td className={`text-center jv-num ${callItm ? "jv-chain-itm" : ""}`}>{row.call?.openInterest ?? "—"}</td>
+                      <td className={`text-center jv-num ${callItm ? "jv-chain-itm" : ""}`}>{row.call?.totalVolume ?? "—"}</td>
+                      <td className={`text-center jv-num ${callItm ? "jv-chain-itm" : ""}`}>{fmt(row.call?.delta, 3)}</td>
+                      <td className={`text-center ${callItm ? "jv-chain-itm" : ""}`}>
+                        {row.call && (
+                          <button
+                            onClick={() => setSelected({ right: "call", contract: row.call! })}
+                            className="text-xs px-2 py-1"
+                            style={{ border: "1px solid var(--signal)", color: "var(--signal)" }}
+                          >
+                            Trade
+                          </button>
+                        )}
+                      </td>
+                      <td className="text-center jv-num font-medium" style={{ color: "var(--text-0)" }}>
+                        {row.strike}
+                      </td>
+                      <td className={`text-center ${putItm ? "jv-chain-itm" : ""}`}>
+                        {row.put && (
+                          <button
+                            onClick={() => setSelected({ right: "put", contract: row.put! })}
+                            className="text-xs px-2 py-1"
+                            style={{ border: "1px solid var(--danger)", color: "var(--danger)" }}
+                          >
+                            Trade
+                          </button>
+                        )}
+                      </td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{fmt(row.put?.delta, 3)}</td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{row.put?.totalVolume ?? "—"}</td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{row.put?.openInterest ?? "—"}</td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{fmt(row.put?.ask)}</td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{fmt(row.put?.bid)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <PaperOrderForm sessionId={sessionId} prefillOption={prefillOption} compact onFilled={() => setSelected(null)} />
-        </section>
+
+          <div className="jv-ticket-dock">
+            <section className="jv-card">
+              {prefillOption && sessionId ? (
+                <>
+                  <div className="jv-strip-title">
+                    Trade {ticker.trim().toUpperCase()} ${prefillOption.strikePrice} {prefillOption.optionRight === "call" ? "Call" : "Put"}
+                  </div>
+                  <PaperOrderForm sessionId={sessionId} prefillOption={prefillOption} compact onFilled={() => setSelected(null)} />
+                </>
+              ) : (
+                <>
+                  <div className="jv-strip-title">Order Ticket</div>
+                  <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                    Select a contract from the chain to trade it.
+                  </p>
+                </>
+              )}
+            </section>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { PaperOrderForm } from "./PaperOrderForm";
+import { StatCard } from "./StatCard";
 import { formatOptionLabel } from "@/lib/agents/trading-agent/skills/option-symbol";
 import type { PaperAccountSummary, PaperOptionFields } from "@/lib/agents/trading-agent/types";
 
@@ -13,24 +14,6 @@ function displaySymbol(row: PaperOptionFields & { symbol: string }): string {
   return row.symbol;
 }
 
-function StatCard({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "up" | "down" | "neutral" }) {
-  const color = tone === "up" ? "var(--signal)" : tone === "down" ? "var(--danger)" : "var(--text-0)";
-  return (
-    <div className="jv-card">
-      <div className="jv-br-b" />
-      <div className="jv-label">{label}</div>
-      <div className="jv-cond c-neutral" style={{ fontSize: 18, color }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs" style={{ color: "var(--text-2)" }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function fmtUsd(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "N/A";
   return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
@@ -39,6 +22,11 @@ function fmtUsd(n: number | null): string {
 function fmtPct(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "N/A";
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+}
+
+function pnlClass(n: number | null): string {
+  if (n === null || !Number.isFinite(n) || n === 0) return "jv-pnl-flat";
+  return n > 0 ? "jv-pnl-up" : "jv-pnl-down";
 }
 
 export function PaperTradingTab() {
@@ -111,14 +99,20 @@ export function PaperTradingTab() {
   }
 
   if (!sessionId || loading) {
-    return <p style={{ color: "var(--text-2)" }}>Loading paper trading account…</p>;
+    return (
+      <div className="jarvis">
+        <p style={{ color: "var(--text-2)" }}>Loading paper trading account…</p>
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
-        <div className="font-medium">Could not load paper trading account</div>
-        <div className="text-sm mt-1">{error}</div>
+      <div className="jarvis">
+        <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <div className="font-medium">Could not load paper trading account</div>
+          <div className="text-sm mt-1">{error}</div>
+        </div>
       </div>
     );
   }
@@ -126,7 +120,7 @@ export function PaperTradingTab() {
   if (!summary) return null;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="jarvis flex flex-col gap-8">
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         A long-only paper trading simulator on real quotes and real intraday price action — market, limit, stop,
         stop-limit, and trailing-stop orders, real slippage, and real SEC/FINRA regulatory fees on sells. No fake
@@ -178,11 +172,11 @@ export function PaperTradingTab() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+            <table className="jv-table">
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--line)" }}>
+                <tr>
                   {["Symbol", "Qty", "Avg Cost", "Current", "Market Value", "Unrealized P&L", "P&L %"].map((h) => (
-                    <th key={h} className="text-left py-2 px-2" style={{ color: "var(--text-2)" }}>
+                    <th key={h} className={h === "Symbol" ? "text-left" : "text-right"}>
                       {h}
                     </th>
                   ))}
@@ -190,18 +184,14 @@ export function PaperTradingTab() {
               </thead>
               <tbody>
                 {summary.positions.map((p) => (
-                  <tr key={`${p.symbol}-${p.assetClass}`} style={{ borderBottom: "1px solid var(--line)" }}>
-                    <td className="py-2 px-2 font-medium">{displaySymbol(p)}</td>
-                    <td className="py-2 px-2">{p.quantity}</td>
-                    <td className="py-2 px-2">{fmtUsd(p.avgCostBasis)}</td>
-                    <td className="py-2 px-2">{fmtUsd(p.currentPrice)}</td>
-                    <td className="py-2 px-2">{fmtUsd(p.marketValue)}</td>
-                    <td className="py-2 px-2" style={{ color: (p.unrealizedPnl ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>
-                      {fmtUsd(p.unrealizedPnl)}
-                    </td>
-                    <td className="py-2 px-2" style={{ color: (p.unrealizedPnlPct ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>
-                      {fmtPct(p.unrealizedPnlPct)}
-                    </td>
+                  <tr key={`${p.symbol}-${p.assetClass}`}>
+                    <td className="font-medium">{displaySymbol(p)}</td>
+                    <td className="jv-num">{p.quantity}</td>
+                    <td className="jv-num">{fmtUsd(p.avgCostBasis)}</td>
+                    <td className="jv-num">{fmtUsd(p.currentPrice)}</td>
+                    <td className="jv-num">{fmtUsd(p.marketValue)}</td>
+                    <td className={`jv-num ${pnlClass(p.unrealizedPnl)}`}>{fmtUsd(p.unrealizedPnl)}</td>
+                    <td className={`jv-num ${pnlClass(p.unrealizedPnlPct)}`}>{fmtPct(p.unrealizedPnlPct)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -240,11 +230,11 @@ export function PaperTradingTab() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+            <table className="jv-table">
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--line)" }}>
+                <tr>
                   {["Symbol", "Side", "Type", "Qty", "Limit", "Stop", "Trail", "Placed", ""].map((h) => (
-                    <th key={h} className="text-left py-2 px-2" style={{ color: "var(--text-2)" }}>
+                    <th key={h} className={h === "Symbol" || h === "Side" || h === "Type" || h === "" ? "text-left" : "text-right"}>
                       {h}
                     </th>
                   ))}
@@ -252,22 +242,18 @@ export function PaperTradingTab() {
               </thead>
               <tbody>
                 {summary.openOrders.map((o) => (
-                  <tr key={o.id} style={{ borderBottom: "1px solid var(--line)" }}>
-                    <td className="py-2 px-2 font-medium">{displaySymbol(o)}</td>
-                    <td className="py-2 px-2" style={{ textTransform: "capitalize" }}>
-                      {o.side}
-                    </td>
-                    <td className="py-2 px-2" style={{ textTransform: "capitalize" }}>
-                      {o.orderType.replace("_", " ")}
-                    </td>
-                    <td className="py-2 px-2">{o.quantity}</td>
-                    <td className="py-2 px-2">{o.limitPrice !== null ? fmtUsd(o.limitPrice) : "—"}</td>
-                    <td className="py-2 px-2">{o.stopPrice !== null ? fmtUsd(o.stopPrice) : "—"}</td>
-                    <td className="py-2 px-2">{o.trailAmount !== null ? fmtUsd(o.trailAmount) : "—"}</td>
-                    <td className="py-2 px-2 text-xs" style={{ color: "var(--text-2)" }}>
+                  <tr key={o.id}>
+                    <td className="font-medium">{displaySymbol(o)}</td>
+                    <td style={{ textTransform: "capitalize" }}>{o.side}</td>
+                    <td style={{ textTransform: "capitalize" }}>{o.orderType.replace("_", " ")}</td>
+                    <td className="jv-num">{o.quantity}</td>
+                    <td className="jv-num">{o.limitPrice !== null ? fmtUsd(o.limitPrice) : "—"}</td>
+                    <td className="jv-num">{o.stopPrice !== null ? fmtUsd(o.stopPrice) : "—"}</td>
+                    <td className="jv-num">{o.trailAmount !== null ? fmtUsd(o.trailAmount) : "—"}</td>
+                    <td className="text-xs" style={{ color: "var(--text-2)" }}>
                       {new Date(o.createdAt).toLocaleString()}
                     </td>
-                    <td className="py-2 px-2">
+                    <td>
                       <button
                         onClick={() => handleCancelOrder(o.id)}
                         className="text-xs px-2 py-1"
@@ -292,11 +278,11 @@ export function PaperTradingTab() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+            <table className="jv-table">
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--line)" }}>
+                <tr>
                   {["Symbol", "Side", "Qty", "Fill Price", "Fees", "Realized P&L", "Filled"].map((h) => (
-                    <th key={h} className="text-left py-2 px-2" style={{ color: "var(--text-2)" }}>
+                    <th key={h} className={h === "Symbol" || h === "Side" ? "text-left" : "text-right"}>
                       {h}
                     </th>
                   ))}
@@ -304,18 +290,14 @@ export function PaperTradingTab() {
               </thead>
               <tbody>
                 {summary.recentFills.map((f) => (
-                  <tr key={f.id} style={{ borderBottom: "1px solid var(--line)" }}>
-                    <td className="py-2 px-2 font-medium">{displaySymbol(f)}</td>
-                    <td className="py-2 px-2" style={{ textTransform: "capitalize" }}>
-                      {f.side}
-                    </td>
-                    <td className="py-2 px-2">{f.quantity}</td>
-                    <td className="py-2 px-2">{fmtUsd(f.fillPrice)}</td>
-                    <td className="py-2 px-2">{fmtUsd(f.totalFees)}</td>
-                    <td className="py-2 px-2" style={{ color: (f.realizedPnl ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>
-                      {f.realizedPnl !== null ? fmtUsd(f.realizedPnl) : "—"}
-                    </td>
-                    <td className="py-2 px-2 text-xs" style={{ color: "var(--text-2)" }}>
+                  <tr key={f.id}>
+                    <td className="font-medium">{displaySymbol(f)}</td>
+                    <td style={{ textTransform: "capitalize" }}>{f.side}</td>
+                    <td className="jv-num">{f.quantity}</td>
+                    <td className="jv-num">{fmtUsd(f.fillPrice)}</td>
+                    <td className="jv-num">{fmtUsd(f.totalFees)}</td>
+                    <td className={`jv-num ${pnlClass(f.realizedPnl)}`}>{f.realizedPnl !== null ? fmtUsd(f.realizedPnl) : "—"}</td>
+                    <td className="text-xs" style={{ color: "var(--text-2)" }}>
                       {new Date(f.filledAt).toLocaleString()}
                     </td>
                   </tr>

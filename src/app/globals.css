@@ -355,3 +355,60 @@ body {
 }
 .jarvis .jv-chip button { color: var(--text-2); }
 .jarvis .jv-chip button:hover { color: var(--danger); }
+
+/* Data-table primitive — tabular numerals, row hover, sticky header for
+   scrollable tables. Used for Positions/Open Orders/Recent Fills and the
+   options chain instead of each table hand-rolling inline border styles. */
+.jarvis .jv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.jarvis .jv-table th {
+  position: sticky;
+  top: 0;
+  background: var(--ink-900);
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-bright);
+  white-space: nowrap;
+}
+.jarvis .jv-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-0);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.jarvis .jv-table tbody tr:hover td { background: var(--ink-800); }
+.jarvis .jv-table .jv-num { text-align: right; font-family: var(--font-mono); }
+
+/* Realized/unrealized P&L coloring — replaces the repeated inline
+   style={{color: x >= 0 ? 'var(--signal)' : 'var(--danger)'}} pattern. */
+.jarvis .jv-pnl-up { color: var(--signal); }
+.jarvis .jv-pnl-down { color: var(--danger); }
+.jarvis .jv-pnl-flat { color: var(--text-1); }
+
+/* Options chain strike shading — ITM tint reuses the same faint signal wash
+   as .jv-badge.c-signal; the ATM/current-price row gets the verdict-amber
+   accent already used elsewhere for "pay attention here" panels. */
+.jarvis .jv-chain-itm { background: rgba(79, 232, 208, 0.05); }
+.jarvis .jv-chain-atm td {
+  border-top: 2px solid var(--verdict);
+  border-bottom: 2px solid var(--verdict);
+}
+
+/* Docked order ticket — sticky right column on wide viewports, matching
+   Webull's always-visible panel; falls back to normal in-flow stacking
+   below the chain on narrow viewports via the responsive grid at the call
+   site (this class only handles the sticky/positioning half). */
+.jarvis .jv-ticket-dock {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+}

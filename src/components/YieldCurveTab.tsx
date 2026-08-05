@@ -2,24 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { StatCard } from "./StatCard";
 import type { YieldCurveResult } from "@/lib/agents/trading-agent/types";
-
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="jv-card">
-      <div className="jv-br-b" />
-      <div className="jv-label">{label}</div>
-      <div className="jv-cond c-neutral" style={{ fontSize: 18 }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs" style={{ color: "var(--text-2)" }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function YieldCurveTab() {
   const [data, setData] = useState<YieldCurveResult | null>(null);

@@ -3,19 +3,8 @@
 import { useEffect, useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { MacroRegimeBanner } from "./MacroRegimeBanner";
+import { StatCard } from "./StatCard";
 import type { OptionsCalculatorResult, RiskFreeRateResult } from "@/lib/agents/trading-agent/types";
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="jv-card">
-      <div className="jv-br-b" />
-      <div className="jv-label">{label}</div>
-      <div className="jv-cond c-neutral" style={{ fontSize: 18 }}>
-        {value}
-      </div>
-    </div>
-  );
-}
 
 function Field({
   label,

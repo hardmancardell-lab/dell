@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useResearchWatchlist } from "@/lib/agents/research-agent/watchlist-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { getResearchGlossaryEntry } from "@/lib/agents/research-agent/skills/glossary";
 import { GlossaryTerm } from "@/components/GlossaryTerm";
+import { StatCard } from "@/components/StatCard";
 import type { SecurityAnalysis, SectorPeerRanking, ValuationVerdict } from "@/lib/agents/research-agent/types";
 
 type QualityTier = "Strong" | "Moderate" | "Weak";
@@ -25,23 +26,6 @@ function qualityTier(passedCount: number, total: number): QualityTier {
   if (passedCount >= 6) return "Strong";
   if (passedCount >= 4) return "Moderate";
   return "Weak";
-}
-
-function StatCard({ label, value, sub }: { label: ReactNode; value: string; sub?: string }) {
-  return (
-    <div className="jv-card">
-      <div className="jv-br-b" />
-      <div className="jv-label">{label}</div>
-      <div className="jv-cond c-neutral" style={{ fontSize: 20 }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs" style={{ color: "var(--text-2)" }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function PassFailBadge({ passed }: { passed: boolean | null }) {

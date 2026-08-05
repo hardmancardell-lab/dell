@@ -18,7 +18,7 @@ import { TIMEFRAME_PRESETS } from "@/lib/agents/trading-agent/skills/timeframe-p
 import type { ChartBarsResult } from "@/lib/agents/trading-agent/skills/chart-bars";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { PaperOrderForm } from "./PaperOrderForm";
-import type { AssetClass } from "@/lib/agents/trading-agent/types";
+import type { AssetClass, PaperAccountSummary } from "@/lib/agents/trading-agent/types";
 import {
   atr,
   bollingerBands,
@@ -107,6 +107,18 @@ const COLORS = {
   cmf: "#84cc16",
 };
 
+// The jarvis palette's real hex values (globals.css .jarvis custom
+// properties) — lightweight-charts renders on canvas and can't resolve
+// var(--...) itself, so the chart's own theme is kept in sync by hand here.
+const JARVIS = {
+  inkBg: "#0e131b", // --ink-900
+  line: "#223040", // --line
+  text1: "#9fb0c4", // --text-1
+  signal: "#4fe8d0", // --signal — also this chart's candle up-color
+  danger: "#e8637a", // --danger — also this chart's candle down-color
+  verdict: "#f0a868", // --verdict — cost-basis line
+};
+
 export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbol: string; focusDate?: string; assetClass?: AssetClass }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -116,6 +128,8 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
   const sma50SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const extraSeriesRef = useRef<ISeriesApi<SeriesType>[]>([]);
   const extraPriceLinesRef = useRef<IPriceLine[]>([]);
+  const positionLineRef = useRef<IPriceLine | null>(null);
+  const orderLinesRef = useRef<IPriceLine[]>([]);
   const assetClassRef = useRef<AssetClass>(assetClass);
   assetClassRef.current = assetClass;
 
@@ -133,6 +147,7 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [tradeTicketOpen, setTradeTicketOpen] = useState(false);
   const [clickedPrice, setClickedPrice] = useState<number | undefined>(undefined);
+  const [positionRefreshKey, setPositionRefreshKey] = useState(0);
 
   useEffect(() => {
     setSessionId(getOrCreateSessionId());
@@ -156,20 +171,19 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
     });
   }
 
-  // Chart lifecycle: create once per mount, dispose on unmount.
+  // Chart lifecycle: create once per mount, dispose on unmount. Single fixed
+  // dark theme (jarvis is dark-only by design, no light/OS-preference fork).
   useEffect(() => {
     if (!containerRef.current) return;
-    const isDark = document.documentElement.classList.contains("dark") ||
-      window.matchMedia?.("(prefers-color-scheme: dark)").matches;
 
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: isDark ? "#a1a1aa" : "#71717a",
+        textColor: JARVIS.text1,
       },
       grid: {
-        vertLines: { color: isDark ? "#27272a" : "#e4e4e7" },
-        horzLines: { color: isDark ? "#27272a" : "#e4e4e7" },
+        vertLines: { color: JARVIS.line },
+        horzLines: { color: JARVIS.line },
       },
       width: containerRef.current.clientWidth,
       height: 420,
@@ -177,11 +191,11 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#22c55e",
-      downColor: "#ef4444",
+      upColor: JARVIS.signal,
+      downColor: JARVIS.danger,
       borderVisible: false,
-      wickUpColor: "#22c55e",
-      wickDownColor: "#ef4444",
+      wickUpColor: JARVIS.signal,
+      wickDownColor: JARVIS.danger,
     });
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
@@ -223,6 +237,8 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
       chartRef.current = null;
       extraSeriesRef.current = [];
       extraPriceLinesRef.current = [];
+      positionLineRef.current = null;
+      orderLinesRef.current = [];
     };
   }, []);
 
@@ -274,7 +290,7 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
       candles.map((c) => ({
         time: toSeconds(c.datetime),
         value: c.volume,
-        color: c.close >= c.open ? "rgba(34,197,94,0.5)" : "rgba(239,68,68,0.5)",
+        color: c.close >= c.open ? "rgba(79,232,208,0.5)" : "rgba(232,99,122,0.5)",
       }))
     );
 
@@ -339,7 +355,7 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
       const points = values
         .map((v, i) =>
           v !== null
-            ? { time: times[i], value: v, color: v >= 0 ? "rgba(34,197,94,0.6)" : "rgba(239,68,68,0.6)" }
+            ? { time: times[i], value: v, color: v >= 0 ? "rgba(79,232,208,0.6)" : "rgba(232,99,122,0.6)" }
             : null
         )
         .filter((p): p is { time: UTCTimestamp; value: number; color: string } => p !== null);
@@ -467,8 +483,71 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
     chart.applyOptions({ height: 420 + (nextPane - 1) * 150 });
   }, [data, enabledOverlays, enabledOscillators]);
 
+  // Cost-basis + open-order price lines — the real mechanism behind
+  // Webull's "trade on the chart" (confirmed live: it draws lines for held
+  // positions/resting orders, not a floating button), using the exact
+  // createPriceLine primitive already used above for Volume Profile.
+  // Options are excluded (never charted here — see the click-to-trade guard
+  // above). Gracefully no-ops if paper trading isn't configured or the
+  // account fetch fails — this is contextual chart decoration, not a
+  // feature the chart depends on.
+  useEffect(() => {
+    if (!sessionId || assetClass === "option" || !candleSeriesRef.current) return;
+    let cancelled = false;
+
+    fetch(`/api/paper-trading/account?sessionId=${encodeURIComponent(sessionId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((summary: PaperAccountSummary | null) => {
+        if (cancelled || !summary || !candleSeriesRef.current) return;
+        const series = candleSeriesRef.current;
+
+        if (positionLineRef.current) {
+          series.removePriceLine(positionLineRef.current);
+          positionLineRef.current = null;
+        }
+        for (const line of orderLinesRef.current) series.removePriceLine(line);
+        orderLinesRef.current = [];
+
+        const upperSymbol = symbol.trim().toUpperCase();
+        const position = summary.positions.find((p) => p.symbol === upperSymbol);
+        if (position) {
+          positionLineRef.current = series.createPriceLine({
+            price: position.avgCostBasis,
+            color: JARVIS.verdict,
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            axisLabelVisible: true,
+            title: `Cost Basis ${position.avgCostBasis.toFixed(2)}`,
+          });
+        }
+
+        const openOrders = summary.openOrders.filter((o) => o.symbol === upperSymbol);
+        for (const order of openOrders) {
+          const price = order.limitPrice ?? order.stopPrice;
+          if (price === null || price === undefined) continue;
+          orderLinesRef.current.push(
+            series.createPriceLine({
+              price,
+              color: order.side === "buy" ? JARVIS.signal : JARVIS.danger,
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+              title: `${order.side} ${order.quantity} (${order.orderType.replace("_", " ")})`,
+            })
+          );
+        }
+      })
+      .catch(() => {
+        // Contextual decoration only — silently skip on any failure.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, symbol, assetClass, data, positionRefreshKey]);
+
   return (
-    <div>
+    <div className="jarvis">
       <div className="flex flex-wrap gap-1.5 mb-3">
         {TIMEFRAME_PRESETS.map((p) => (
           <button
@@ -476,44 +555,39 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
             onClick={() => p.alpacaTimeframe && setTimeframe(p.id)}
             disabled={!p.alpacaTimeframe}
             title={p.unavailableReason ?? undefined}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            className="px-3 py-1 text-[11px] font-mono uppercase tracking-wider border transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+            style={
               p.id === timeframe
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-black"
-                : p.alpacaTimeframe
-                  ? "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                  : "bg-zinc-50 text-zinc-300 dark:bg-zinc-900 dark:text-zinc-700 cursor-not-allowed"
-            }`}
+                ? { background: "var(--signal)", color: "var(--ink-950)", borderColor: "var(--signal)", fontWeight: 600 }
+                : { borderColor: "var(--line)", color: "var(--text-1)" }
+            }
           >
             {p.label}
           </button>
         ))}
       </div>
 
-      <div className="flex items-center gap-4 mb-3 text-xs">
-        <label className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
+      <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: "var(--text-1)" }}>
+        <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={showSma20} onChange={(e) => setShowSma20(e.target.checked)} />
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" /> SMA 20
+          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "#3b82f6" }} /> SMA 20
         </label>
-        <label className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
+        <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={showSma50} onChange={(e) => setShowSma50(e.target.checked)} />
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" /> SMA 50
+          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "#f59e0b" }} /> SMA 50
         </label>
-        {loading && <span className="text-zinc-400">Loading…</span>}
-        {focusDate && <span className="text-zinc-400">Centered on {focusDate}</span>}
+        {loading && <span style={{ color: "var(--text-2)" }}>Loading…</span>}
+        {focusDate && <span style={{ color: "var(--text-2)" }}>Centered on {focusDate}</span>}
       </div>
 
       <details className="mb-3">
-        <summary className="text-xs font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer select-none">
+        <summary className="text-xs font-medium cursor-pointer select-none" style={{ color: "var(--text-1)" }}>
           Overlays ({enabledOverlays.size} active)
         </summary>
-        <div className="flex flex-wrap gap-3 mt-2 text-xs">
+        <div className="flex flex-wrap gap-3 mt-2 text-xs" style={{ color: "var(--text-1)" }}>
           {OVERLAY_INDICATORS.map((o) => (
-            <label key={o.id} className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
-              <input
-                type="checkbox"
-                checked={enabledOverlays.has(o.id)}
-                onChange={() => toggleOverlay(o.id)}
-              />
+            <label key={o.id} className="flex items-center gap-1.5">
+              <input type="checkbox" checked={enabledOverlays.has(o.id)} onChange={() => toggleOverlay(o.id)} />
               {o.label}
             </label>
           ))}
@@ -521,17 +595,13 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
       </details>
 
       <details className="mb-3">
-        <summary className="text-xs font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer select-none">
+        <summary className="text-xs font-medium cursor-pointer select-none" style={{ color: "var(--text-1)" }}>
           Oscillators ({enabledOscillators.size} active)
         </summary>
-        <div className="flex flex-wrap gap-3 mt-2 text-xs">
+        <div className="flex flex-wrap gap-3 mt-2 text-xs" style={{ color: "var(--text-1)" }}>
           {OSCILLATOR_INDICATORS.map((o) => (
-            <label key={o.id} className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
-              <input
-                type="checkbox"
-                checked={enabledOscillators.has(o.id)}
-                onChange={() => toggleOscillator(o.id)}
-              />
+            <label key={o.id} className="flex items-center gap-1.5">
+              <input type="checkbox" checked={enabledOscillators.has(o.id)} onChange={() => toggleOscillator(o.id)} />
               {o.label}
             </label>
           ))}
@@ -539,30 +609,40 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
       </details>
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm mb-3">
-          {error}
+        <div className="jv-card mb-3" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <div className="text-sm">{error}</div>
         </div>
       )}
 
       {assetClass !== "option" ? (
         <details className="mb-3" open={tradeTicketOpen} onToggle={(e) => setTradeTicketOpen(e.currentTarget.open)}>
-          <summary className="text-xs font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer select-none">
+          <summary className="text-xs font-medium cursor-pointer select-none" style={{ color: "var(--text-1)" }}>
             Place Paper Trade{clickedPrice !== undefined ? ` — clicked ${clickedPrice.toFixed(2)}` : ""}
           </summary>
-          <div className="mt-2 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div className="mt-2 jv-card">
             {sessionId && (
-              <PaperOrderForm sessionId={sessionId} prefillSymbol={symbol} prefillAssetClass={assetClass} prefillPrice={clickedPrice} compact />
+              <PaperOrderForm
+                sessionId={sessionId}
+                prefillSymbol={symbol}
+                prefillAssetClass={assetClass}
+                prefillPrice={clickedPrice}
+                compact
+                onFilled={() => setPositionRefreshKey((n) => n + 1)}
+              />
             )}
           </div>
         </details>
       ) : (
-        <p className="text-xs text-zinc-400 mb-3">Options are traded via the real options chain — see the Options tab&apos;s &quot;Trade Options&quot; sub-tab to pick a specific contract.</p>
+        <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+          Options are traded via the real options chain — see the Options tab&apos;s &quot;Trade Options&quot; sub-tab to pick a
+          specific contract.
+        </p>
       )}
 
-      <div ref={containerRef} className="rounded-xl border border-zinc-200 dark:border-zinc-800" />
+      <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)" }} />
 
       {volumeProfileSummary && volumeProfileSummary.poc !== null && (
-        <p className="text-xs text-zinc-500 mt-2">
+        <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>
           Volume Profile (approximated from OHLCV bars, not true tick-level data) — POC{" "}
           {volumeProfileSummary.poc.toFixed(2)}, Value Area {volumeProfileSummary.val?.toFixed(2)}–
           {volumeProfileSummary.vah?.toFixed(2)}.
@@ -572,17 +652,16 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
       {data && data.dataLimitations.length > 0 && (
         <div className="mt-3 space-y-2">
           {data.dataLimitations.map((d) => (
-            <div
-              key={d.slice(0, 30)}
-              className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-            >
-              {d}
+            <div key={d.slice(0, 30)} className="jv-card" style={{ borderColor: "var(--verdict-dim)" }}>
+              <div className="text-xs" style={{ color: "var(--verdict)" }}>
+                {d}
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      <p className="text-xs text-zinc-400 mt-3">
+      <p className="text-xs mt-3" style={{ color: "var(--text-2)" }}>
         18 retail/OHLCV-based indicators available above. Institutional
         microstructure indicators (CVD, Footprint/Cluster charts, Liquidity
         Heatmaps, Iceberg detectors) need Level 2 order-book depth or

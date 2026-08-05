@@ -2,24 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { TradingDashboardTab } from "./TradingDashboardTab";
+import { StatCard } from "./StatCard";
 import type { BondMacroSnapshot } from "@/lib/agents/trading-agent/types";
-
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="jv-card">
-      <div className="jv-br-b" />
-      <div className="jv-label">{label}</div>
-      <div className="jv-cond c-neutral" style={{ fontSize: 20 }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs" style={{ color: "var(--text-2)" }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function BondDashboardTab() {
   const [snapshot, setSnapshot] = useState<BondMacroSnapshot | null>(null);

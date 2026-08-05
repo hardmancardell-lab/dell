@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import { getMacroOverview, getMacroBriefing } from "@/lib/agents/research-agent/skills/macro-overview";
+import { StatCard } from "@/components/StatCard";
 import { ResearchGlossaryTerm } from "@/components/ResearchGlossaryTerm";
 import { getSectorOverview } from "@/lib/agents/research-agent/skills/sector-overview";
 import { Tabs } from "@/components/Tabs";
@@ -50,31 +50,6 @@ import { CorrelationFinderTab } from "@/components/CorrelationFinderTab";
 import { PortfolioMethodologyTab } from "@/components/PortfolioMethodologyTab";
 import { FinancialLiteracyTab } from "@/components/FinancialLiteracyTab";
 import { AssistantChatTab } from "@/components/AssistantChatTab";
-
-function StatCard({
-  label,
-  value,
-  sub,
-}: {
-  label: ReactNode;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="jv-card">
-      <div className="jv-br-b" />
-      <div className="jv-label">{label}</div>
-      <div className="jv-cond c-neutral" style={{ fontSize: 18 }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs" style={{ color: "var(--text-2)" }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function ConditionBadge({ text }: { text: string }) {
   return <span className="jv-badge c-neutral">{text}</span>;

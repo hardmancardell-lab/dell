@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { StatCard } from "@/components/StatCard";
 import type { SectorFundamentals } from "@/lib/agents/research-agent/types";
 
 const UNAVAILABLE_SECTORS = new Set(["Basic Materials", "Real Estate", "Utilities"]);
@@ -18,23 +19,6 @@ const SECTORS = [
   "Technology",
   "Utilities",
 ];
-
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="jv-card">
-      <div className="jv-br-b" />
-      <div className="jv-label">{label}</div>
-      <div className="jv-cond c-neutral" style={{ fontSize: 20 }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs" style={{ color: "var(--text-2)" }}>
-          {sub}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function SectorFundamentalsTab() {
   const [sector, setSector] = useState(SECTORS[0]);
