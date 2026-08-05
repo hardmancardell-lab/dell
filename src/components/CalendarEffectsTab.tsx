@@ -11,6 +11,7 @@ import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { PriceChart } from "./PriceChart";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type {
+  AssetClass,
   CalendarDayOfWeekResult,
   CalendarTimeOfDayResult,
   DayOfWeekEffectResult,
@@ -115,7 +116,7 @@ function ResultsTable({
 }
 
 /** Reused across Equities/Currency/Futures/Commodities' own Calendar Effects tabs — a single .jarvis island here upgrades all four. */
-export function CalendarEffectsTab({ defaultTicker = "AAPL" }: { defaultTicker?: string }) {
+export function CalendarEffectsTab({ defaultTicker = "AAPL", assetClass = "equity" }: { defaultTicker?: string; assetClass?: AssetClass }) {
   const [ticker, setTicker] = useState(defaultTicker);
   const [mode, setMode] = useState<Mode>("dayOfWeek");
   const [years, setYears] = useState(3);
@@ -426,7 +427,7 @@ export function CalendarEffectsTab({ defaultTicker = "AAPL" }: { defaultTicker?:
                   ✕ Close
                 </button>
               </div>
-              <PriceChart key={focusedDate} symbol={swResult.ticker} focusDate={focusedDate} />
+              <PriceChart key={focusedDate} symbol={swResult.ticker} focusDate={focusedDate} assetClass={assetClass} />
             </div>
           )}
 

@@ -1,4 +1,4 @@
-import type { MarketCandle, MarketQuote } from "./market-data-types";
+import type { MarketBidAsk, MarketCandle, MarketQuote } from "./market-data-types";
 
 // LIVE account endpoint — confirmed live this session: the user's token
 // returned 401 against the practice environment (api-fxpractice.oanda.com)
@@ -61,6 +61,8 @@ interface OandaCandle {
   volume: number; // tick count, not traded volume — forex is OTC, no consolidated tape
   complete: boolean;
   mid?: { o: string; h: string; l: string; c: string }; // OANDA returns OHLC as strings
+  bid?: { o: string; h: string; l: string; c: string };
+  ask?: { o: string; h: string; l: string; c: string };
 }
 
 interface OandaCandlesResponse {
@@ -138,6 +140,43 @@ export async function fetchDailyBars(
   revalidateSeconds: number
 ): Promise<MarketCandle[]> {
   return fetchBarsForTimeframe(symbol, "1Day", startDateMs, endDateMs, revalidateSeconds);
+}
+
+/**
+ * Real bid/ask candles (price="BA", confirmed supported by OANDA's own API
+ * alongside the mid-only "M" this app otherwise requests) over an arbitrary
+ * date range — works for both a live "current" quote (see fetchLatestBidAsk
+ * below) and for re-pricing a historical evaluation window (a resting paper
+ * order that triggers against yesterday's bars should fill at that moment's
+ * real spread, not today's). Read-only GET, same as every other function in
+ * this file — never wired to any order-placement endpoint.
+ */
+export async function fetchBidAsk(symbol: string, startMs: number, endMs: number, revalidateSeconds: number): Promise<MarketBidAsk[]> {
+  const instrument = toOandaInstrument(symbol);
+  const data = await fetchOanda<OandaCandlesResponse>(
+    `/v3/instruments/${instrument}/candles`,
+    {
+      granularity: "M1",
+      price: "BA",
+      from: new Date(startMs).toISOString(),
+      to: new Date(endMs).toISOString(),
+    },
+    revalidateSeconds
+  );
+  return (data.candles ?? [])
+    .filter((c) => c.complete && c.bid && c.ask)
+    .map((c) => ({
+      datetime: Date.parse(c.time),
+      bid: parseFloat(c.bid!.c),
+      ask: parseFloat(c.ask!.c),
+    }));
+}
+
+/** The most recent real bid/ask, for a market order filling right now. */
+export async function fetchLatestBidAsk(symbol: string): Promise<MarketBidAsk | null> {
+  const now = Date.now();
+  const bars = await fetchBidAsk(symbol, now - 10 * 60 * 1000, now, 15);
+  return bars.length > 0 ? bars[bars.length - 1] : null;
 }
 
 /**

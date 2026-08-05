@@ -6,6 +6,7 @@ import { GlossaryTerm } from "./GlossaryTerm";
 import { PriceChart } from "./PriceChart";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type {
+  AssetClass,
   OptionsChainSummary,
   PmVolumeAnomalyReport,
   SectorScanSummary,
@@ -57,7 +58,7 @@ const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-norm
 const TD_CLASS = "py-2 pr-4 whitespace-nowrap";
 
 /** Reused across Equities/Currency/Futures/Commodities' own PM-Volume Tracker tabs — a single .jarvis island here upgrades all four. */
-export function PmVolumeTab() {
+export function PmVolumeTab({ assetClass = "equity" }: { assetClass?: AssetClass } = {}) {
   const [ticker, setTicker] = useState("");
   const [report, setReport] = useState<PmVolumeAnomalyReport | null>(null);
   const [chain, setChain] = useState<OptionsChainSummary | null>(null);
@@ -333,7 +334,7 @@ export function PmVolumeTab() {
                       ✕ Close
                     </button>
                   </div>
-                  <PriceChart key={focusedDate} symbol={report.ticker} focusDate={focusedDate} />
+                  <PriceChart key={focusedDate} symbol={report.ticker} focusDate={focusedDate} assetClass={assetClass} />
                 </div>
               )}
 
@@ -506,7 +507,7 @@ export function PmVolumeTab() {
                                 <div key={d.dateKey} className="jv-card">
                                   <div className="jv-br-b" />
                                   <div className="text-xs font-medium mb-1" style={{ color: "var(--text-2)" }}>{d.dateKey}</div>
-                                  <PriceChart key={d.dateKey} symbol={report.ticker} focusDate={d.dateKey} />
+                                  <PriceChart key={d.dateKey} symbol={report.ticker} focusDate={d.dateKey} assetClass={assetClass} />
                                 </div>
                               ))}
                             </div>

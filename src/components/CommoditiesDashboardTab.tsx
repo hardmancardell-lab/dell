@@ -96,7 +96,7 @@ export function CommoditiesDashboardTab() {
         ))}
         {selectedSymbol && (
           <div className="mt-4">
-            <PriceChart symbol={selectedSymbol} />
+            <PriceChart symbol={selectedSymbol} assetClass="commodity" />
             <TickerNewsPanel symbol={selectedSymbol} assetClass="commodity" />
           </div>
         )}

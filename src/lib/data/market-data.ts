@@ -10,6 +10,7 @@ import {
 } from "./schwab-mock";
 import { aggregateCandles } from "../agents/trading-agent/skills/candle-aggregation";
 import type {
+  MarketBidAsk,
   MarketCandle,
   MarketOptionsChain,
   MarketQuote,
@@ -149,6 +150,37 @@ export async function fetchQuote(symbol: string): Promise<MarketQuote> {
   if (isMockMode()) return generateMockQuote(symbol);
   if (isForexSymbol(symbol) && hasOandaToken()) return oanda.fetchQuote(symbol);
   return getProvider() === "alpaca" ? alpaca.fetchQuote(symbol) : schwab.fetchQuote(symbol);
+}
+
+/**
+ * Real bid/ask for forex — used by the paper trading engine so a forex fill
+ * prices off the actual spread instead of a flat guessed slippage constant.
+ * No equivalent exists for equities (no provider here supplies bid/ask for
+ * stocks) — that's a real, disclosed data gap, not something faked here.
+ */
+function generateMockBidAsk(symbol: string): MarketBidAsk {
+  const quote = generateMockQuote(symbol);
+  const halfSpread = quote.lastPrice * 0.0001; // synthetic, mock mode only
+  return { datetime: Date.now(), bid: quote.lastPrice - halfSpread, ask: quote.lastPrice + halfSpread };
+}
+
+export async function fetchForexBidAsk(
+  symbol: string,
+  startMs: number,
+  endMs: number,
+  revalidateSeconds: number
+): Promise<MarketBidAsk[]> {
+  if (isMockMode()) return [generateMockBidAsk(symbol)];
+  if (isForexSymbol(symbol) && hasOandaToken()) {
+    return oanda.fetchBidAsk(symbol, startMs, endMs, revalidateSeconds);
+  }
+  throw new Error(`No real bid/ask source for ${symbol} — requires a forex pair and OANDA_API_TOKEN.`);
+}
+
+export async function fetchLatestForexBidAsk(symbol: string): Promise<MarketBidAsk | null> {
+  if (isMockMode()) return generateMockBidAsk(symbol);
+  if (isForexSymbol(symbol) && hasOandaToken()) return oanda.fetchLatestBidAsk(symbol);
+  return null;
 }
 
 function hasTradierToken(): boolean {

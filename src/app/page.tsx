@@ -31,6 +31,7 @@ import { BondDashboardTab } from "@/components/BondDashboardTab";
 import { YieldCurveTab } from "@/components/YieldCurveTab";
 import { OptionsDashboardTab } from "@/components/OptionsDashboardTab";
 import { OptionsStrategiesTab } from "@/components/OptionsStrategiesTab";
+import { OptionsChainTradeTab } from "@/components/OptionsChainTradeTab";
 import { PaperBacktestLogTab } from "@/components/PaperBacktestLogTab";
 import { CurrencyDashboardTab } from "@/components/CurrencyDashboardTab";
 import { FuturesDashboardTab } from "@/components/FuturesDashboardTab";
@@ -553,14 +554,14 @@ export default async function Home() {
                               {
                                 id: "backtest",
                                 label: "Backtest",
-                                content: <HistoricalBacktestTab key="equities-backtest" defaultTicker="AAPL" />,
+                                content: <HistoricalBacktestTab key="equities-backtest" defaultTicker="AAPL" assetClass="equity" />,
                               },
                               {
                                 id: "calendar-effects",
                                 label: "Calendar Effects",
-                                content: <CalendarEffectsTab key="equities-calendar-effects" defaultTicker="AAPL" />,
+                                content: <CalendarEffectsTab key="equities-calendar-effects" defaultTicker="AAPL" assetClass="equity" />,
                               },
-                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab /> },
+                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab assetClass="equity" /> },
                               { id: "orb-watchlist", label: "ORB Watchlist", content: <OrbWatchlistTab /> },
                               { id: "orb-detail", label: "ORB Ticker Detail", content: <OrbDetailTab /> },
                             ]}
@@ -603,6 +604,7 @@ export default async function Home() {
                               { id: "strategy-guide", label: "Strategy Guide", content: <OptionsStrategiesTab /> },
                               { id: "calculator", label: "Calculator", content: <OptionsCalculatorTab /> },
                               { id: "paper-backtest", label: "Paper Backtest Log", content: <PaperBacktestLogTab /> },
+                              { id: "trade-options", label: "Trade Options", content: <OptionsChainTradeTab /> },
                             ]}
                           />
                         </div>
@@ -627,14 +629,14 @@ export default async function Home() {
                               {
                                 id: "backtest",
                                 label: "Backtest",
-                                content: <HistoricalBacktestTab key="currency-backtest" defaultTicker="EUR/USD" />,
+                                content: <HistoricalBacktestTab key="currency-backtest" defaultTicker="EUR/USD" assetClass="forex" />,
                               },
                               {
                                 id: "calendar-effects",
                                 label: "Calendar Effects",
-                                content: <CalendarEffectsTab key="currency-calendar-effects" defaultTicker="EUR/USD" />,
+                                content: <CalendarEffectsTab key="currency-calendar-effects" defaultTicker="EUR/USD" assetClass="forex" />,
                               },
-                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab /> },
+                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab assetClass="forex" /> },
                               {
                                 id: "orb-watchlist",
                                 label: "ORB Watchlist",
@@ -672,14 +674,14 @@ export default async function Home() {
                               {
                                 id: "backtest",
                                 label: "Backtest",
-                                content: <HistoricalBacktestTab key="futures-backtest" defaultTicker="SPY" />,
+                                content: <HistoricalBacktestTab key="futures-backtest" defaultTicker="SPY" assetClass="future" />,
                               },
                               {
                                 id: "calendar-effects",
                                 label: "Calendar Effects",
-                                content: <CalendarEffectsTab key="futures-calendar-effects" defaultTicker="SPY" />,
+                                content: <CalendarEffectsTab key="futures-calendar-effects" defaultTicker="SPY" assetClass="future" />,
                               },
-                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab /> },
+                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab assetClass="future" /> },
                               {
                                 id: "orb-watchlist",
                                 label: "ORB Watchlist",
@@ -716,14 +718,14 @@ export default async function Home() {
                               {
                                 id: "backtest",
                                 label: "Backtest",
-                                content: <HistoricalBacktestTab key="commodities-backtest" defaultTicker="GLD" />,
+                                content: <HistoricalBacktestTab key="commodities-backtest" defaultTicker="GLD" assetClass="commodity" />,
                               },
                               {
                                 id: "calendar-effects",
                                 label: "Calendar Effects",
-                                content: <CalendarEffectsTab key="commodities-calendar-effects" defaultTicker="GLD" />,
+                                content: <CalendarEffectsTab key="commodities-calendar-effects" defaultTicker="GLD" assetClass="commodity" />,
                               },
-                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab /> },
+                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab assetClass="commodity" /> },
                               {
                                 id: "orb-watchlist",
                                 label: "ORB Watchlist",

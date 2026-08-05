@@ -16,6 +16,9 @@ import {
 } from "lightweight-charts";
 import { TIMEFRAME_PRESETS } from "@/lib/agents/trading-agent/skills/timeframe-presets";
 import type { ChartBarsResult } from "@/lib/agents/trading-agent/skills/chart-bars";
+import { getOrCreateSessionId } from "@/lib/analytics/use-track";
+import { PaperOrderForm } from "./PaperOrderForm";
+import type { AssetClass } from "@/lib/agents/trading-agent/types";
 import {
   atr,
   bollingerBands,
@@ -104,7 +107,7 @@ const COLORS = {
   cmf: "#84cc16",
 };
 
-export function PriceChart({ symbol, focusDate }: { symbol: string; focusDate?: string }) {
+export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbol: string; focusDate?: string; assetClass?: AssetClass }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -113,6 +116,8 @@ export function PriceChart({ symbol, focusDate }: { symbol: string; focusDate?: 
   const sma50SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const extraSeriesRef = useRef<ISeriesApi<SeriesType>[]>([]);
   const extraPriceLinesRef = useRef<IPriceLine[]>([]);
+  const assetClassRef = useRef<AssetClass>(assetClass);
+  assetClassRef.current = assetClass;
 
   // 1mo (1-day candles, ~1 month lookback) gives useful before/after context
   // around a single occurrence date without pulling a whole year of noise.
@@ -125,6 +130,13 @@ export function PriceChart({ symbol, focusDate }: { symbol: string; focusDate?: 
   const [data, setData] = useState<ChartBarsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [tradeTicketOpen, setTradeTicketOpen] = useState(false);
+  const [clickedPrice, setClickedPrice] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    setSessionId(getOrCreateSessionId());
+  }, []);
 
   function toggleOverlay(id: string) {
     setEnabledOverlays((prev) => {
@@ -186,6 +198,18 @@ export function PriceChart({ symbol, focusDate }: { symbol: string; focusDate?: 
     volumeSeriesRef.current = volumeSeries;
     sma20SeriesRef.current = sma20Series;
     sma50SeriesRef.current = sma50Series;
+
+    // Click-to-trade: options aren't chartable here (a click on the
+    // underlying can't identify a specific contract — use the Options
+    // "Trade Options" chain tab instead), so this only arms for the asset
+    // classes this chart actually charts a tradeable instrument for.
+    chart.subscribeClick((param) => {
+      if (assetClassRef.current === "option" || !param.time) return;
+      const barData = candleSeriesRef.current ? param.seriesData.get(candleSeriesRef.current) : undefined;
+      const price = barData && "close" in barData ? (barData as { close: number }).close : undefined;
+      setClickedPrice(price);
+      setTradeTicketOpen(true);
+    });
 
     const resizeObserver = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width;
@@ -518,6 +542,21 @@ export function PriceChart({ symbol, focusDate }: { symbol: string; focusDate?: 
         <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm mb-3">
           {error}
         </div>
+      )}
+
+      {assetClass !== "option" ? (
+        <details className="mb-3" open={tradeTicketOpen} onToggle={(e) => setTradeTicketOpen(e.currentTarget.open)}>
+          <summary className="text-xs font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer select-none">
+            Place Paper Trade{clickedPrice !== undefined ? ` — clicked ${clickedPrice.toFixed(2)}` : ""}
+          </summary>
+          <div className="mt-2 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
+            {sessionId && (
+              <PaperOrderForm sessionId={sessionId} prefillSymbol={symbol} prefillAssetClass={assetClass} prefillPrice={clickedPrice} compact />
+            )}
+          </div>
+        </details>
+      ) : (
+        <p className="text-xs text-zinc-400 mb-3">Options are traded via the real options chain — see the Options tab&apos;s &quot;Trade Options&quot; sub-tab to pick a specific contract.</p>
       )}
 
       <div ref={containerRef} className="rounded-xl border border-zinc-200 dark:border-zinc-800" />

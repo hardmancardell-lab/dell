@@ -2,6 +2,7 @@ import type {
   AssetClass,
   PaperAccount,
   PaperFill,
+  PaperOptionFields,
   PaperOrder,
   PaperOrderSide,
   PaperOrderStatus,
@@ -70,7 +71,32 @@ function toAccount(row: AccountRow): PaperAccount {
   return { id: row.id, sessionId: row.session_id, cashBalance: row.cash_balance, createdAt: row.created_at };
 }
 
-interface OrderRow {
+interface OptionFieldsRow {
+  option_right: "call" | "put" | null;
+  strike_price: number | null;
+  expiration_date: string | null;
+  underlying_symbol: string | null;
+}
+
+function toOptionFields(row: OptionFieldsRow): PaperOptionFields {
+  return {
+    optionRight: row.option_right,
+    strikePrice: row.strike_price,
+    expirationDate: row.expiration_date,
+    underlyingSymbol: row.underlying_symbol,
+  };
+}
+
+function fromOptionFields(fields: Partial<PaperOptionFields> | undefined): OptionFieldsRow {
+  return {
+    option_right: fields?.optionRight ?? null,
+    strike_price: fields?.strikePrice ?? null,
+    expiration_date: fields?.expirationDate ?? null,
+    underlying_symbol: fields?.underlyingSymbol ?? null,
+  };
+}
+
+interface OrderRow extends OptionFieldsRow {
   id: string;
   account_id: string;
   symbol: string;
@@ -111,10 +137,11 @@ function toOrder(row: OrderRow): PaperOrder {
     createdAt: row.created_at,
     filledAt: row.filled_at,
     cancelledAt: row.cancelled_at,
+    ...toOptionFields(row),
   };
 }
 
-interface FillRow {
+interface FillRow extends OptionFieldsRow {
   id: string;
   order_id: string;
   account_id: string;
@@ -125,6 +152,7 @@ interface FillRow {
   slippage_per_share: number;
   sec_fee: number;
   finra_fee: number;
+  occ_fee: number;
   total_fees: number;
   realized_pnl: number | null;
   filled_at: string;
@@ -142,13 +170,15 @@ function toFill(row: FillRow): PaperFill {
     slippagePerShare: row.slippage_per_share,
     secFee: row.sec_fee,
     finraFee: row.finra_fee,
+    occFee: row.occ_fee,
     totalFees: row.total_fees,
     realizedPnl: row.realized_pnl,
     filledAt: row.filled_at,
+    ...toOptionFields(row),
   };
 }
 
-interface PositionRow {
+interface PositionRow extends OptionFieldsRow {
   symbol: string;
   asset_class: AssetClass;
   quantity: number;
@@ -156,7 +186,13 @@ interface PositionRow {
 }
 
 function toPosition(row: PositionRow): PaperPosition {
-  return { symbol: row.symbol, assetClass: row.asset_class, quantity: row.quantity, avgCostBasis: row.avg_cost_basis };
+  return {
+    symbol: row.symbol,
+    assetClass: row.asset_class,
+    quantity: row.quantity,
+    avgCostBasis: row.avg_cost_basis,
+    ...toOptionFields(row),
+  };
 }
 
 // --- Accounts ---
@@ -210,7 +246,7 @@ export async function createOrder(order: {
   ocoGroupId: string | null;
   status: PaperOrderStatus;
   rejectedReason: string | null;
-}): Promise<PaperOrder> {
+} & Partial<PaperOptionFields>): Promise<PaperOrder> {
   const rows = await supabaseRequest<OrderRow[]>("paper_orders", {
     method: "POST",
     prefer: "return=representation",
@@ -228,6 +264,7 @@ export async function createOrder(order: {
       status: order.status,
       rejected_reason: order.rejectedReason,
       filled_at: order.status === "filled" ? new Date().toISOString() : null,
+      ...fromOptionFields(order),
     },
   });
   return toOrder(rows[0]);
@@ -300,9 +337,10 @@ export async function insertFill(fill: {
   slippagePerShare: number;
   secFee: number;
   finraFee: number;
+  occFee: number;
   totalFees: number;
   realizedPnl: number | null;
-}): Promise<PaperFill> {
+} & Partial<PaperOptionFields>): Promise<PaperFill> {
   const rows = await supabaseRequest<FillRow[]>("paper_fills", {
     method: "POST",
     prefer: "return=representation",
@@ -316,8 +354,10 @@ export async function insertFill(fill: {
       slippage_per_share: fill.slippagePerShare,
       sec_fee: fill.secFee,
       finra_fee: fill.finraFee,
+      occ_fee: fill.occFee,
       total_fees: fill.totalFees,
       realized_pnl: fill.realizedPnl,
+      ...fromOptionFields(fill),
     },
   });
   return toFill(rows[0]);
@@ -341,9 +381,9 @@ export async function getPositions(accountId: string): Promise<PaperPosition[]> 
   return rows.map(toPosition);
 }
 
-export async function getPosition(accountId: string, symbol: string): Promise<PaperPosition | null> {
+export async function getPosition(accountId: string, symbol: string, assetClass: AssetClass): Promise<PaperPosition | null> {
   const rows = await supabaseRequest<PositionRow[]>(
-    `paper_positions?account_id=eq.${encodeURIComponent(accountId)}&symbol=eq.${encodeURIComponent(symbol)}`,
+    `paper_positions?account_id=eq.${encodeURIComponent(accountId)}&symbol=eq.${encodeURIComponent(symbol)}&asset_class=eq.${encodeURIComponent(assetClass)}`,
     { method: "GET", prefer: "return=representation" }
   );
   return rows[0] ? toPosition(rows[0]) : null;
@@ -354,18 +394,26 @@ export async function upsertPosition(
   symbol: string,
   assetClass: AssetClass,
   quantity: number,
-  avgCostBasis: number
+  avgCostBasis: number,
+  optionFields?: Partial<PaperOptionFields>
 ): Promise<void> {
-  await supabaseRequest("paper_positions?on_conflict=account_id,symbol", {
+  await supabaseRequest("paper_positions?on_conflict=account_id,symbol,asset_class", {
     method: "POST",
     prefer: "resolution=merge-duplicates",
-    body: { account_id: accountId, symbol, asset_class: assetClass, quantity, avg_cost_basis: avgCostBasis },
+    body: {
+      account_id: accountId,
+      symbol,
+      asset_class: assetClass,
+      quantity,
+      avg_cost_basis: avgCostBasis,
+      ...fromOptionFields(optionFields),
+    },
   });
 }
 
-export async function deletePosition(accountId: string, symbol: string): Promise<void> {
+export async function deletePosition(accountId: string, symbol: string, assetClass: AssetClass): Promise<void> {
   await supabaseRequest(
-    `paper_positions?account_id=eq.${encodeURIComponent(accountId)}&symbol=eq.${encodeURIComponent(symbol)}`,
+    `paper_positions?account_id=eq.${encodeURIComponent(accountId)}&symbol=eq.${encodeURIComponent(symbol)}&asset_class=eq.${encodeURIComponent(assetClass)}`,
     { method: "DELETE" }
   );
 }

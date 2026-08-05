@@ -5,7 +5,7 @@ import { GlossaryTerm } from "./GlossaryTerm";
 import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { PriceChart } from "./PriceChart";
 import { useTrackEvent } from "@/lib/analytics/use-track";
-import type { EquityBacktestResult, EquityBacktestSignalType } from "@/lib/agents/trading-agent/types";
+import type { AssetClass, EquityBacktestResult, EquityBacktestSignalType } from "@/lib/agents/trading-agent/types";
 
 const SIGNAL_OPTIONS: { value: EquityBacktestSignalType; label: string }[] = [
   { value: "volumeDisplacement", label: "Volume Displacement" },
@@ -51,7 +51,7 @@ const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-norm
 const TD_CLASS = "py-2 pr-4 whitespace-nowrap";
 
 /** Reused across Equities/Currency/Futures/Commodities' own Backtest tabs — a single .jarvis island here upgrades all four. */
-export function HistoricalBacktestTab({ defaultTicker = "AAPL" }: { defaultTicker?: string }) {
+export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "equity" }: { defaultTicker?: string; assetClass?: AssetClass }) {
   const [ticker, setTicker] = useState(defaultTicker);
   const [signal, setSignal] = useState<EquityBacktestSignalType>("momentum");
   const [years, setYears] = useState(3);
@@ -266,7 +266,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL" }: { defaultTicke
                 </button>
               </div>
               {/* PriceChart itself is still on the old light/dark theme — a dedicated redesign pass, not yet done. */}
-              <PriceChart key={focusedDate} symbol={result.ticker} focusDate={focusedDate} />
+              <PriceChart key={focusedDate} symbol={result.ticker} focusDate={focusedDate} assetClass={assetClass} />
             </div>
           )}
 

@@ -1104,6 +1104,18 @@ export interface OrbWatchlistSummary {
 export type PaperOrderSide = "buy" | "sell";
 export type PaperOrderType = "market" | "limit" | "stop" | "stop_limit" | "trailing_stop";
 export type PaperOrderStatus = "pending" | "filled" | "cancelled" | "rejected";
+export type PaperOptionRight = "call" | "put";
+
+// Options-specific identity fields, present only when assetClass === "option".
+// underlyingSymbol/expirationDate/optionRight/strikePrice are stored explicitly
+// (not re-parsed from the OCC-style contract symbol) so the UI and engine can
+// re-fetch a live quote for the exact contract without a string parser.
+export interface PaperOptionFields {
+  underlyingSymbol: string | null;
+  expirationDate: string | null; // YYYY-MM-DD
+  optionRight: PaperOptionRight | null;
+  strikePrice: number | null;
+}
 
 export interface PaperAccount {
   id: string;
@@ -1112,14 +1124,14 @@ export interface PaperAccount {
   createdAt: string;
 }
 
-export interface PaperPosition {
+export interface PaperPosition extends PaperOptionFields {
   symbol: string;
   assetClass: AssetClass;
   quantity: number;
   avgCostBasis: number;
 }
 
-export interface PaperOrder {
+export interface PaperOrder extends PaperOptionFields {
   id: string;
   accountId: string;
   symbol: string;
@@ -1140,7 +1152,7 @@ export interface PaperOrder {
   cancelledAt: string | null;
 }
 
-export interface PaperFill {
+export interface PaperFill extends PaperOptionFields {
   id: string;
   orderId: string;
   accountId: string;
@@ -1151,12 +1163,13 @@ export interface PaperFill {
   slippagePerShare: number;
   secFee: number;
   finraFee: number;
+  occFee: number; // OCC per-contract clearing fee, options only, charged both sides
   totalFees: number;
   realizedPnl: number | null; // only set for sell fills that close/reduce a long position
   filledAt: string;
 }
 
-export interface PaperOrderInput {
+export interface PaperOrderInput extends Partial<PaperOptionFields> {
   symbol: string;
   assetClass: AssetClass;
   side: PaperOrderSide;

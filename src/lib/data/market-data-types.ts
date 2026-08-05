@@ -21,6 +21,13 @@ export interface MarketQuote {
   totalVolume: number;
 }
 
+/** Real bid/ask close at a point in time — forex only today (via OANDA). */
+export interface MarketBidAsk {
+  datetime: number; // epoch ms
+  bid: number;
+  ask: number;
+}
+
 export interface MarketOptionContract {
   strikePrice: number;
   expirationDate: string;

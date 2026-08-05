@@ -149,7 +149,7 @@ export function CurrencyDashboardTab() {
         ))}
         {selectedPair && (
           <div className="mt-4">
-            <PriceChart symbol={selectedPair} />
+            <PriceChart symbol={selectedPair} assetClass="forex" />
             <TickerNewsPanel symbol={selectedPair} assetClass="forex" />
 
             <div className="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
