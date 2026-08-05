@@ -1,9 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Line, LineChart, ReferenceLine, Tooltip, XAxis, YAxis } from "recharts";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { PaperOrderForm, type PrefillOption } from "./PaperOrderForm";
+import { mapStrategyToLegs, type StrategyLegPrefill } from "@/lib/agents/trading-agent/skills/strategy-order-mapper";
+import { summarizeStrategyPayoff, type PayoffLeg } from "@/lib/agents/trading-agent/skills/option-payoff";
 import type { MarketOptionContract, MarketOptionsChain } from "@/lib/data/market-data-types";
+
+const STRATEGY_NAMES = [
+  "Covered Call",
+  "Cash-Secured Put",
+  "Bull Call Spread",
+  "Protective Put / Bear Put Spread",
+  "Long Straddle / Strangle",
+  "Iron Condor",
+];
 
 function fmt(n: number | undefined | null, digits = 2): string {
   if (n === undefined || n === null || !Number.isFinite(n)) return "—";
@@ -65,10 +77,55 @@ export function OptionsChainTradeTab() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ right: "call" | "put"; contract: MarketOptionContract } | null>(null);
+  const [selectedStrategy, setSelectedStrategy] = useState<string>("");
+  const [strategyQuantity, setStrategyQuantity] = useState("1");
+  const [placingAll, setPlacingAll] = useState(false);
+  const [placeAllError, setPlaceAllError] = useState<string | null>(null);
+  const [placeAllMsg, setPlaceAllMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setSessionId(getOrCreateSessionId());
   }, []);
+
+  async function placeAllLegs(legs: StrategyLegPrefill[], underlyingSymbol: string, expirationDate: string) {
+    if (!sessionId) return;
+    setPlacingAll(true);
+    setPlaceAllError(null);
+    setPlaceAllMsg(null);
+    const strategyGroupId = crypto.randomUUID();
+    const qty = Number(strategyQuantity) || 1;
+    try {
+      for (const leg of legs) {
+        const res = await fetch("/api/paper-trading/order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            order: {
+              symbol: underlyingSymbol,
+              assetClass: "option",
+              side: leg.side,
+              orderType: "market",
+              quantity: qty,
+              underlyingSymbol,
+              expirationDate,
+              optionRight: leg.right,
+              strikePrice: leg.strike,
+              strategyGroupId,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(`${leg.side} ${leg.right} $${leg.strike}: ${data.error ?? "failed"}`);
+      }
+      setPlaceAllMsg(`Placed all ${legs.length} leg(s) — tagged as one strategy in the ledger.`);
+      setSelectedStrategy("");
+    } catch (err) {
+      setPlaceAllError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setPlacingAll(false);
+    }
+  }
 
   async function loadExpirations(t: string) {
     setLoading(true);
@@ -254,6 +311,119 @@ export function OptionsChainTradeTab() {
                 </>
               )}
             </section>
+
+            {spot !== null && chain && (
+              <section className="jv-card mt-4">
+                <div className="jv-strip-title">Strategy Builder</div>
+                <p className="text-xs mb-2" style={{ color: "var(--text-2)" }}>
+                  Real strikes from the live chain above, mapped by a documented rule-based heuristic — the same
+                  shapes the Options Dashboard&apos;s Strategy Scanner may suggest from GEX/skew. Not investment
+                  advice.
+                </p>
+                <select
+                  value={selectedStrategy}
+                  onChange={(e) => {
+                    setSelectedStrategy(e.target.value);
+                    setPlaceAllMsg(null);
+                    setPlaceAllError(null);
+                  }}
+                  className="jv-select w-full mb-2"
+                >
+                  <option value="">Select a strategy…</option>
+                  {STRATEGY_NAMES.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+
+                {selectedStrategy &&
+                  (() => {
+                    const legs = mapStrategyToLegs(selectedStrategy, spot, chain, expiration);
+                    if (!legs) {
+                      return (
+                        <p className="text-sm" style={{ color: "var(--danger)" }}>
+                          Couldn&apos;t map real strikes for this strategy from the current chain (not enough OTM
+                          strikes on one or both sides).
+                        </p>
+                      );
+                    }
+                    const payoffLegs: PayoffLeg[] = legs.map((leg) => ({
+                      right: leg.right,
+                      side: leg.side,
+                      strike: leg.strike,
+                      premium: leg.side === "buy" ? leg.contract.ask : leg.contract.bid,
+                      contracts: Number(strategyQuantity) || 1,
+                    }));
+                    const summary = summarizeStrategyPayoff(payoffLegs, spot);
+                    return (
+                      <div className="flex flex-col gap-3">
+                        <ul className="text-sm" style={{ color: "var(--text-1)" }}>
+                          {legs.map((leg) => (
+                            <li key={`${leg.right}-${leg.strike}-${leg.side}`}>
+                              {leg.side === "buy" ? "Buy" : "Sell"} {leg.right} ${leg.strike} @{" "}
+                              {leg.side === "buy" ? leg.contract.ask.toFixed(2) : leg.contract.bid.toFixed(2)}
+                            </li>
+                          ))}
+                        </ul>
+
+                        <div style={{ width: "100%", height: 140 }}>
+                          <LineChart width={280} height={140} data={summary.points} margin={{ top: 5, right: 5, bottom: 0, left: 5 }}>
+                            <XAxis
+                              dataKey="underlyingPrice"
+                              tick={{ fontSize: 10, fill: "var(--text-2)" }}
+                              tickFormatter={(v: number) => v.toFixed(0)}
+                            />
+                            <YAxis tick={{ fontSize: 10, fill: "var(--text-2)" }} width={40} />
+                            <ReferenceLine y={0} stroke="var(--line-bright)" />
+                            <ReferenceLine x={spot} stroke="var(--verdict)" strokeDasharray="3 3" />
+                            <Tooltip
+                              formatter={(v) => `$${Number(v).toFixed(2)}`}
+                              labelFormatter={(v) => `Underlying $${Number(v).toFixed(2)}`}
+                              contentStyle={{ background: "var(--ink-900)", border: "1px solid var(--line)", fontSize: 12 }}
+                            />
+                            <Line type="monotone" dataKey="pnl" stroke="var(--signal)" dot={false} strokeWidth={2} />
+                          </LineChart>
+                        </div>
+
+                        <div className="text-xs grid grid-cols-3 gap-2" style={{ color: "var(--text-1)" }}>
+                          <div>
+                            <div style={{ color: "var(--text-2)" }}>Max Profit</div>
+                            <div>{summary.maxProfit === null ? "Unbounded" : `$${summary.maxProfit.toFixed(2)}`}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: "var(--text-2)" }}>Max Loss</div>
+                            <div>{summary.maxLoss === null ? "Unbounded" : `$${summary.maxLoss.toFixed(2)}`}</div>
+                          </div>
+                          <div>
+                            <div style={{ color: "var(--text-2)" }}>Breakeven</div>
+                            <div>{summary.breakevens.length > 0 ? summary.breakevens.map((b) => `$${b.toFixed(2)}`).join(", ") : "N/A"}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 items-center">
+                          <input
+                            value={strategyQuantity}
+                            onChange={(e) => setStrategyQuantity(e.target.value)}
+                            className="jv-input"
+                            style={{ width: 70 }}
+                            placeholder="Qty"
+                          />
+                          <button
+                            onClick={() => placeAllLegs(legs, ticker.trim().toUpperCase(), expiration)}
+                            disabled={placingAll || !sessionId}
+                            className="jv-btn"
+                          >
+                            {placingAll ? "Placing…" : `Place All ${legs.length} Leg(s)`}
+                          </button>
+                        </div>
+                        {placeAllError && <p className="text-sm" style={{ color: "var(--danger)" }}>{placeAllError}</p>}
+                        {placeAllMsg && <p className="text-sm" style={{ color: "var(--signal)" }}>{placeAllMsg}</p>}
+                      </div>
+                    );
+                  })()}
+              </section>
+            )}
           </div>
         </div>
       )}

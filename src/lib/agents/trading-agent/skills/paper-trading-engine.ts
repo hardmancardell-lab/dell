@@ -281,6 +281,7 @@ export async function placeOrder(sessionId: string, input: PaperOrderInput): Pro
     stopPrice: input.stopPrice ?? null,
     trailAmount: input.trailAmount ?? null,
     ocoGroupId,
+    strategyGroupId: input.strategyGroupId ?? null,
     status: isImmediatelyMarketable ? "filled" : "pending",
     rejectedReason: null,
   });
@@ -403,6 +404,7 @@ async function placeOptionOrder(sessionId: string, input: PaperOrderInput): Prom
     stopPrice: null,
     trailAmount: null,
     ocoGroupId: null,
+    strategyGroupId: input.strategyGroupId ?? null,
     status: "filled",
     rejectedReason: null,
     underlyingSymbol,

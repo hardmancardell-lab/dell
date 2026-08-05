@@ -109,6 +109,7 @@ interface OrderRow extends OptionFieldsRow {
   trail_amount: number | null;
   trailing_stop_price: number | null;
   oco_group_id: string | null;
+  strategy_group_id: string | null;
   status: PaperOrderStatus;
   rejected_reason: string | null;
   last_evaluated_at: string | null;
@@ -131,6 +132,7 @@ function toOrder(row: OrderRow): PaperOrder {
     trailAmount: row.trail_amount,
     trailingStopPrice: row.trailing_stop_price,
     ocoGroupId: row.oco_group_id,
+    strategyGroupId: row.strategy_group_id,
     status: row.status,
     rejectedReason: row.rejected_reason,
     lastEvaluatedAt: row.last_evaluated_at,
@@ -244,6 +246,7 @@ export async function createOrder(order: {
   stopPrice: number | null;
   trailAmount: number | null;
   ocoGroupId: string | null;
+  strategyGroupId?: string | null;
   status: PaperOrderStatus;
   rejectedReason: string | null;
 } & Partial<PaperOptionFields>): Promise<PaperOrder> {
@@ -261,6 +264,7 @@ export async function createOrder(order: {
       stop_price: order.stopPrice,
       trail_amount: order.trailAmount,
       oco_group_id: order.ocoGroupId,
+      strategy_group_id: order.strategyGroupId ?? null,
       status: order.status,
       rejected_reason: order.rejectedReason,
       filled_at: order.status === "filled" ? new Date().toISOString() : null,

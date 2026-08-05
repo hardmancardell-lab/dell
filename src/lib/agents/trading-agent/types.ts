@@ -1206,6 +1206,7 @@ export interface PaperOrder extends PaperOptionFields {
   trailAmount: number | null;
   trailingStopPrice: number | null; // ratchets as price moves favorably; null until first evaluation
   ocoGroupId: string | null; // the linked order is auto-cancelled when this one fills
+  strategyGroupId: string | null; // tags N single-leg orders submitted together as one multi-leg strategy (e.g. an iron condor) — display/ledger grouping only, no atomic-fill guarantee across legs
   status: PaperOrderStatus;
   rejectedReason: string | null;
   lastEvaluatedAt: string | null;
@@ -1241,6 +1242,7 @@ export interface PaperOrderInput extends Partial<PaperOptionFields> {
   stopPrice?: number | null;
   trailAmount?: number | null;
   ocoGroupId?: string | null;
+  strategyGroupId?: string | null;
 }
 
 export interface PaperPositionView extends PaperPosition {

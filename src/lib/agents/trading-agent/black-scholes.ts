@@ -46,7 +46,7 @@ function d1d2(S: number, K: number, T: number, sigma: number, r: number): { d1: 
   return { d1, d2 };
 }
 
-function intrinsicValue(type: OptionType, S: number, K: number): number {
+export function intrinsicValue(type: OptionType, S: number, K: number): number {
   return type === "call" ? Math.max(S - K, 0) : Math.max(K - S, 0);
 }
 
