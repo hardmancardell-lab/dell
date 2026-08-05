@@ -14,9 +14,12 @@ import { getOptionsChainSummary } from "../trading-agent/skills/options-chain";
 import { computeGexSignal } from "../trading-agent/skills/gex-signal";
 import { classifyPutCallSkew, computeChainWideUnusualActivity } from "../trading-agent/skills/options-flow-skew";
 import { findCorrelations, DEFAULT_CORRELATION_CANDIDATES } from "../trading-agent/skills/correlation-finder";
+import { getRollingMoveStats } from "../trading-agent/skills/rolling-move-stats";
+import { getRecentHypotheses, isHypothesisLedgerConfigured } from "@/lib/data/hypothesis-ledger-db";
 import { fetchQuote } from "@/lib/data/market-data";
 import { submitFeedback, type FeedbackCategory } from "@/lib/analytics/feedback";
 import type { AnthropicToolSchema } from "./anthropic-client";
+import type { AssetClass } from "../trading-agent/types";
 
 // Defensive cap on any single tool result serialized back to the model —
 // none of the underlying skills should ever get near this, but it's a
@@ -108,6 +111,25 @@ export const ASSISTANT_TOOLS: AnthropicToolSchema[] = [
     },
   },
   {
+    name: "get_rolling_move_stats",
+    description:
+      "Real rolling 20/40/100-day average up-day return, average down-day return, and average absolute move, computed directly from actual daily bars — not a textbook/memorized approximation. Use this instead of stating a remembered 'typical daily move' figure for any ticker or FX pair.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticker: { type: "string" },
+        assetClass: { type: "string", enum: ["equity", "forex", "commodity", "future", "bond", "option"], description: "Defaults to 'equity' if omitted." },
+      },
+      required: ["ticker"],
+    },
+  },
+  {
+    name: "get_strategy_hypotheses",
+    description:
+      "Real, already-backtested strategy results from this app's own weekly automated sweep — each one validated (passed real BH-FDR significance + bootstrap CI + out-of-sample sign check) or rejected (with the real reason), across a fixed ticker universe. Call this before answering any 'any good strategies right now' or 'what's working' question — never invent a strategy or its stats from scratch.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "submit_feedback",
     description:
       "Logs a suggestion, bug report, or other feedback the user is giving about this app so the team can review it later. Call this whenever the user offers a feature idea, reports something broken or confusing, or explicitly says they want to leave feedback — don't just acknowledge it in text, actually call this tool. Use the user's own words for the message, not a paraphrase that loses specifics.",
@@ -170,6 +192,16 @@ export async function dispatchTool(
           ? (input.candidates as string[])
           : DEFAULT_CORRELATION_CANDIDATES;
         return truncate(await findCorrelations(String(input.baseSymbol ?? ""), candidates));
+      }
+      case "get_rolling_move_stats": {
+        const assetClass = (String(input.assetClass ?? "equity")) as AssetClass;
+        return truncate(await getRollingMoveStats(String(input.ticker ?? ""), assetClass));
+      }
+      case "get_strategy_hypotheses": {
+        if (!isHypothesisLedgerConfigured()) {
+          return { error: "Strategy hypothesis ledger is not configured yet." };
+        }
+        return truncate(await getRecentHypotheses(50));
       }
       case "submit_feedback": {
         const category = String(input.category ?? "other") as FeedbackCategory;

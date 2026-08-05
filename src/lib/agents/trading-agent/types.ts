@@ -1195,3 +1195,61 @@ export interface PaperOrderCheckResult {
   ordersCancelledByOco: number;
   errors: { orderId: string; error: string }[];
 }
+
+// --- Rolling Move Stats ---
+// Real up-day/down-day/absolute average move, computed directly from actual
+// daily bars — deliberately NOT the symmetric folded-normal shortcut
+// (E[|R|] = sigma*sqrt(2/pi)), since that assumes zero skew and throws away
+// exactly the asymmetry a real strategy would want to know about.
+
+export type RollingMoveWindow = 20 | 40 | 100;
+
+export interface RollingMoveWindowStats {
+  windowDays: RollingMoveWindow;
+  tradingDaysUsed: number;
+  avgAbsMovePct: number | null;
+  avgUpDayPct: number | null;
+  upDayCount: number;
+  avgDownDayPct: number | null;
+  downDayCount: number;
+}
+
+export interface RollingMoveStatsResult {
+  ticker: string;
+  assetClass: AssetClass;
+  windows: RollingMoveWindowStats[];
+  dataLimitations: string[];
+}
+
+// --- Strategy Hypothesis Ledger ---
+// Real, automatically-logged results from this app's own already-validated
+// backtest engines (BH-FDR + bootstrap CI + out-of-sample sign check — the
+// "three bars" gate already used everywhere else) — not a new statistical
+// method, just disciplined, automated reuse of what's already proven
+// rigorous. Every row states its exit type explicitly: "time" = fixed
+// forward-holding-period, no price trigger; "price" = stop/target level.
+
+export type HypothesisExitType = "time" | "price";
+export type HypothesisStatus = "validated" | "rejected";
+
+export interface StrategyHypothesis {
+  id: string;
+  createdAt: string;
+  ticker: string;
+  assetClass: AssetClass;
+  strategyType: string;
+  horizonLabel: string;
+  entryRule: string;
+  exitType: HypothesisExitType;
+  exitRule: string;
+  sampleSize: number;
+  winRatePct: number | null;
+  profitFactor: number | null;
+  passesThreeBars: boolean;
+  pValueFdr: number | null;
+  bootstrapCiLower: number | null;
+  bootstrapCiUpper: number | null;
+  status: HypothesisStatus;
+  rejectionReason: string | null;
+  sourceEngine: string;
+}

@@ -11,6 +11,9 @@ import { isResendConfigured, sendAlertEmail } from "@/lib/data/resend";
 import { isTwilioConfigured, sendAlertSms } from "@/lib/data/twilio";
 import { evaluateAllPendingOrders } from "@/lib/agents/trading-agent/skills/paper-trading-engine";
 import { isPaperTradingDbConfigured } from "@/lib/data/paper-trading-db";
+import { runHypothesisSweep } from "@/lib/agents/trading-agent/skills/hypothesis-sweep";
+import type { HypothesisSweepResult } from "@/lib/agents/trading-agent/skills/hypothesis-sweep";
+import { isHypothesisLedgerConfigured } from "@/lib/data/hypothesis-ledger-db";
 import type { AlertEvaluation, AlertRule, PaperOrderCheckResult } from "@/lib/agents/trading-agent/types";
 
 export const maxDuration = 60;
@@ -34,6 +37,13 @@ function cacheKey(rule: AlertRule): string {
   return `${rule.conditionType}:${rule.ticker}:${JSON.stringify(rule.params)}`;
 }
 
+/** Same UTC-round-trip weekday derivation as calendar-effects.ts — the hypothesis sweep runs once a week, not daily, to stay well inside the shared 60s budget once real network calls are included. */
+function isMonday(): boolean {
+  const { dateKey } = toEasternParts(Date.now());
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 1;
+}
+
 export async function GET(request: Request) {
   const expected = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
@@ -55,12 +65,27 @@ export async function GET(request: Request) {
     paperOrders = { skipped: err instanceof Error ? err.message : "unknown error" };
   }
 
+  // Strategy hypothesis sweep — also independent of the alerts gates, same
+  // one-cron-job constraint as paperOrders above. Runs Mondays only (not
+  // daily) to stay well inside the shared 60s budget once real
+  // Alpaca/OANDA calls across the whole sweep universe are included.
+  let hypothesisSweep: HypothesisSweepResult | { skipped: string };
+  try {
+    hypothesisSweep = !isHypothesisLedgerConfigured()
+      ? { skipped: "Hypothesis ledger DB not configured." }
+      : !isMonday()
+        ? { skipped: "Hypothesis sweep only runs on Mondays." }
+        : await runHypothesisSweep();
+  } catch (err) {
+    hypothesisSweep = { skipped: err instanceof Error ? err.message : "unknown error" };
+  }
+
   if (!isAlertsDbConfigured()) {
-    return NextResponse.json({ ok: true, skipped: "Alerts DB not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset).", paperOrders });
+    return NextResponse.json({ ok: true, skipped: "Alerts DB not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset).", paperOrders, hypothesisSweep });
   }
 
   if (!isDuringMarketHours()) {
-    return NextResponse.json({ ok: true, skipped: "Outside market hours (9:30am-4:00pm ET, weekdays).", paperOrders });
+    return NextResponse.json({ ok: true, skipped: "Outside market hours (9:30am-4:00pm ET, weekdays).", paperOrders, hypothesisSweep });
   }
 
   const rules = await getActiveRulesWithSubscriptions();
@@ -152,5 +177,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ rulesEvaluated: rules.length, alertsSent, errors, paperOrders });
+  return NextResponse.json({ rulesEvaluated: rules.length, alertsSent, errors, paperOrders, hypothesisSweep });
 }

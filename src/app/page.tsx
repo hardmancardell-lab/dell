@@ -25,6 +25,7 @@ import { TradingDashboardTab } from "@/components/TradingDashboardTab";
 import { GlossaryTab } from "@/components/GlossaryTab";
 import { AlertsSubscribeTab } from "@/components/AlertsSubscribeTab";
 import { PaperTradingTab } from "@/components/PaperTradingTab";
+import { StrategyLedgerTab } from "@/components/StrategyLedgerTab";
 import { InternationalEconomicsTab } from "@/components/InternationalEconomicsTab";
 import { BondDashboardTab } from "@/components/BondDashboardTab";
 import { YieldCurveTab } from "@/components/YieldCurveTab";
@@ -37,6 +38,7 @@ import { CommoditiesDashboardTab } from "@/components/CommoditiesDashboardTab";
 import { FxResearchSourcesTab } from "@/components/FxResearchSourcesTab";
 import { CurrencyDriversTab } from "@/components/CurrencyDriversTab";
 import { CurrencyPegsTab } from "@/components/CurrencyPegsTab";
+import { RollingMoveStatsTab } from "@/components/RollingMoveStatsTab";
 import { FuturesCommoditiesResearchSourcesTab } from "@/components/FuturesCommoditiesResearchSourcesTab";
 import { PortfolioDashboardTab } from "@/components/PortfolioDashboardTab";
 import { TraditionalPortfolioTab } from "@/components/TraditionalPortfolioTab";
@@ -640,6 +642,11 @@ export default async function Home() {
                               },
                               { id: "orb-detail", label: "ORB Ticker Detail", content: <OrbDetailTab defaultTicker="EUR/USD" /> },
                               { id: "news", label: "News Search", content: <InternationalEconomicsTab /> },
+                              {
+                                id: "rolling-move-stats",
+                                label: "Rolling Move Stats",
+                                content: <RollingMoveStatsTab defaultTicker="EUR/USD" defaultAssetClass="forex" />,
+                              },
                             ]}
                           />
                         </div>
@@ -761,6 +768,19 @@ export default async function Home() {
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Paper Trading</h1>
                           <PaperTradingTab />
+                        </div>
+                      ),
+                    },
+                    {
+                      id: "strategy-ledger",
+                      label: "Strategy Ledger",
+                      content: (
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">
+                            Trading Agent &middot; Strategy Ledger
+                          </div>
+                          <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Strategy Ledger</h1>
+                          <StrategyLedgerTab />
                         </div>
                       ),
                     },
