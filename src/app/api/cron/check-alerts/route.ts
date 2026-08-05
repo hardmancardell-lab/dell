@@ -9,7 +9,9 @@ import { evaluateAlertRule } from "@/lib/agents/trading-agent/skills/alert-condi
 import { toEasternParts } from "@/lib/agents/trading-agent/skills/time-windows";
 import { isResendConfigured, sendAlertEmail } from "@/lib/data/resend";
 import { isTwilioConfigured, sendAlertSms } from "@/lib/data/twilio";
-import type { AlertEvaluation, AlertRule } from "@/lib/agents/trading-agent/types";
+import { evaluateAllPendingOrders } from "@/lib/agents/trading-agent/skills/paper-trading-engine";
+import { isPaperTradingDbConfigured } from "@/lib/data/paper-trading-db";
+import type { AlertEvaluation, AlertRule, PaperOrderCheckResult } from "@/lib/agents/trading-agent/types";
 
 export const maxDuration = 60;
 
@@ -39,12 +41,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Paper-trading order sweep — independent of the alerts gates below, since
+  // Vercel's Hobby plan allows only one cron job total. This is the
+  // once-daily backstop for pending limit/stop/trailing-stop orders; a user
+  // hitting "Check Orders" in the UI gets a sooner check, but this is what
+  // catches a fill for anyone who doesn't come back to the tab.
+  let paperOrders: PaperOrderCheckResult | { skipped: string };
+  try {
+    paperOrders = isPaperTradingDbConfigured()
+      ? await evaluateAllPendingOrders()
+      : { skipped: "Paper trading DB not configured." };
+  } catch (err) {
+    paperOrders = { skipped: err instanceof Error ? err.message : "unknown error" };
+  }
+
   if (!isAlertsDbConfigured()) {
-    return NextResponse.json({ ok: true, skipped: "Alerts DB not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." });
+    return NextResponse.json({ ok: true, skipped: "Alerts DB not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset).", paperOrders });
   }
 
   if (!isDuringMarketHours()) {
-    return NextResponse.json({ ok: true, skipped: "Outside market hours (9:30am-4:00pm ET, weekdays)." });
+    return NextResponse.json({ ok: true, skipped: "Outside market hours (9:30am-4:00pm ET, weekdays).", paperOrders });
   }
 
   const rules = await getActiveRulesWithSubscriptions();
@@ -136,5 +152,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ rulesEvaluated: rules.length, alertsSent, errors });
+  return NextResponse.json({ rulesEvaluated: rules.length, alertsSent, errors, paperOrders });
 }

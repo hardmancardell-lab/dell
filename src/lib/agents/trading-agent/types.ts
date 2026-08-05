@@ -1,4 +1,5 @@
 import type { Greeks } from "./black-scholes";
+import type { WinLossMetrics } from "./stats";
 
 export interface BlackScholesInputs {
   spotPrice: number;
@@ -1090,4 +1091,107 @@ export interface OrbWatchlistSummary {
   tickersScanned: number;
   tickersWithBreakoutToday: number;
   dataLimitations: string[];
+}
+
+// --- Paper Trading Simulator ---
+// Long-only equity paper trading (no shorting/margin) on real quotes and
+// real minute-bar price action — no fabricated fills. Scoped this way
+// because this app never fabricates a number: short-selling would need a
+// borrow/margin model this app has no real data source for, so it's left
+// out rather than faked. Anonymous, session_id-keyed like alert_subscriptions
+// — no login/account system anywhere in this app.
+
+export type PaperOrderSide = "buy" | "sell";
+export type PaperOrderType = "market" | "limit" | "stop" | "stop_limit" | "trailing_stop";
+export type PaperOrderStatus = "pending" | "filled" | "cancelled" | "rejected";
+
+export interface PaperAccount {
+  id: string;
+  sessionId: string;
+  cashBalance: number;
+  createdAt: string;
+}
+
+export interface PaperPosition {
+  symbol: string;
+  assetClass: AssetClass;
+  quantity: number;
+  avgCostBasis: number;
+}
+
+export interface PaperOrder {
+  id: string;
+  accountId: string;
+  symbol: string;
+  assetClass: AssetClass;
+  side: PaperOrderSide;
+  orderType: PaperOrderType;
+  quantity: number;
+  limitPrice: number | null;
+  stopPrice: number | null;
+  trailAmount: number | null;
+  trailingStopPrice: number | null; // ratchets as price moves favorably; null until first evaluation
+  ocoGroupId: string | null; // the linked order is auto-cancelled when this one fills
+  status: PaperOrderStatus;
+  rejectedReason: string | null;
+  lastEvaluatedAt: string | null;
+  createdAt: string;
+  filledAt: string | null;
+  cancelledAt: string | null;
+}
+
+export interface PaperFill {
+  id: string;
+  orderId: string;
+  accountId: string;
+  symbol: string;
+  side: PaperOrderSide;
+  quantity: number;
+  fillPrice: number;
+  slippagePerShare: number;
+  secFee: number;
+  finraFee: number;
+  totalFees: number;
+  realizedPnl: number | null; // only set for sell fills that close/reduce a long position
+  filledAt: string;
+}
+
+export interface PaperOrderInput {
+  symbol: string;
+  assetClass: AssetClass;
+  side: PaperOrderSide;
+  orderType: PaperOrderType;
+  quantity: number;
+  limitPrice?: number | null;
+  stopPrice?: number | null;
+  trailAmount?: number | null;
+  ocoGroupId?: string | null;
+}
+
+export interface PaperPositionView extends PaperPosition {
+  currentPrice: number | null;
+  marketValue: number | null;
+  unrealizedPnl: number | null;
+  unrealizedPnlPct: number | null;
+}
+
+export interface PaperAccountSummary {
+  account: PaperAccount;
+  positions: PaperPositionView[];
+  openOrders: PaperOrder[];
+  recentFills: PaperFill[];
+  cashBalance: number;
+  positionsValue: number;
+  totalEquity: number;
+  totalUnrealizedPnl: number;
+  totalRealizedPnl: number;
+  winLoss: WinLossMetrics | null;
+  dataLimitations: string[];
+}
+
+export interface PaperOrderCheckResult {
+  ordersEvaluated: number;
+  ordersFilled: number;
+  ordersCancelledByOco: number;
+  errors: { orderId: string; error: string }[];
 }

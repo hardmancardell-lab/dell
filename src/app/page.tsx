@@ -24,6 +24,7 @@ import { OrbWatchlistTab } from "@/components/OrbWatchlistTab";
 import { TradingDashboardTab } from "@/components/TradingDashboardTab";
 import { GlossaryTab } from "@/components/GlossaryTab";
 import { AlertsSubscribeTab } from "@/components/AlertsSubscribeTab";
+import { PaperTradingTab } from "@/components/PaperTradingTab";
 import { InternationalEconomicsTab } from "@/components/InternationalEconomicsTab";
 import { BondDashboardTab } from "@/components/BondDashboardTab";
 import { YieldCurveTab } from "@/components/YieldCurveTab";
@@ -749,6 +750,19 @@ export default async function Home() {
                       id: "alerts",
                       label: "Alerts",
                       content: <AlertsSubscribeTab />,
+                    },
+                    {
+                      id: "paper-trading",
+                      label: "Paper Trading",
+                      content: (
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">
+                            Trading Agent &middot; Paper Trading
+                          </div>
+                          <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Paper Trading</h1>
+                          <PaperTradingTab />
+                        </div>
+                      ),
                     },
                   ]}
                 />
