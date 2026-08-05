@@ -319,7 +319,7 @@ export default async function Home() {
             : "No cyclical bargain candidates flagged"}
         </h3>
         <p>
-          Industry groups running meaningfully below their long-run capacity utilization. Graham&apos;s
+          Industry groups running meaningfully below their long-run capacity utilization. Classic value
           read: worth screening for asset-rich, low-leverage names trading near liquidation value &mdash;
           but this alone doesn&apos;t confirm balance sheet strength (see gaps below).
         </p>
@@ -423,7 +423,7 @@ export default async function Home() {
                           <p className="jv-eyebrow">Layer 1 &middot; Macro Agent</p>
                           <h1 className="jv-title">Macro-Margin Matrix</h1>
                           <p className="jv-lede">
-                            A Graham-style read on systemic stability and
+                            A classic value-style read on systemic stability and
                             normalized earning power &mdash; not a market
                             forecast.
                           </p>
@@ -489,7 +489,7 @@ export default async function Home() {
                       content: (
                         <div className="jarvis">
                           <p className="jv-eyebrow">Layer 3 &middot; Security Analyst</p>
-                          <h1 className="jv-title">Graham Checklist</h1>
+                          <h1 className="jv-title">Value Checklist</h1>
                           <Tabs
                             size="tertiary"
                             theme="jarvis"

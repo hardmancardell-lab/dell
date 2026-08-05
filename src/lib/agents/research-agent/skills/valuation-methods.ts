@@ -70,23 +70,23 @@ export async function getValuationMethods(inputs: ValuationInputs): Promise<Valu
 
   const latestEps = incomeStatements[0]?.eps ?? 0;
 
-  // --- 1. Graham Number: sqrt(22.5 * EPS * BVPS) ---
+  // --- 1. Classic Value Number: sqrt(22.5 * EPS * BVPS) ---
   if (latestEps > 0 && bookValuePerShare > 0) {
-    const grahamNumber = Math.sqrt(22.5 * latestEps * bookValuePerShare);
-    const { percentDifference, verdict } = classify(grahamNumber, price);
+    const valueNumber = Math.sqrt(22.5 * latestEps * bookValuePerShare);
+    const { percentDifference, verdict } = classify(valueNumber, price);
     results.push({
-      method: "Graham Number",
+      method: "Classic Value Number",
       available: true,
-      impliedValuePerShare: grahamNumber,
+      impliedValuePerShare: valueNumber,
       currentMarketPrice: price,
       percentDifference,
       verdict,
-      assumptions: "sqrt(22.5 x EPS x Book Value per Share) — Graham's original conservative ceiling, no growth assumption.",
+      assumptions: "sqrt(22.5 x EPS x Book Value per Share) — a conservative ceiling, no growth assumption.",
       note: null,
     });
   } else {
     results.push({
-      method: "Graham Number",
+      method: "Classic Value Number",
       available: false,
       impliedValuePerShare: null,
       currentMarketPrice: price,
@@ -97,25 +97,25 @@ export async function getValuationMethods(inputs: ValuationInputs): Promise<Valu
     });
   }
 
-  // --- 2. Graham Growth Formula: V = EPS x (8.5 + 2g) x 4.4 / Y ---
+  // --- 2. Classic Value Growth Formula: V = EPS x (8.5 + 2g) x 4.4 / Y ---
   const epsHistory = incomeStatements.map((s) => s.eps);
   const growthPct = cappedHistoricalGrowthPct(epsHistory);
   if (latestEps > 0 && growthPct !== null && aaaYieldPct > 0) {
-    const grahamGrowthValue = (latestEps * (8.5 + 2 * growthPct) * 4.4) / aaaYieldPct;
-    const { percentDifference, verdict } = classify(grahamGrowthValue, price);
+    const valueGrowthValue = (latestEps * (8.5 + 2 * growthPct) * 4.4) / aaaYieldPct;
+    const { percentDifference, verdict } = classify(valueGrowthValue, price);
     results.push({
-      method: "Graham Growth Formula",
+      method: "Classic Value Growth Formula",
       available: true,
-      impliedValuePerShare: grahamGrowthValue,
+      impliedValuePerShare: valueGrowthValue,
       currentMarketPrice: price,
       percentDifference,
       verdict,
       assumptions: `EPS x (8.5 + 2g) x 4.4 / Y, where g = ${growthPct.toFixed(1)}% (historical EPS CAGR, capped at ${MAX_GROWTH_ASSUMPTION_PCT}%) and Y = ${aaaYieldPct.toFixed(2)}% (Aaa corporate bond yield). ${aaaYieldNote}`,
-      note: `Based on ${epsHistory.length} years of EPS history, not Graham's original 7-10 year window (FMP free tier caps at 5 years).`,
+      note: `Based on ${epsHistory.length} years of EPS history, not the original 7-10 year window (FMP free tier caps at 5 years).`,
     });
   } else {
     results.push({
-      method: "Graham Growth Formula",
+      method: "Classic Value Growth Formula",
       available: false,
       impliedValuePerShare: null,
       currentMarketPrice: price,

@@ -167,7 +167,7 @@ export interface SectorSelectionMatrix {
     note: string;
   };
   /**
-   * Metrics from the Graham sector framework that require a company
+   * Metrics from the classic-value sector framework that require a company
    * fundamentals/ratings data source we haven't wired up (FRED doesn't
    * publish these). Listed explicitly rather than faked.
    */
@@ -238,7 +238,7 @@ export interface LiquiditySection {
   currentAssets: number;
   currentLiabilities: number;
   currentRatio: number;
-  meetsGrahamThreshold: boolean; // >= 2.0
+  meetsThreshold: boolean; // >= 2.0
   cashAndEquivalents: number;
 }
 
@@ -246,7 +246,7 @@ export interface SolvencySection {
   ebit: number;
   interestExpense: number;
   fixedChargeCoverage: number | null; // null if no interest expense (no debt)
-  meetsGrahamThreshold: boolean; // >= 4x
+  meetsThreshold: boolean; // >= 4x
   totalDebt: number;
   totalEquity: number;
   debtToEquity: number | null;
@@ -258,10 +258,10 @@ export type DividendGrowthTrend = "growing" | "stable" | "declining";
 export interface DividendSection {
   consecutiveYearsPaid: number;
   yearsRequested: number;
-  meetsGrahamThreshold: boolean;
+  meetsThreshold: boolean;
   mostRecentPaymentDate: string | null;
   // Derived from the same dividendHistory.historical already fetched for
-  // the consecutive-years streak — supplements the Graham pass/fail
+  // the consecutive-years streak — supplements the checklist's pass/fail
   // criterion, doesn't change its threshold or logic.
   growthTrend: DividendGrowthTrend | null;
 }
@@ -273,11 +273,11 @@ export interface ValuationSection2 {
   peRatio: number | null;
   bookValuePerShare: number;
   pbRatio: number | null;
-  grahamMultiplier: number | null;
-  passesGrahamMultiplier: boolean;
+  valueMultiplier: number | null;
+  passesValueMultiplier: boolean;
 }
 
-export interface GrahamChecklistItem {
+export interface ValueChecklistItem {
   criterion: string;
   passed: boolean;
   detail: string;
@@ -362,7 +362,7 @@ export interface SecurityAnalysis {
   solvency: SolvencySection;
   dividends: DividendSection;
   valuation: ValuationSection2;
-  checklist: GrahamChecklistItem[];
+  checklist: ValueChecklistItem[];
   sectorPanel: SectorSpecificPanel | null;
   financialStatements: FinancialStatementYear[];
   valuationMethods: ValuationResult[];

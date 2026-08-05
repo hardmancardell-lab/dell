@@ -58,7 +58,7 @@ export function ScreenerTab() {
       <div className="flex items-center justify-between gap-4">
         <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           Candidate securities seeded from the Research Agent&apos;s own Sector Recommendations (real
-          macro-indicator trends per industry) and scored against the Graham Checklist (7 fundamental criteria)
+          macro-indicator trends per industry) and scored against the Value Checklist (7 fundamental criteria)
           — the same checklist used above in Analyze Ticker. A curated set of bellwether tickers per sector, not
           a live market screen (FMP&apos;s real screener needs a paid plan).
         </p>
@@ -125,7 +125,7 @@ export function ScreenerTab() {
                           </div>
                         ) : (
                           <div className="text-xs" style={{ color: "var(--text-2)" }}>
-                            Graham Checklist: {c.checklistPassCount}/{c.checklistTotal}
+                            Value Checklist: {c.checklistPassCount}/{c.checklistTotal}
                           </div>
                         )}
                       </div>
@@ -151,7 +151,7 @@ export function ScreenerTab() {
       )}
 
       <p className="text-xs" style={{ color: "var(--text-2)" }}>
-        For a full breakdown of any candidate&apos;s Graham Checklist (earning power, NCAV, liquidity, solvency,
+        For a full breakdown of any candidate&apos;s Value Checklist (earning power, NCAV, liquidity, solvency,
         dividends, valuation), type its ticker into Analyze Ticker above.
       </p>
     </div>

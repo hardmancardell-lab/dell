@@ -15,7 +15,7 @@ export const RESEARCH_SOURCE_CATEGORIES: ResearchSourceCategory[] = [
     id: "regulatory",
     title: "1. Primary Regulatory & Corporate Sources",
     intro:
-      "Graham's discipline: the truth about a sector is in the audited numbers, not the management narrative.",
+      "Classic value discipline: the truth about a sector is in the audited numbers, not the management narrative.",
     sources: [
       {
         name: "SEC EDGAR (10-K, 10-Q, 8-K Filings)",
@@ -134,7 +134,7 @@ export const RESEARCH_SOURCE_CATEGORIES: ResearchSourceCategory[] = [
       {
         name: "Aswath Damodaran's Data Sheets (NYU Stern)",
         description:
-          "Updated every January: ROIC, cost of capital, margins, and growth rates across 100+ industries. The closest modern equivalent to a comprehensive Graham-and-Dodd screening baseline.",
+          "Updated every January: ROIC, cost of capital, margins, and growth rates across 100+ industries. The closest modern equivalent to a comprehensive classic value-and-quality screening baseline.",
       },
     ],
   },

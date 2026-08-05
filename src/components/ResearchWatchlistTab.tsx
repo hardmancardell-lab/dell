@@ -44,7 +44,7 @@ export function ResearchWatchlistTab() {
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between gap-4">
         <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
-          Tickers saved from Analyze Ticker or the Screener, with a fresh Graham Checklist run the moment this
+          Tickers saved from Analyze Ticker or the Screener, with a fresh Value Checklist run the moment this
           page loads — the honest version of &quot;alerts&quot; for an app with no background server process:
           real flags computed from real data on load, not a push notification.
         </p>
@@ -101,7 +101,7 @@ export function ResearchWatchlistTab() {
                 ) : (
                   <div className="flex items-center gap-3">
                     <span className="text-sm" style={{ color: "var(--text-2)" }}>
-                      Graham Checklist: {e.checklistPassCount}/{e.checklistTotal}
+                      Value Checklist: {e.checklistPassCount}/{e.checklistTotal}
                     </span>
                     {e.isStrong && <span className="jv-badge c-signal">Strong</span>}
                   </div>

@@ -1,8 +1,8 @@
 // Same shape/pattern as trading-agent/skills/glossary.ts, scoped to Research
-// Agent concepts (macro matrix terms, Graham checklist criteria, sector
+// Agent concepts (macro matrix terms, value checklist criteria, sector
 // analysis) — the follow-up that file's own comment anticipated.
 
-export type ResearchGlossaryCategory = "macro" | "graham-checklist" | "sector-analysis";
+export type ResearchGlossaryCategory = "macro" | "value-checklist" | "sector-analysis";
 
 export interface ResearchGlossaryEntry {
   term: string; // stable key, referenced by <GlossaryTerm term="..." getEntry={getResearchGlossaryEntry}>
@@ -74,7 +74,7 @@ export const RESEARCH_GLOSSARY_ENTRIES: ResearchGlossaryEntry[] = [
     label: "Production Phase (trough / normal / overheated)",
     category: "macro",
     definition:
-      "This app's own classification of where the industrial economy sits relative to its long-run average capacity utilization. A 'trough' often coincides with cyclically depressed asset prices — exactly the environment where Graham-style bargain-hunting (assets trading below liquidation value) tends to surface real candidates.",
+      "This app's own classification of where the industrial economy sits relative to its long-run average capacity utilization. A 'trough' often coincides with cyclically depressed asset prices — exactly the environment where classic value-style bargain-hunting (assets trading below liquidation value) tends to surface real candidates.",
     seeAlso: ["capacityUtilization"],
   },
   {
@@ -92,34 +92,34 @@ export const RESEARCH_GLOSSARY_ENTRIES: ResearchGlossaryEntry[] = [
       "This app's own rule-based synthesis of the four matrix sections into a plain-language read of the current environment. These labels can combine (e.g. 'Speculative euphoria + Margin compression') — they're not mutually exclusive, and 'No extreme signal' means nothing in the matrix is currently flashing an outlier reading.",
   },
 
-  // --- Graham Checklist ---
+  // --- Value Checklist ---
   {
     term: "ncav",
     label: "Net Current Asset Value (NCAV)",
-    category: "graham-checklist",
+    category: "value-checklist",
     definition:
-      "Benjamin Graham's most conservative valuation floor: current assets minus ALL liabilities (including long-term debt), ignoring fixed assets and goodwill entirely. A stock trading at or below two-thirds of NCAV per share is, in theory, priced as if the company were worth more dead (liquidated) than alive — a rare, deep-value signal.",
+      "A conservative valuation floor: current assets minus ALL liabilities (including long-term debt), ignoring fixed assets and goodwill entirely. A stock trading at or below two-thirds of NCAV per share is, in theory, priced as if the company were worth more dead (liquidated) than alive — a rare, deep-value signal.",
   },
   {
     term: "fixedChargeCoverage",
     label: "Fixed-Charge Coverage",
-    category: "graham-checklist",
+    category: "value-checklist",
     definition:
-      "Operating income (EBIT) divided by interest expense — how many times over a company can pay its interest obligations from operating earnings. Graham's threshold here is 4x; below that, a company has little cushion if earnings dip.",
+      "Operating income (EBIT) divided by interest expense — how many times over a company can pay its interest obligations from operating earnings. This app's threshold here is 4x; below that, a company has little cushion if earnings dip.",
   },
   {
-    term: "grahamMultiplier",
-    label: "Graham Multiplier (P/E × P/B)",
-    category: "graham-checklist",
+    term: "valueMultiplier",
+    label: "Value Multiplier (P/E × P/B)",
+    category: "value-checklist",
     definition:
-      "Price-to-earnings multiplied by price-to-book. Graham's rule of thumb: don't pay more than 22.5 for this combined multiple — it catches stocks that look cheap on earnings but expensive on book value (or vice versa), not just one ratio in isolation.",
+      "Price-to-earnings multiplied by price-to-book. Classic value rule of thumb: don't pay more than 22.5 for this combined multiple — it catches stocks that look cheap on earnings but expensive on book value (or vice versa), not just one ratio in isolation.",
   },
   {
     term: "qualityTier",
     label: "Quality Tier (Strong / Moderate / Weak)",
-    category: "graham-checklist",
+    category: "value-checklist",
     definition:
-      "A simple 3-tier summary of how many of the 7 Graham checklist criteria a company passes: Strong (6-7 of 7), Moderate (4-5), Weak (0-3). A blended score for quick scanning — the full checklist breakdown underneath is what actually matters for a real decision.",
+      "A simple 3-tier summary of how many of the 7 value checklist criteria a company passes: Strong (6-7 of 7), Moderate (4-5), Weak (0-3). A blended score for quick scanning — the full checklist breakdown underneath is what actually matters for a real decision.",
   },
 
   // --- Sector Analysis ---

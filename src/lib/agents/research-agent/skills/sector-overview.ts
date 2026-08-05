@@ -66,7 +66,7 @@ const UNAVAILABLE_METRICS: UnavailableMetric[] = [
   },
   {
     label: "Sector Gross/Operating Margin Variance",
-    note: "Now available at /sector-fundamentals for 8 of 11 sectors (see Debt-to-Equity note above for the same coverage caveat), based on up to 5 years of history (FMP free tier cap) rather than Graham's requested 7-10 years.",
+    note: "Now available at /sector-fundamentals for 8 of 11 sectors (see Debt-to-Equity note above for the same coverage caveat), based on up to 5 years of history (FMP free tier cap) rather than the requested 7-10 years.",
   },
   {
     label: "Sector CAPE Ratio",

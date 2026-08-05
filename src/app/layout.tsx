@@ -18,15 +18,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Graham Research Agent",
-  description: "A Benjamin Graham-style long-term investing research agent.",
+  title: "Dellegate — Delegate the research. Own the decision.",
+  description: "Delegate the research. Own the decision. Top-down macro research, trading signals, and portfolio tracking built on real market data.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Graham Agent",
-  },
-  icons: {
-    apple: "/api/pwa-icon?size=180",
+    title: "Dellegate",
   },
 };
 

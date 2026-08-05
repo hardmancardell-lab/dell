@@ -10,7 +10,7 @@ import type {
   DividendSection,
   EarningPowerSection,
   FinancialStatementYear,
-  GrahamChecklistItem,
+  ValueChecklistItem,
   LiquiditySection,
   NcavSection,
   SecurityAnalysis,
@@ -46,7 +46,7 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
   // --- Earning Power (income statement, multi-year average) ---
   if (incomeStatements.length < EARNINGS_YEARS_REQUESTED) {
     dataLimitations.push(
-      `Only ${incomeStatements.length} of ${EARNINGS_YEARS_REQUESTED} requested years of income statement history available (FMP free tier caps annual statements around 5 years). Earnings average and stability check are based on fewer years than Graham specified.`
+      `Only ${incomeStatements.length} of ${EARNINGS_YEARS_REQUESTED} requested years of income statement history available (FMP free tier caps annual statements around 5 years). Earnings average and stability check are based on fewer years than specified.`
     );
   }
   const deficitYears = incomeStatements.filter((s) => s.netIncome <= 0).length;
@@ -60,7 +60,7 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
     meetsStabilityThreshold: deficitYears === 0,
     warning:
       incomeStatements.length < EARNINGS_YEARS_REQUESTED
-        ? `Based on ${incomeStatements.length}yr history, not Graham's requested ${EARNINGS_YEARS_REQUESTED}yr.`
+        ? `Based on ${incomeStatements.length}yr history, not the requested ${EARNINGS_YEARS_REQUESTED}yr.`
         : null,
   };
 
@@ -94,7 +94,7 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
     currentAssets: latestBalanceSheet.totalCurrentAssets,
     currentLiabilities: latestBalanceSheet.totalCurrentLiabilities,
     currentRatio,
-    meetsGrahamThreshold: currentRatio >= 2.0,
+    meetsThreshold: currentRatio >= 2.0,
     cashAndEquivalents: latestBalanceSheet.cashAndCashEquivalents,
   };
 
@@ -112,7 +112,7 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
     ebit,
     interestExpense,
     fixedChargeCoverage,
-    meetsGrahamThreshold: fixedChargeCoverage === null || fixedChargeCoverage >= 4,
+    meetsThreshold: fixedChargeCoverage === null || fixedChargeCoverage >= 4,
     totalDebt: latestBalanceSheet.totalDebt,
     totalEquity: latestBalanceSheet.totalStockholdersEquity,
     debtToEquity,
@@ -139,7 +139,7 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
   }
   // Growth-trend read — derived from the same dividendHistory.historical
   // already fetched above for the streak calculation, no new data source.
-  // Supplements the Graham pass/fail criterion; doesn't affect it.
+  // Supplements the checklist's pass/fail criterion; doesn't affect it.
   const dividendsByYear = new Map<number, number>();
   for (const d of dividendHistory.historical) {
     const year = new Date(d.date).getFullYear();
@@ -161,7 +161,7 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
   const dividends: DividendSection = {
     consecutiveYearsPaid,
     yearsRequested: DIVIDEND_YEARS_REQUESTED,
-    meetsGrahamThreshold: consecutiveYearsPaid >= DIVIDEND_YEARS_REQUESTED,
+    meetsThreshold: consecutiveYearsPaid >= DIVIDEND_YEARS_REQUESTED,
     mostRecentPaymentDate: dividendHistory.historical[0]?.date ?? null,
     growthTrend,
   };
@@ -182,7 +182,7 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
       : 0;
   const peRatio = averageEpsRecentYears > 0 ? profile.price / averageEpsRecentYears : null;
   const pbRatio = bookValuePerShare > 0 ? profile.price / bookValuePerShare : null;
-  const grahamMultiplier = peRatio !== null && pbRatio !== null ? peRatio * pbRatio : null;
+  const valueMultiplier = peRatio !== null && pbRatio !== null ? peRatio * pbRatio : null;
   const valuation: ValuationSection2 = {
     price: profile.price,
     averageEpsRecentYears,
@@ -190,16 +190,16 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
     peRatio,
     bookValuePerShare,
     pbRatio,
-    grahamMultiplier,
-    passesGrahamMultiplier: grahamMultiplier !== null && grahamMultiplier <= 22.5,
+    valueMultiplier,
+    passesValueMultiplier: valueMultiplier !== null && valueMultiplier <= 22.5,
   };
   if (peRatio === null || pbRatio === null) {
     dataLimitations.push(
-      "PE or PB ratio could not be calculated (negative/zero earnings or book value) — Graham multiplier check skipped."
+      "PE or PB ratio could not be calculated (negative/zero earnings or book value) — value multiplier check skipped."
     );
   }
 
-  const checklist: GrahamChecklistItem[] = [
+  const checklist: ValueChecklistItem[] = [
     {
       criterion: "Earnings stability: no deficit years in available history",
       passed: earningPower.meetsStabilityThreshold,
@@ -207,12 +207,12 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
     },
     {
       criterion: "Current ratio >= 2.0",
-      passed: liquidity.meetsGrahamThreshold,
+      passed: liquidity.meetsThreshold,
       detail: `Current ratio: ${currentRatio.toFixed(2)}`,
     },
     {
       criterion: "Fixed-charge coverage >= 4x",
-      passed: solvency.meetsGrahamThreshold,
+      passed: solvency.meetsThreshold,
       detail:
         fixedChargeCoverage !== null
           ? `EBIT covers interest ${fixedChargeCoverage.toFixed(1)}x`
@@ -225,15 +225,15 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
     },
     {
       criterion: `Dividend record >= ${DIVIDEND_YEARS_REQUESTED} consecutive years`,
-      passed: dividends.meetsGrahamThreshold,
+      passed: dividends.meetsThreshold,
       detail: `${consecutiveYearsPaid} consecutive year(s) detected in available history.`,
     },
     {
-      criterion: "PE x PB <= 22.5 (Graham multiplier)",
-      passed: valuation.passesGrahamMultiplier,
+      criterion: "PE x PB <= 22.5 (value multiplier)",
+      passed: valuation.passesValueMultiplier,
       detail:
-        grahamMultiplier !== null
-          ? `PE ${peRatio?.toFixed(1)} x PB ${pbRatio?.toFixed(1)} = ${grahamMultiplier.toFixed(1)}`
+        valueMultiplier !== null
+          ? `PE ${peRatio?.toFixed(1)} x PB ${pbRatio?.toFixed(1)} = ${valueMultiplier.toFixed(1)}`
           : "Could not be calculated",
     },
     {

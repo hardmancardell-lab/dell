@@ -13,7 +13,7 @@ function secHeaders(): HeadersInit {
   const userAgent = process.env.SEC_EDGAR_USER_AGENT;
   if (!userAgent) {
     throw new Error(
-      "SEC_EDGAR_USER_AGENT is not set. SEC requires a descriptive User-Agent (app name + contact email) on every request — add one to .env.local, e.g. \"Graham Research Agent you@example.com\"."
+      "SEC_EDGAR_USER_AGENT is not set. SEC requires a descriptive User-Agent (app name + contact email) on every request — add one to .env.local, e.g. \"Dellegate you@example.com\"."
     );
   }
   return { "User-Agent": userAgent };

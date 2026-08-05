@@ -56,7 +56,7 @@ export function TraditionalPortfolioTab() {
       <div className="flex items-center justify-between gap-4">
         <p className="text-zinc-500 flex-1">
           Candidate securities seeded from the Research Agent&apos;s own Sector Recommendations (real macro-indicator
-          trends per industry) and scored against the Graham Checklist (7 fundamental criteria) — the same checklist
+          trends per industry) and scored against the Value Checklist (7 fundamental criteria) — the same checklist
           used standalone in Security Analysis. Fundamental analysis on individual securities, not a market screen.
         </p>
         <button
@@ -112,7 +112,7 @@ export function TraditionalPortfolioTab() {
                           <div className="text-xs text-zinc-500">{c.error}</div>
                         ) : (
                           <div className="text-xs text-zinc-500">
-                            Graham Checklist: {c.checklistPassCount}/{c.checklistTotal}
+                            Value Checklist: {c.checklistPassCount}/{c.checklistTotal}
                           </div>
                         )}
                       </div>
@@ -137,7 +137,7 @@ export function TraditionalPortfolioTab() {
       )}
 
       <p className="text-xs text-zinc-400">
-        For a full breakdown of any candidate&apos;s Graham Checklist (earning power, NCAV, liquidity, solvency,
+        For a full breakdown of any candidate&apos;s Value Checklist (earning power, NCAV, liquidity, solvency,
         dividends, valuation), use Top-Down Economic Analysis → Security Analysis directly. Adding a candidate here
         adds a 1-share placeholder holding at $0 cost basis — there&apos;s no in-place edit yet, so remove it on the
         Dashboard tab and re-add with real shares/cost basis once you&apos;ve actually bought in.

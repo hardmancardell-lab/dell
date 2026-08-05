@@ -129,7 +129,7 @@ export function SecurityAnalystTab() {
     <div>
       <p className="jv-lede" style={{ marginBottom: 20 }}>
         A cold-blooded interrogation of one company&apos;s financial statements &mdash; NCAV, earnings
-        stability, debt coverage, and the Graham multiplier.
+        stability, debt coverage, and the value multiplier.
       </p>
 
       <form onSubmit={runAnalysis} className="flex gap-3">
@@ -189,7 +189,7 @@ export function SecurityAnalystTab() {
                 <b>
                   {passedCount} / {data.checklist.length}
                 </b>{" "}
-                Graham criteria passed
+                criteria passed
               </p>
               <GlossaryTerm term="qualityTier" getEntry={getResearchGlossaryEntry}>
                 <span className={QUALITY_TIER_CLASS[qualityTier(passedCount, data.checklist.length)]}>
@@ -215,7 +215,7 @@ export function SecurityAnalystTab() {
           )}
 
           <section>
-            <div className="jv-strip-title">The Graham Checklist</div>
+            <div className="jv-strip-title">The Value Checklist</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {data.checklist.map((c) => (
                 <div key={c.criterion} className="jv-card">
@@ -303,7 +303,7 @@ export function SecurityAnalystTab() {
               <StatCard
                 label="Price vs NCAV"
                 value={data.ncav.priceToNcav !== null ? `${(data.ncav.priceToNcav * 100).toFixed(0)}%` : "N/A"}
-                sub={data.ncav.isBargain ? "Below 2/3 of NCAV — Graham bargain" : undefined}
+                sub={data.ncav.isBargain ? "Below 2/3 of NCAV — deep-value bargain" : undefined}
               />
             </div>
           </section>
@@ -311,7 +311,7 @@ export function SecurityAnalystTab() {
           <section>
             <div className="jv-strip-title">3. Liquidity &amp; Solvency</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <StatCard label="Current Ratio" value={data.liquidity.currentRatio.toFixed(2)} sub="Graham floor: 2.0" />
+              <StatCard label="Current Ratio" value={data.liquidity.currentRatio.toFixed(2)} sub="Floor: 2.0" />
               <StatCard
                 label={
                   <GlossaryTerm term="fixedChargeCoverage" getEntry={getResearchGlossaryEntry}>
@@ -319,14 +319,14 @@ export function SecurityAnalystTab() {
                   </GlossaryTerm>
                 }
                 value={data.solvency.fixedChargeCoverage !== null ? `${data.solvency.fixedChargeCoverage.toFixed(1)}x` : "No debt"}
-                sub="Graham floor: 4x"
+                sub="Floor: 4x"
               />
               <StatCard
                 label="Debt / Equity"
                 value={data.solvency.debtToEquity !== null ? data.solvency.debtToEquity.toFixed(2) : "N/A"}
                 sub={data.solvency.topHeavy ? "Top-heavy capital structure" : undefined}
               />
-              <StatCard label="Dividend Record" value={`${data.dividends.consecutiveYearsPaid} yrs`} sub={`Graham floor: ${data.dividends.yearsRequested} yrs`} />
+              <StatCard label="Dividend Record" value={`${data.dividends.consecutiveYearsPaid} yrs`} sub={`Floor: ${data.dividends.yearsRequested} yrs`} />
             </div>
             {data.dividends.growthTrend && (
               <p className="text-sm mt-3" style={{ color: "var(--text-2)" }}>
@@ -358,12 +358,12 @@ export function SecurityAnalystTab() {
               <StatCard label="PB (book value)" value={data.valuation.pbRatio !== null ? data.valuation.pbRatio.toFixed(1) : "N/A"} />
               <StatCard
                 label={
-                  <GlossaryTerm term="grahamMultiplier" getEntry={getResearchGlossaryEntry}>
-                    Graham Multiplier (PE x PB)
+                  <GlossaryTerm term="valueMultiplier" getEntry={getResearchGlossaryEntry}>
+                    Value Multiplier (PE x PB)
                   </GlossaryTerm>
                 }
-                value={data.valuation.grahamMultiplier !== null ? data.valuation.grahamMultiplier.toFixed(1) : "N/A"}
-                sub="Graham ceiling: 22.5"
+                value={data.valuation.valueMultiplier !== null ? data.valuation.valueMultiplier.toFixed(1) : "N/A"}
+                sub="Ceiling: 22.5"
               />
             </div>
           </section>

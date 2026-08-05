@@ -49,7 +49,7 @@ export const ASSISTANT_TOOLS: AnthropicToolSchema[] = [
   {
     name: "get_security_analysis",
     description:
-      "The full Graham 7-criteria checklist plus NCAV valuation, liquidity, solvency, dividend record, and multi-year financial statements for one ticker. The core bottom-of-the-stack company fundamentals tool.",
+      "The full 7-criteria value checklist plus NCAV valuation, liquidity, solvency, dividend record, and multi-year financial statements for one ticker. The core bottom-of-the-stack company fundamentals tool.",
     input_schema: {
       type: "object",
       properties: { ticker: { type: "string", description: "Equity ticker symbol, e.g. 'AAPL'." } },

@@ -147,7 +147,7 @@ export function SectorStockAnalysisTab() {
                     <div className="flex items-center gap-2">
                       <span className={CYCLE_TAG_CLASS[c.cycleTag]}>{c.cycleTag}</span>
                       <span className={qualityClass(c.checklistPassCount, c.checklistTotal)}>
-                        {c.checklistPassCount !== null ? `${c.checklistPassCount}/${c.checklistTotal} Graham` : "N/A"}
+                        {c.checklistPassCount !== null ? `${c.checklistPassCount}/${c.checklistTotal} Value` : "N/A"}
                       </span>
                     </div>
                   </div>

@@ -21,7 +21,7 @@ export async function sendAlertEmail(to: string, subject: string, html: string):
     body: JSON.stringify({
       // Requires a domain verified in Resend — RESEND_FROM_EMAIL is not a
       // secret, just the sender identity, kept configurable rather than hardcoded.
-      from: process.env.RESEND_FROM_EMAIL ?? "Graham Research Agent Alerts <alerts@example.com>",
+      from: process.env.RESEND_FROM_EMAIL ?? "Dellegate Alerts <alerts@example.com>",
       to,
       subject,
       html,

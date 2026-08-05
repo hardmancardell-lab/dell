@@ -1202,7 +1202,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     order: 1,
     title: "Reading the three statements",
     body: "The income statement shows revenue and profit over a period. The balance sheet shows what a company owns and owes at a single point in time. The cash flow statement shows actual cash moving in and out — and it's the one that's hardest to fake, because accounting profit can include revenue that hasn't actually been collected yet.\n\nA company can report a genuine accounting profit while its cash position quietly deteriorates — usually a sign to look at receivables and inventory before trusting the headline number.",
-    tryIt: { label: "Security Analysis · Graham Checklist" },
+    tryIt: { label: "Security Analysis · Value Checklist" },
     checks: [
       {
         prompt: "A company reports a profit on its income statement, but its cash flow statement shows cash actually declining. What should that make you check?",
@@ -1798,11 +1798,11 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "expert",
     order: 6,
     title: "Deep-value methodology",
-    body: "Benjamin Graham's Net Current Asset Value (NCAV) approach values a company against current assets minus all liabilities — deliberately ignoring long-term/fixed assets and goodwill entirely. It's a conservative, liquidation-style floor: what would be left for shareholders if the company were wound down today, using only the most liquid assets.\n\nThis app's Graham Checklist implements the full 7-criteria version of this methodology, and deliberately excludes analyst price targets — not as an oversight, but because forecasting isn't part of Graham's method.",
+    body: "The Net Current Asset Value (NCAV) approach values a company against current assets minus all liabilities — deliberately ignoring long-term/fixed assets and goodwill entirely. It's a conservative, liquidation-style floor: what would be left for shareholders if the company were wound down today, using only the most liquid assets.\n\nThis app's Value Checklist implements the full 7-criteria version of this methodology, and deliberately excludes analyst price targets — not as an oversight, but because forecasting isn't part of this classic value approach.",
     tryIt: { label: "Security Analysis · full Checklist" },
     checks: [
       {
-        prompt: "What does Graham's NCAV approach deliberately exclude from a company's valuation?",
+        prompt: "What does the NCAV approach deliberately exclude from a company's valuation?",
         options: [
           "Current liabilities",
           "Long-term/fixed assets and goodwill — it's a conservative, liquidation-style floor",
@@ -1813,7 +1813,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
         explanation: "NCAV is deliberately conservative — it only counts current assets against all liabilities, ignoring long-term assets and goodwill that might not hold their value in a real liquidation.",
       },
       {
-        prompt: "Why is Graham's NCAV approach described as a conservative 'liquidation-style floor' rather than a full valuation?",
+        prompt: "Why is the NCAV approach described as a conservative 'liquidation-style floor' rather than a full valuation?",
         options: [
           "Because it counts every asset the company owns at full value",
           "Because it only credits the most liquid current assets against all liabilities, deliberately ignoring assets that might not hold their value if the company were actually wound down",
@@ -1824,15 +1824,15 @@ export const LITERACY_MODULES: LiteracyModule[] = [
         explanation: "NCAV deliberately strips out long-term/fixed assets and goodwill — the assets least certain to retain their book value in an actual liquidation — leaving a conservative floor rather than a full going-concern valuation.",
       },
       {
-        prompt: "This app's Graham Checklist deliberately excludes analyst price targets. Why?",
+        prompt: "This app's Value Checklist deliberately excludes analyst price targets. Why?",
         options: [
           "Analyst price targets are illegal to use",
-          "Forecasting isn't part of Graham's method — it's built around present, verifiable financial facts, not forward guesses about where a price might go",
+          "Forecasting isn't part of this classic value approach — it's built around present, verifiable financial facts, not forward guesses about where a price might go",
           "Analyst targets are always wrong",
           "There's no reason — it's simply an oversight",
         ],
         correctIndex: 1,
-        explanation: "Graham's method is deliberately grounded in current, verifiable facts about a business — forecasting future prices was never part of the approach, so this app's checklist stays consistent with that by excluding forward price targets.",
+        explanation: "This classic value approach is deliberately grounded in current, verifiable facts about a business — forecasting future prices was never part of it, so this app's checklist stays consistent with that by excluding forward price targets.",
       },
     ],
   },
@@ -1998,7 +1998,7 @@ export const PLACEMENT_QUESTIONS: PlacementQuestion[] = [
   },
   {
     tier: "expert",
-    prompt: "What does Graham's Net Current Asset Value (NCAV) approach deliberately exclude from a company's valuation?",
+    prompt: "What does the Net Current Asset Value (NCAV) approach deliberately exclude from a company's valuation?",
     options: ["Current liabilities", "Long-term/fixed assets and goodwill — a conservative, liquidation-style floor", "Current assets", "Cash on the balance sheet"],
     correctIndex: 1,
   },

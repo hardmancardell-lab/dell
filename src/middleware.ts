@@ -30,6 +30,6 @@ export const config = {
      * - /api/gate (the password-check endpoint)
      * - Next.js internals and static assets
      */
-    "/((?!gate|api/gate|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon-|videos/).*)",
+    "/((?!gate|api/gate|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|icons/|manifest.webmanifest|sw.js|icon-|videos/).*)",
   ],
 };

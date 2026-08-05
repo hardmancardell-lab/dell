@@ -62,7 +62,7 @@ Large, open-ended undertaking (parser, sandboxed execution, its own UI) — no p
 was scoped or estimated. Flagged as a real competitor differentiator, not attempted.
 
 ### Analyst consensus estimates / price targets (Research Agent)
-**Not actually a gap** — deliberately excluded on principle. Graham's method avoids forward
+**Not actually a gap** — deliberately excluded on principle. This app's classic value method avoids forward
 guessing; building this would work against the checklist's own philosophy, not close a gap.
 Recorded here for completeness, not as a TODO.
 

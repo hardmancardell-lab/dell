@@ -44,7 +44,7 @@ function faangBigTech({ income, cashFlow, balance }: Inputs): SectorRatio[] {
   const sbcToRevenue = c0 && i0 && i0.revenue > 0 ? (c0.stockBasedCompensation / i0.revenue) * 100 : null;
 
   return [
-    available("ROIC (approx., 21% flat tax NOPAT)", roic, "%", "Graham/Buffett floor: ≥20%", roic !== null ? roic >= 20 : null),
+    available("ROIC (approx., 21% flat tax NOPAT)", roic, "%", "Classic value floor: ≥20%", roic !== null ? roic >= 20 : null),
     available("FCF Conversion Rate", fcfConversion, "%", "Quality floor: ≥100%", fcfConversion !== null ? fcfConversion >= 100 : null),
     available("Stock-Based Comp / Revenue", sbcToRevenue, "%", "Lower is better — high SBC masks true dilution cost", sbcToRevenue !== null ? sbcToRevenue < 10 : null, "Subtract this from reported FCF to find the true owner's cash yield."),
   ];
@@ -84,7 +84,7 @@ function softwareSaas({ income, cashFlow }: Inputs): SectorRatio[] {
 
   return [
     available("Rule of 40 (Rev Growth + FCF Margin)", ruleOf40, " pts", "Floor: ≥40", ruleOf40 !== null ? ruleOf40 >= 40 : null, revenueGrowth !== null && fcfMargin !== null ? `Growth ${revenueGrowth.toFixed(1)}% + FCF margin ${fcfMargin.toFixed(1)}%` : null),
-    available("R&D / Revenue", rdToRevenue, "%", "Reinvestment intensity — no hard Graham threshold, compare to sector peers", null),
+    available("R&D / Revenue", rdToRevenue, "%", "Reinvestment intensity — no hard threshold, compare to sector peers", null),
     unavailable("LTV / CAC", "Sustainability floor: ≥3.0x", NEEDS_DISCLOSURE_DATA),
     unavailable("Net Revenue Retention (NRR)", "Healthy floor: ≥110%", NEEDS_DISCLOSURE_DATA),
   ];
@@ -102,7 +102,7 @@ function telecomMediaInfrastructure({ profile, income, balance }: Inputs): Secto
   const netDebtToEbitda = netDebt !== null && ebitda !== null && ebitda > 0 ? netDebt / ebitda : null;
 
   return [
-    available("EV / EBITDA", evToEbitda, "x", "Graham's PE surrogate for capital-intensive sectors — compare to peers, no universal floor", null, "EV = market cap + total debt − cash (approximation, not a dedicated enterprise-value feed)."),
+    available("EV / EBITDA", evToEbitda, "x", "PE surrogate for capital-intensive sectors — compare to peers, no universal floor", null, "EV = market cap + total debt − cash (approximation, not a dedicated enterprise-value feed)."),
     available("Net Debt / EBITDA", netDebtToEbitda, "x", "Structurally acceptable range for mature telecom/utility: 3.5x-5.0x", netDebtToEbitda !== null ? netDebtToEbitda <= 5 : null),
   ];
 }

@@ -89,7 +89,7 @@ export const INDICATOR_LIBRARY: IndicatorMeta[] = [
     classificationNote:
       "Quarterly Senior Loan Officer Opinion Survey. One of the most reliable recession-leading indicators — credit tightening chokes off business investment before it shows up in GDP.",
     description:
-      "The net percentage of banks reporting tighter standards on commercial and industrial loans. When this spikes, it means credit is becoming harder to get regardless of what interest rates are doing — a direct read on the 'systemic liquidity' half of Graham's credit framework.",
+      "The net percentage of banks reporting tighter standards on commercial and industrial loans. When this spikes, it means credit is becoming harder to get regardless of what interest rates are doing — a direct read on the 'systemic liquidity' half of this app's credit framework.",
     isFlagship: true,
     favorableTrend: "down",
   },

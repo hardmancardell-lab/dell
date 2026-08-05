@@ -26,7 +26,7 @@ export const PORTFOLIO_METHODOLOGY_OUTLINES: PortfolioMethodologyOutline[] = [
       {
         heading: "What this app computes for you",
         detail:
-          "The Traditional tab pulls the Research Agent's own Sector Recommendations (which industries look constructive right now, from real macro indicator trends) and cross-references each sector's curated bellwether tickers against the Graham Checklist (7 criteria: earnings stability, current ratio, fixed-charge coverage, debt load, dividend record, Graham multiplier, and price vs. net current asset value) — the same checklist used standalone in Security Analysis.",
+          "The Traditional tab pulls the Research Agent's own Sector Recommendations (which industries look constructive right now, from real macro indicator trends) and cross-references each sector's curated bellwether tickers against the Value Checklist (7 criteria: earnings stability, current ratio, fixed-charge coverage, debt load, dividend record, value multiplier, and price vs. net current asset value) — the same checklist used standalone in Security Analysis.",
       },
       {
         heading: "Where it falls short",

@@ -2,7 +2,7 @@
 // portfolio-methodology.ts. Scoped to Trading Agent concepts (statistics,
 // performance metrics, strategy concepts, options/macro terms) since that's
 // what triggered the request — Research Agent and Portfolio Tracker have
-// their own jargon (NCAV, Graham checklist criteria, Sharpe ratio, efficient
+// their own jargon (NCAV, value checklist criteria, Sharpe ratio, efficient
 // frontier) that would get their own glossary using this identical pattern
 // as a natural follow-up, not built here.
 

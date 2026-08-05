@@ -9,7 +9,7 @@ import type { TraditionalCandidate, TraditionalCandidateGroup, TraditionalCandid
  * together before: getSectorRecommendations() (industry-level stance, zero
  * tickers) -> SECTOR_CONSTITUENTS (the only ticker universe in the
  * codebase, curated bellwethers per FMP sector) -> getSecurityAnalysis()
- * (per-ticker Graham Checklist). This is the "traditional" candidate
+ * (per-ticker Value Checklist). This is the "traditional" candidate
  * pipeline: fundamental analysis on individual securities, seeded by the
  * Research Agent's own macro/industry read.
  *
@@ -58,7 +58,7 @@ export async function getTraditionalCandidates(heldSymbols: string[]): Promise<T
   const failedTickers = analyses.filter((a) => a.error !== null);
   if (failedTickers.length > 0) {
     dataLimitations.push(
-      `Could not run the Graham Checklist for: ${failedTickers.map((a) => a.ticker).join(", ")} — likely restricted on the free FMP tier.`
+      `Could not run the Value Checklist for: ${failedTickers.map((a) => a.ticker).join(", ")} — likely restricted on the free FMP tier.`
     );
   }
 

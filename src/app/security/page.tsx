@@ -8,7 +8,7 @@ export default function SecurityAnalysisPage() {
           Layer 3 &middot; Security Analyst
         </div>
         <h1 className="text-3xl font-semibold tracking-tight mt-1 mb-6">
-          Graham Checklist
+          Value Checklist
         </h1>
         <SecurityAnalystTab />
       </main>

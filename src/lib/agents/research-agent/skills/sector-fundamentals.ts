@@ -193,7 +193,7 @@ export async function getSectorFundamentals(sector: string): Promise<SectorFunda
 
   dataLimitations.push(
     "Company list is a curated set of large-cap bellwethers for this sector, not a live market-cap screen — FMP's screener endpoint requires a paid plan.",
-    "Margin variance and earnings history are based on up to 5 years (FMP free tier cap), not Graham's requested 7-10 year window.",
+    "Margin variance and earnings history are based on up to 5 years (FMP free tier cap), not the requested 7-10 year window.",
     "\"Also Tracked in This Sector\" companies have real names and real sub-industry classifications (FMP /profile), but no financial ratios — full statements are gated by the same free-tier allowlist noted above."
   );
 

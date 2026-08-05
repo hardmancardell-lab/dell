@@ -56,7 +56,7 @@ export async function getScreenerCandidates(watchlistedSymbols: string[]): Promi
   const failedTickers = analyses.filter((a) => a.error !== null);
   if (failedTickers.length > 0) {
     dataLimitations.push(
-      `Could not run the Graham Checklist for: ${failedTickers.map((a) => a.ticker).join(", ")} — likely restricted on the free FMP tier.`
+      `Could not run the Value Checklist for: ${failedTickers.map((a) => a.ticker).join(", ")} — likely restricted on the free FMP tier.`
     );
   }
 

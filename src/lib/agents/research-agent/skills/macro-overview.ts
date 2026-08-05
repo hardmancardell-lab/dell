@@ -27,8 +27,8 @@ function creditCondition(
 }
 
 // Bands follow the commonly cited historical Buffett Indicator ranges.
-// Treat as directional, not precise — Graham's own view was that aggregate
-// judgment matters more than false precision in a single ratio.
+// Treat as directional, not precise — aggregate judgment matters more than
+// false precision in a single ratio.
 function valuationCondition(buffettIndicatorPct: number): ValuationCondition {
   if (buffettIndicatorPct < 75) return "cheap";
   if (buffettIndicatorPct < 115) return "fair";

@@ -2,12 +2,12 @@ import { getSecurityAnalysis } from "./security-analysis";
 import { getMacroOverview } from "./macro-overview";
 import type { WatchlistOverviewEntry, WatchlistOverviewResult } from "../types";
 
-const STRONG_THRESHOLD = 6; // of 7 Graham criteria
+const STRONG_THRESHOLD = 6; // of 7 value-checklist criteria
 
 /**
  * The honest version of "alerts" for an app with no background server
  * process anywhere: real flags computed from real data the moment the page
- * loads, not a fake push notification. Runs the Graham Checklist for every
+ * loads, not a fake push notification. Runs the Value Checklist for every
  * watchlisted ticker in parallel (scanOne-style per-ticker isolation, same
  * idiom as watchlist-scan.ts in the trading agent) and reuses
  * getMacroOverview()'s already-computed stance synthesis for a one-line

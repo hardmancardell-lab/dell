@@ -31,7 +31,7 @@ export function PortfolioMethodologyTab() {
         <p className="text-sm text-amber-800 dark:text-amber-400 leading-relaxed">
           These aren&apos;t competing predictions about which stocks will go up — they&apos;re different frameworks
           for the same job, and they're not mutually exclusive. You can use the Traditional tab to source
-          individually-strong candidates via the Graham Checklist, then use the Modern Portfolio Theory tab to check
+          individually-strong candidates via the Value Checklist, then use the Modern Portfolio Theory tab to check
           whether the resulting combination is actually diversified, or just a collection of stocks that happen to
           move together. Both tabs work off the same holdings on the Dashboard tab.
         </p>
