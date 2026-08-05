@@ -257,6 +257,24 @@ export interface GeopoliticalVolumePoint {
   value: number; // % of monitored global coverage matching the query
 }
 
+export interface PortfolioShockScanEntry {
+  symbols: string[]; // one or more holdings sharing this query (e.g. same sector or FX pair)
+  assetClass: AssetClass;
+  query: string;
+  mechanismNote: string;
+  latestCoverageValue: number | null;
+  averageCoverageValue: number | null;
+  coverageMultiple: number | null;
+  triggered: boolean;
+  headlines: GeopoliticalArticle[];
+  narrative: string | null; // real PhD-persona synthesis, null if ANTHROPIC_API_KEY unset or not triggered
+}
+
+export interface PortfolioShockScanResult {
+  entries: PortfolioShockScanEntry[];
+  dataLimitations: string[];
+}
+
 export interface GeopoliticalNewsResult {
   query: string;
   pairLabel: string | null; // e.g. "EUR/USD" if this came from a seeded major pair

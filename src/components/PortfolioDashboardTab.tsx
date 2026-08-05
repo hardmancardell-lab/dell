@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
-import type { AssetClass, PortfolioSummary } from "@/lib/agents/trading-agent/types";
+import type { AssetClass, PortfolioShockScanResult, PortfolioSummary } from "@/lib/agents/trading-agent/types";
 
 const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
 
@@ -70,6 +70,29 @@ export function PortfolioDashboardTab() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [autoValued, setAutoValued] = useState(false);
+  const [shockScan, setShockScan] = useState<PortfolioShockScanResult | null>(null);
+  const [shockScanLoading, setShockScanLoading] = useState(false);
+  const [shockScanError, setShockScanError] = useState<string | null>(null);
+
+  async function runShockScan() {
+    setShockScanLoading(true);
+    setShockScanError(null);
+    setShockScan(null);
+    try {
+      const res = await fetch("/api/portfolio-shock-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ holdings }),
+      });
+      const json = await res.json();
+      if (!res.ok) setShockScanError(json.error ?? "Unknown error");
+      else setShockScan(json as PortfolioShockScanResult);
+    } catch (err) {
+      setShockScanError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setShockScanLoading(false);
+    }
+  }
 
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -318,6 +341,84 @@ export function PortfolioDashboardTab() {
               ))}
             </div>
           )}
+
+          <div className="border-t border-zinc-200 dark:border-zinc-800 pt-6">
+            <h3 className="text-sm font-semibold mb-2">Macro Supply/Demand Shock Scan</h3>
+            <p className="text-sm text-zinc-500 mb-3">
+              Maps your real holdings to real news-coverage-spike checks (GDELT), and — where a spike is real and
+              confirmed — a PhD-economist-persona read classifying it as a supply-side or demand-side shock. Takes
+              real time (GDELT rate-limits to ~1 request/5s); a few seconds per distinct sector/pair/commodity your
+              portfolio maps to.
+            </p>
+            <button
+              onClick={runShockScan}
+              disabled={shockScanLoading}
+              className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {shockScanLoading ? "Scanning…" : "Run Shock Scan"}
+            </button>
+
+            {shockScanError && (
+              <div className="mt-3 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+                {shockScanError}
+              </div>
+            )}
+
+            {shockScan && (
+              <div className="mt-4 space-y-4">
+                {shockScan.entries.length === 0 && shockScan.dataLimitations.length === 0 && (
+                  <p className="text-sm text-zinc-500">No holdings mapped to a real news query (e.g. bond-only portfolios) — nothing to scan.</p>
+                )}
+                {shockScan.entries.length === 0 && shockScan.dataLimitations.length > 0 && (
+                  <p className="text-sm text-zinc-500">Real holdings mapped to a query, but the scan couldn&apos;t complete — see the reason below.</p>
+                )}
+                {shockScan.entries.map((e) => (
+                  <div
+                    key={e.query}
+                    className={`rounded-lg border p-4 ${
+                      e.triggered
+                        ? "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20"
+                        : "border-zinc-200 dark:border-zinc-800"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-sm font-semibold">{e.symbols.join(", ")}</div>
+                      {e.triggered && (
+                        <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                          Coverage spike: {e.coverageMultiple?.toFixed(1)}x average
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 mb-2">{e.mechanismNote}</p>
+                    {e.narrative && <p className="text-sm mb-2 whitespace-pre-wrap">{e.narrative}</p>}
+                    {e.headlines.length > 0 && (
+                      <ul className="text-xs text-zinc-500 list-disc pl-4 space-y-1">
+                        {e.headlines.slice(0, 3).map((h) => (
+                          <li key={h.url}>
+                            <a href={h.url} target="_blank" rel="noopener noreferrer" className="underline">
+                              {h.title}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+                {shockScan.dataLimitations.length > 0 && (
+                  <div className="space-y-2">
+                    {shockScan.dataLimitations.map((d) => (
+                      <div
+                        key={d.slice(0, 30)}
+                        className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
+                      >
+                        {d}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
