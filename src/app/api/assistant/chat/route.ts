@@ -5,6 +5,17 @@ import { ASSISTANT_TOOLS, dispatchTool } from "@/lib/agents/assistant/tools";
 import { ASSISTANT_SYSTEM_PROMPT } from "@/lib/agents/assistant/system-prompt";
 import type { AssistantMessage } from "@/lib/agents/assistant/types";
 
+interface PaperTradingNavigationTarget {
+  target: { primaryId: string; secondaryId: string };
+  prefill: {
+    symbol: string;
+    assetClass: string;
+    optionRight: string | null;
+    strikePrice: number | null;
+    expirationDate: string | null;
+  };
+}
+
 // Server-side tool-use loop against the Anthropic Messages API. Capped so a
 // pathological back-and-forth (or a model that never settles) can't hang a
 // request indefinitely — same defensive-cap instinct as this app's other
@@ -34,6 +45,7 @@ export async function POST(request: Request) {
     const dataLimitations = new Set<string>();
     let finalText = "";
     let hitIterationCap = true;
+    let navigationTarget: PaperTradingNavigationTarget | null = null;
 
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
       const response = await callClaude(workingMessages, ASSISTANT_TOOLS, ASSISTANT_SYSTEM_PROMPT);
@@ -63,6 +75,14 @@ export async function POST(request: Request) {
         ) {
           for (const note of (result as { dataLimitations: string[] }).dataLimitations) dataLimitations.add(note);
         }
+        if (
+          block.name === "open_paper_trading_ticket" &&
+          result &&
+          typeof result === "object" &&
+          (result as { action?: string }).action === "open_paper_trading_ticket"
+        ) {
+          navigationTarget = result as unknown as PaperTradingNavigationTarget;
+        }
         toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
       }
       workingMessages.push({ role: "user", content: toolResults });
@@ -79,6 +99,7 @@ export async function POST(request: Request) {
       reply: finalText,
       toolsUsed: Array.from(toolsUsed),
       dataLimitations: Array.from(dataLimitations),
+      navigationTarget,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

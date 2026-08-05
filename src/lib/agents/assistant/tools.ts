@@ -130,6 +130,22 @@ export const ASSISTANT_TOOLS: AnthropicToolSchema[] = [
     input_schema: { type: "object", properties: {} },
   },
   {
+    name: "open_paper_trading_ticket",
+    description:
+      "Surfaces a real 'Open Paper Trading' button in the chat for the user to click — it does NOT place any order itself. Use this when the conversation naturally arrives at a specific, concrete paper-trading action the user could take (e.g. after discussing a ticker's setup or a specific option contract) and you want to offer a one-click way to go set it up. Never call this to execute a trade — navigation only, the user still has to fill in and submit the ticket themselves.",
+    input_schema: {
+      type: "object",
+      properties: {
+        symbol: { type: "string", description: "Underlying ticker or forex pair, e.g. 'AAPL' or 'EUR/USD'." },
+        assetClass: { type: "string", enum: ["equity", "forex", "commodity", "future", "option"] },
+        optionRight: { type: "string", enum: ["call", "put"], description: "Only for assetClass 'option'." },
+        strikePrice: { type: "number", description: "Only for assetClass 'option'." },
+        expirationDate: { type: "string", description: "YYYY-MM-DD. Only for assetClass 'option'." },
+      },
+      required: ["symbol", "assetClass"],
+    },
+  },
+  {
     name: "submit_feedback",
     description:
       "Logs a suggestion, bug report, or other feedback the user is giving about this app so the team can review it later. Call this whenever the user offers a feature idea, reports something broken or confusing, or explicitly says they want to leave feedback — don't just acknowledge it in text, actually call this tool. Use the user's own words for the message, not a paraphrase that loses specifics.",
@@ -202,6 +218,22 @@ export async function dispatchTool(
           return { error: "Strategy hypothesis ledger is not configured yet." };
         }
         return truncate(await getRecentHypotheses(50));
+      }
+      case "open_paper_trading_ticket": {
+        const symbol = String(input.symbol ?? "").trim();
+        if (!symbol) return { error: "No symbol provided." };
+        const assetClass = String(input.assetClass ?? "equity") as AssetClass;
+        return {
+          action: "open_paper_trading_ticket",
+          target: { primaryId: "trading", secondaryId: "paper-trading" },
+          prefill: {
+            symbol,
+            assetClass,
+            optionRight: input.optionRight ? String(input.optionRight) : null,
+            strikePrice: typeof input.strikePrice === "number" ? input.strikePrice : null,
+            expirationDate: input.expirationDate ? String(input.expirationDate) : null,
+          },
+        };
       }
       case "submit_feedback": {
         const category = String(input.category ?? "other") as FeedbackCategory;

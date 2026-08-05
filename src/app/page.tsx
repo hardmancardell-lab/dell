@@ -3,6 +3,7 @@ import { StatCard } from "@/components/StatCard";
 import { ResearchGlossaryTerm } from "@/components/ResearchGlossaryTerm";
 import { getSectorOverview } from "@/lib/agents/research-agent/skills/sector-overview";
 import { Tabs } from "@/components/Tabs";
+import { AppNavigationProvider } from "@/lib/navigation/app-navigation";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
 import { IndustryImpactTab } from "@/components/IndustryImpactTab";
 import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
@@ -369,9 +370,11 @@ export default async function Home() {
   ) : null;
 
   return (
+    <AppNavigationProvider>
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <main className="mx-auto max-w-4xl px-6 py-12">
         <Tabs
+          navLevel="primary"
           tabs={[
             {
               id: "top-down",
@@ -508,6 +511,8 @@ export default async function Home() {
                 </div>
                 <Tabs
                   size="secondary"
+                  navLevel="secondary"
+                  navParentId="trading"
                   tabs={[
                     {
                       id: "equities",
@@ -880,5 +885,6 @@ export default async function Home() {
         />
       </main>
     </div>
+    </AppNavigationProvider>
   );
 }

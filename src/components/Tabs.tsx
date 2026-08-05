@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
+import { useAppNavigationOptional } from "@/lib/navigation/app-navigation";
 
 export interface TabItem {
   id: string;
@@ -14,6 +15,8 @@ export function Tabs({
   size = "primary",
   theme = "default",
   mobileDropdown = false,
+  navLevel,
+  navParentId,
 }: {
   tabs: TabItem[];
   size?: "primary" | "secondary" | "tertiary";
@@ -30,15 +33,43 @@ export function Tabs({
   // the primary agent switcher, a hidden-by-default dropdown made it
   // non-obvious that other agents existed at all, so it defaults off.
   mobileDropdown?: boolean;
+  // Opt-in, additive: when set, this instance also reacts to
+  // AppNavigationProvider's `pending` target (if one is in scope) and
+  // switches its own active tab to match. "primary" listens for
+  // pending.primaryId; "secondary" listens for pending.secondaryId, but
+  // only when pending.primaryId === navParentId (so e.g. Trading Agent's
+  // secondary Tabs doesn't react to a target meant for a different primary
+  // tab). Omitted everywhere except the 2 instances the Assistant routes
+  // into — every other call site is unaffected.
+  navLevel?: "primary" | "secondary";
+  navParentId?: string;
 }) {
   const [active, setActive] = useState(tabs[0]?.id);
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
   const { track } = useTrackEvent();
+  const nav = useAppNavigationOptional();
 
   function selectTab(id: string, label: string) {
     setActive(id);
     track("tab_view", { tab: label, metadata: { level: size, tabId: id } });
   }
+
+  useEffect(() => {
+    if (!nav || !navLevel) return;
+    const pending = nav.pending;
+    if (!pending) return;
+    if (navLevel === "primary") {
+      setActive(pending.primaryId);
+      if (!pending.secondaryId) nav.consume("primary");
+    } else if (navLevel === "secondary" && pending.primaryId === navParentId && pending.secondaryId) {
+      setActive(pending.secondaryId);
+      nav.consume("secondary");
+    }
+    // Only re-run when the pending target itself changes — nav/navLevel/
+    // navParentId are stable per instance (nav's identity is memoized by
+    // AppNavigationProvider).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav?.pending]);
 
   if (size === "tertiary") {
     return (

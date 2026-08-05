@@ -2,11 +2,33 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getOrCreateSessionId, useTrackEvent } from "@/lib/analytics/use-track";
+import { useAppNavigation } from "@/lib/navigation/app-navigation";
 import type { AssistantMessage } from "@/lib/agents/assistant/types";
+
+interface PaperTradingNavigationTarget {
+  target: { primaryId: string; secondaryId: string };
+  prefill: {
+    symbol: string;
+    assetClass: string;
+    optionRight: string | null;
+    strikePrice: number | null;
+    expirationDate: string | null;
+  };
+}
 
 interface DisplayMessage extends AssistantMessage {
   toolsUsed?: string[];
   dataLimitations?: string[];
+  navigationTarget?: PaperTradingNavigationTarget | null;
+}
+
+function describePrefill(prefill: PaperTradingNavigationTarget["prefill"]): string {
+  if (prefill.assetClass === "option" && prefill.optionRight && prefill.strikePrice != null) {
+    return `${prefill.symbol} $${prefill.strikePrice} ${prefill.optionRight === "call" ? "Call" : "Put"}${
+      prefill.expirationDate ? ` · exp ${prefill.expirationDate}` : ""
+    }`;
+  }
+  return prefill.symbol;
 }
 
 const EXAMPLE_QUESTIONS = [
@@ -48,6 +70,7 @@ export function AssistantChatTab() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { track } = useTrackEvent();
+  const { navigateTo } = useAppNavigation();
 
   useEffect(() => {
     setVoiceSupported(getSpeechRecognitionCtor() !== null);
@@ -115,7 +138,13 @@ export function AssistantChatTab() {
       }
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: data.reply, toolsUsed: data.toolsUsed, dataLimitations: data.dataLimitations },
+        {
+          role: "assistant",
+          content: data.reply,
+          toolsUsed: data.toolsUsed,
+          dataLimitations: data.dataLimitations,
+          navigationTarget: data.navigationTarget ?? null,
+        },
       ]);
       speak(data.reply);
       // Message length/tool names only — never the raw question or reply text.
@@ -190,6 +219,22 @@ export function AssistantChatTab() {
                     <li key={di}>{d}</li>
                   ))}
                 </ul>
+              )}
+              {m.role === "assistant" && m.navigationTarget && (
+                <button
+                  onClick={() => {
+                    const nt = m.navigationTarget!;
+                    track("assistant_paper_trading_navigation_used", {
+                      agent: "assistant",
+                      tab: "Assistant",
+                      metadata: { symbol: nt.prefill.symbol, assetClass: nt.prefill.assetClass },
+                    });
+                    navigateTo(nt.target.primaryId, nt.target.secondaryId);
+                  }}
+                  className="mt-2 rounded-lg border border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-3 py-1.5 text-xs font-medium"
+                >
+                  Open Paper Trading — {describePrefill(m.navigationTarget.prefill)}
+                </button>
               )}
             </div>
           </div>
