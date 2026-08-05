@@ -61,6 +61,12 @@ const SaveSpendEarnGame = dynamic(
 );
 const SAVE_SPEND_EARN_MODULE_ID = "beginner-game-save-spend-earn";
 
+const DeltaDefenderGame = dynamic(
+  () => import("@/components/literacy/DeltaDefenderGame").then((m) => m.DeltaDefenderGame),
+  { ssr: false, loading: () => <div className="text-sm text-zinc-400 py-6">Loading game…</div> }
+);
+const DELTA_DEFENDER_MODULE_ID = "expert-game-delta-defender";
+
 function PlacementFlow({
   onComplete,
 }: {
@@ -915,6 +921,21 @@ function CurriculumView({
                     </p>
                     <SaveSpendEarnGame
                       onComplete={(xp) => completeModule(SAVE_SPEND_EARN_MODULE_ID, xp)}
+                    />
+                  </div>
+                )}
+                {tier === "expert" && (
+                  <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 mb-2">
+                    <div className="text-sm font-medium mb-1">
+                      Market Vector: Delta Defender {progress.completedModuleIds.includes(DELTA_DEFENDER_MODULE_ID) && (
+                        <span className="text-xs font-mono text-zinc-400 ml-2">completed</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 mb-3">
+                      A real-data arcade defense — targets are real live SPY option contracts (strike, delta, IV, bid), and each shot spends real paper-trading capital priced at the contract&apos;s own bid.
+                    </p>
+                    <DeltaDefenderGame
+                      onComplete={(xp) => completeModule(DELTA_DEFENDER_MODULE_ID, xp)}
                     />
                   </div>
                 )}
