@@ -103,11 +103,14 @@ export function useLiteracyProgress() {
     setHydrated(true);
   }, []);
 
-  const recordPlacement = useCallback((tier: LiteracyTier, goal: LearnerGoal) => {
-    const result: PlacementResult = { tier, goal, placedAt: new Date().toISOString() };
-    setPlacement(result);
-    window.localStorage.setItem(PLACEMENT_KEY, JSON.stringify(result));
-  }, []);
+  const recordPlacement = useCallback(
+    (tier: LiteracyTier, goal: LearnerGoal, breakdown?: Record<LiteracyTier, number>) => {
+      const result: PlacementResult = { tier, goal, placedAt: new Date().toISOString(), breakdown };
+      setPlacement(result);
+      window.localStorage.setItem(PLACEMENT_KEY, JSON.stringify(result));
+    },
+    []
+  );
 
   const resetPlacement = useCallback(() => {
     setPlacement(null);

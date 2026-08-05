@@ -1,6 +1,8 @@
 import { runBacktest } from "./historical-backtest";
 import { runOrbBacktest } from "./opening-range-breakout";
 import { runDayOfWeekBacktest, runTimeOfDayBacktest } from "./calendar-effects";
+import { getDailyBars } from "./daily-bars";
+import { computeShannonEntropy, dailyReturnsFromBars } from "./entropy-analyzer";
 import { insertHypothesis } from "@/lib/data/hypothesis-ledger-db";
 import type {
   AssetClass,
@@ -54,10 +56,27 @@ function entryRuleFor(signalType: EquityBacktestSignalType): string {
   }
 }
 
-function rejectionReasonFor(h: { significantAfterFdr: boolean; ciExcludesZero: boolean; sameSignOutOfSample: boolean | null }): string {
+// A result can pass all three statistical bars (FDR significance, bootstrap
+// CI excludes zero, out-of-sample sign agreement) and still not be worth
+// acting on if it wins less than half the time with a thin edge. Requiring
+// a real win-rate floor on top of the three bars is a disclosed tightening
+// of what counts as "validated" — logged explicitly in rejectionReason when
+// this is the specific reason a statistically-significant result is still
+// marked rejected.
+const MIN_WIN_RATE_PCT = 60;
+
+function rejectionReasonFor(h: {
+  significantAfterFdr: boolean;
+  ciExcludesZero: boolean;
+  sameSignOutOfSample: boolean | null;
+  winRate: number | null;
+}): string {
   if (!h.significantAfterFdr) return "Failed FDR-adjusted significance test.";
   if (!h.ciExcludesZero) return "Bootstrap confidence interval includes zero.";
   if (h.sameSignOutOfSample !== true) return "Return sign disagreed between train and out-of-sample periods.";
+  if (h.winRate === null || h.winRate < MIN_WIN_RATE_PCT) {
+    return `Passed all three statistical bars but win rate (${h.winRate === null ? "unknown" : `${h.winRate.toFixed(1)}%`}) is below the ${MIN_WIN_RATE_PCT}% floor.`;
+  }
   return "Did not pass all three statistical bars.";
 }
 
@@ -70,9 +89,12 @@ async function logHorizonResult(params: {
   exitType: HypothesisExitType;
   exitRule: string;
   sourceEngine: string;
+  entropyScore: number | null;
   horizon: BacktestHorizonResult | OrbHorizonResult | DayOfWeekEffectResult | TimeOfDayEffectResult;
 }): Promise<void> {
   const { horizon } = params;
+  const meetsWinRateFloor = horizon.winRate !== null && horizon.winRate >= MIN_WIN_RATE_PCT;
+  const validated = horizon.passesAllThreeBars && meetsWinRateFloor;
   const hypothesis: Omit<StrategyHypothesis, "id" | "createdAt"> = {
     ticker: params.ticker,
     assetClass: params.assetClass,
@@ -88,9 +110,10 @@ async function logHorizonResult(params: {
     pValueFdr: horizon.pValueFdrAdjusted,
     bootstrapCiLower: horizon.bootstrapCiLower,
     bootstrapCiUpper: horizon.bootstrapCiUpper,
-    status: horizon.passesAllThreeBars ? "validated" : "rejected",
-    rejectionReason: horizon.passesAllThreeBars ? null : rejectionReasonFor(horizon),
+    status: validated ? "validated" : "rejected",
+    rejectionReason: validated ? null : rejectionReasonFor(horizon),
     sourceEngine: params.sourceEngine,
+    entropyScore: params.entropyScore,
   };
   await insertHypothesis(hypothesis);
 }
@@ -112,6 +135,18 @@ export async function runHypothesisSweep(): Promise<HypothesisSweepResult> {
   const errors: { ticker: string; engine: string; error: string }[] = [];
 
   for (const target of SWEEP_UNIVERSE) {
+    // One real entropy read per ticker per sweep run, from the same 3-year
+    // daily-bar history the backtest engines below already pull — reused
+    // across every hypothesis logged for this ticker in this run rather
+    // than refetched per engine.
+    let entropyScore: number | null = null;
+    try {
+      const entropyBars = await getDailyBars(target.ticker, 3 * 365);
+      entropyScore = computeShannonEntropy(dailyReturnsFromBars(entropyBars));
+    } catch (err) {
+      errors.push({ ticker: target.ticker, engine: "entropy-analyzer", error: err instanceof Error ? err.message : "unknown error" });
+    }
+
     // Historical backtest — 4 signal types, each with 5 horizons. Exit is
     // time-based: a fixed N-trading-day forward hold, no price trigger.
     for (const signalType of MOMENTUM_SIGNAL_TYPES) {
@@ -127,6 +162,7 @@ export async function runHypothesisSweep(): Promise<HypothesisSweepResult> {
             exitType: "time",
             exitRule: `Fixed ${h.horizonDays}-trading-day forward hold, then exit regardless of price.`,
             sourceEngine: "historical-backtest",
+            entropyScore,
             horizon: h,
           });
           hypothesesLogged++;
@@ -149,6 +185,7 @@ export async function runHypothesisSweep(): Promise<HypothesisSweepResult> {
           exitType: "time",
           exitRule: `Exit at the close of the same ${d.dayOfWeek} session.`,
           sourceEngine: "calendar-effects:day-of-week",
+          entropyScore,
           horizon: d,
         });
         hypothesesLogged++;
@@ -171,6 +208,7 @@ export async function runHypothesisSweep(): Promise<HypothesisSweepResult> {
           exitType: "time",
           exitRule: `Exit at the end of the "${c.label}" window, same session.`,
           sourceEngine: "calendar-effects:time-of-day",
+          entropyScore,
           horizon: c,
         });
         hypothesesLogged++;
@@ -197,6 +235,7 @@ export async function runHypothesisSweep(): Promise<HypothesisSweepResult> {
             exitType: "time",
             exitRule: `Exit at the "${h.horizonLabel}" checkpoint after the breakout.`,
             sourceEngine: "opening-range-breakout",
+            entropyScore,
             horizon: h,
           });
           hypothesesLogged++;

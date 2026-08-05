@@ -1265,4 +1265,9 @@ export interface StrategyHypothesis {
   status: HypothesisStatus;
   rejectionReason: string | null;
   sourceEngine: string;
+  // Shannon entropy of the ticker's real daily-return series during this
+  // sweep (0 = maximally structured, 1 = maximally random), logged for
+  // transparency — not used to filter results. Null if there wasn't enough
+  // real bar history to compute a meaningful histogram.
+  entropyScore: number | null;
 }

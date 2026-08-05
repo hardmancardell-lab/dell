@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { isTierUnlocked, deriveBadges, useLiteracyProgress } from "@/lib/agents/financial-literacy/literacy-storage";
+import { scaffoldedWrongAnswerFeedback, placementExplanation } from "@/lib/agents/financial-literacy/teaching-persona";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import {
   GOAL_OPTIONS,
@@ -39,7 +40,23 @@ const BADGE_LABEL: Record<BadgeId, string> = {
   "quiz-perfectionist": "Perfect Round",
 };
 
-function PlacementFlow({ onComplete }: { onComplete: (tier: LiteracyTier, goal: LearnerGoal) => void }) {
+// A tier's own questions must show real strength (5/6); every tier below it
+// must also clear a genuine-grounding bar (4/6) — placement requires
+// cumulative evidence, not just performance on the target tier in
+// isolation. This is the fix for the false-mastery problem: guessing well
+// on a couple of Expert questions with no real grounding below it can no
+// longer place someone into Expert. See the psychometric standard-setting
+// literature on placement-test cut scores (e.g. NCPR's postsecondary
+// placement cut-score working paper) for why a narrow, single-tier bar
+// produces exactly this failure mode.
+const TARGET_TIER_BAR = 5; // out of 6
+const LOWER_TIER_BAR = 4; // out of 6
+
+function PlacementFlow({
+  onComplete,
+}: {
+  onComplete: (tier: LiteracyTier, goal: LearnerGoal, breakdown: Record<LiteracyTier, number>) => void;
+}) {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [goal, setGoal] = useState<LearnerGoal | null>(null);
   const [showValidation, setShowValidation] = useState(false);
@@ -57,19 +74,28 @@ function PlacementFlow({ onComplete }: { onComplete: (tier: LiteracyTier, goal: 
       if (answers[i] === q.correctIndex) correctByTier[q.tier] += 1;
     });
     let placedTier: LiteracyTier = "beginner";
-    for (const tier of LITERACY_TIER_ORDER) {
-      if (correctByTier[tier] >= 2) placedTier = tier;
-    }
-    track("literacy_placement_completed", { agent: "literacy", tab: "Placement", metadata: { tier: placedTier, goal } });
-    onComplete(placedTier, goal);
+    LITERACY_TIER_ORDER.forEach((tier, tierIndex) => {
+      const meetsTarget = correctByTier[tier] >= TARGET_TIER_BAR;
+      const meetsEveryLowerTier = LITERACY_TIER_ORDER.slice(0, tierIndex).every(
+        (lower) => correctByTier[lower] >= LOWER_TIER_BAR
+      );
+      if (meetsTarget && meetsEveryLowerTier) placedTier = tier;
+    });
+    track("literacy_placement_completed", {
+      agent: "literacy",
+      tab: "Placement",
+      metadata: { tier: placedTier, goal, breakdown: correctByTier },
+    });
+    onComplete(placedTier, goal, correctByTier);
   }
 
   return (
     <div>
       <p className="text-zinc-500 mb-6">
-        Two quick things before your curriculum: 9 questions to find where you're already
-        fluent (not a test to pass or fail — just placement), and what you actually want out
-        of this. Both can be retaken any time.
+        Two quick things before your curriculum: {PLACEMENT_QUESTIONS.length} questions to find
+        where you're already fluent (not a test to pass or fail — just placement, though placing
+        into a tier now requires real grounding in everything below it too, not just a good guess
+        on the tier itself), and what you actually want out of this. Both can be retaken any time.
       </p>
 
       <div className="space-y-6 mb-8">
@@ -142,11 +168,29 @@ const QUESTION_TIME_SECONDS = 20;
 const MAX_XP_PER_MODULE = 10; // same ceiling as the old flat award — now the fastest-correct-answer case
 const MIN_XP_FRACTION = 0.5; // slowest still-correct answer within time keeps at least half
 
-/** Kahoot-style speed scoring: answering instantly earns full XP, answering right at the buzzer earns half. */
+/**
+ * Kahoot-style speed scoring — answering instantly earns full XP, answering
+ * right at the buzzer earns half. Used ONLY by Quiz Mode (a fast, no-retry
+ * review/practice round pulled from already-completed modules, explicitly
+ * not a mastery gate). The module learn flow below deliberately does NOT
+ * use this anymore — see MIN_THINK_SECONDS.
+ */
 function speedScaledXp(secondsRemaining: number): number {
   const fraction = Math.max(0, Math.min(1, secondsRemaining / QUESTION_TIME_SECONDS));
   return Math.round(MAX_XP_PER_MODULE * (MIN_XP_FRACTION + (1 - MIN_XP_FRACTION) * fraction));
 }
+
+// The module learn flow (unlike Quiz Mode above) is where mastery is
+// actually earned and tier progression happens — rewarding fast answers
+// here directly encouraged guessing, which is the same false-mastery
+// failure mode the placement-exam fix above targets. Per Bloom's
+// mastery-learning research (real learning gains come from genuine
+// engagement + corrective feedback, not speed), a correct answer here
+// requires a real minimum think time, and a wrong answer requires a real
+// cooldown before retrying — no upper time limit, no reward for speed.
+const MIN_THINK_SECONDS = 60;
+const WRONG_ANSWER_LOCKOUT_SECONDS = 120;
+const XP_PER_CORRECT_ANSWER = 10; // flat — speed is no longer measured or rewarded
 
 function ModuleCard({
   mod,
@@ -164,33 +208,34 @@ function ModuleCard({
   const [totalXpEarned, setTotalXpEarned] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const [timedOut, setTimedOut] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_SECONDS);
-  const [awardedXp, setAwardedXp] = useState<number | null>(null);
+  const [thinkSecondsElapsed, setThinkSecondsElapsed] = useState(0);
+  const [lockoutSecondsLeft, setLockoutSecondsLeft] = useState(0);
   const { track } = useTrackEvent();
 
-  // A fresh, timed round only runs for a not-yet-completed module while
-  // open and not yet answered — an already-completed module reviews every
-  // question in the set statically instead of just the first one.
+  // A fresh round only runs for a not-yet-completed module while open and
+  // not yet answered — an already-completed module reviews every question
+  // in the set statically instead of just the first one.
   const roundActive = open && !completed && !submitted;
   const revealed = submitted || completed;
   const question = mod.checks[questionIndex];
   const isLastQuestion = questionIndex === mod.checks.length - 1;
-  const isCorrect = revealed && !timedOut && selected === question.correctIndex;
+  const isCorrect = revealed && selected === question.correctIndex;
+  const canAnswer = roundActive && thinkSecondsElapsed >= MIN_THINK_SECONDS && lockoutSecondsLeft <= 0;
 
+  // Think-gate: counts up to MIN_THINK_SECONDS while the question is live
+  // and not in a wrong-answer lockout.
   useEffect(() => {
-    if (!roundActive) return;
-    if (timeLeft <= 0) {
-      setSubmitted(true);
-      setTimedOut(true);
-      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, questionIndex, correct: false, timedOut: true } });
-      onWrongAnswer();
-      return;
-    }
-    const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+    if (!roundActive || lockoutSecondsLeft > 0 || thinkSecondsElapsed >= MIN_THINK_SECONDS) return;
+    const timer = setTimeout(() => setThinkSecondsElapsed((s) => s + 1), 1000);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundActive, timeLeft]);
+  }, [roundActive, lockoutSecondsLeft, thinkSecondsElapsed]);
+
+  // Wrong-answer lockout: counts down independently of the think-gate.
+  useEffect(() => {
+    if (lockoutSecondsLeft <= 0) return;
+    const timer = setTimeout(() => setLockoutSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [lockoutSecondsLeft]);
 
   function toggleOpen() {
     setOpen((o) => {
@@ -200,9 +245,8 @@ function ModuleCard({
         setTotalXpEarned(0);
         setSelected(null);
         setSubmitted(false);
-        setTimedOut(false);
-        setAwardedXp(null);
-        setTimeLeft(QUESTION_TIME_SECONDS);
+        setThinkSecondsElapsed(0);
+        setLockoutSecondsLeft(0);
       }
       if (next) {
         track("literacy_module_opened", { agent: "literacy", tab: "Learn", metadata: { moduleId: mod.id, tier: mod.tier, alreadyCompleted: completed } });
@@ -212,41 +256,39 @@ function ModuleCard({
   }
 
   function pickAnswer(oi: number) {
-    if (!roundActive) return;
+    if (!canAnswer) return;
     setSelected(oi);
     setSubmitted(true);
     if (oi === question.correctIndex) {
-      const xp = speedScaledXp(timeLeft);
-      setAwardedXp(xp);
-      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, questionIndex, correct: true, timedOut: false, xpAwarded: xp } });
+      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, questionIndex, correct: true, xpAwarded: XP_PER_CORRECT_ANSWER } });
       if (isLastQuestion) {
-        onComplete(totalXpEarned + xp);
+        onComplete(totalXpEarned + XP_PER_CORRECT_ANSWER);
       }
     } else {
-      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, questionIndex, correct: false, timedOut: false } });
+      track("literacy_answer", { agent: "literacy", tab: "Learn", metadata: { mode: "module-check", moduleId: mod.id, tier: mod.tier, questionIndex, correct: false } });
+      setLockoutSecondsLeft(WRONG_ANSWER_LOCKOUT_SECONDS);
       onWrongAnswer();
     }
   }
 
   function nextQuestion() {
-    setTotalXpEarned((t) => t + (awardedXp ?? 0));
+    setTotalXpEarned((t) => t + XP_PER_CORRECT_ANSWER);
     setQuestionIndex((i) => i + 1);
     setSelected(null);
     setSubmitted(false);
-    setTimedOut(false);
-    setAwardedXp(null);
-    setTimeLeft(QUESTION_TIME_SECONDS);
+    setThinkSecondsElapsed(0);
+    setLockoutSecondsLeft(0);
   }
 
   function retry() {
+    if (lockoutSecondsLeft > 0) return;
     setSelected(null);
     setSubmitted(false);
-    setTimedOut(false);
-    setAwardedXp(null);
-    setTimeLeft(QUESTION_TIME_SECONDS);
+    setThinkSecondsElapsed(0); // a genuine retry requires thinking again, not just re-clicking
   }
 
-  const timerPct = (timeLeft / QUESTION_TIME_SECONDS) * 100;
+  const thinkPct = (Math.min(thinkSecondsElapsed, MIN_THINK_SECONDS) / MIN_THINK_SECONDS) * 100;
+  const lockoutPct = (lockoutSecondsLeft / WRONG_ANSWER_LOCKOUT_SECONDS) * 100;
 
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
@@ -316,26 +358,29 @@ function ModuleCard({
               {mod.checks.length > 1 && (
                 <div className="text-xs text-zinc-400 mb-1">Question {questionIndex + 1} of {mod.checks.length}</div>
               )}
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="text-sm font-medium">{question.prompt}</div>
+              <div className="mb-3">
+                <div className="text-sm font-medium mb-2">{question.prompt}</div>
+                {roundActive && lockoutSecondsLeft > 0 && (
+                  <div className="text-xs text-amber-700 dark:text-amber-400 mb-1">
+                    Take a beat — {lockoutSecondsLeft}s before you can try again
+                  </div>
+                )}
+                {roundActive && lockoutSecondsLeft <= 0 && thinkSecondsElapsed < MIN_THINK_SECONDS && (
+                  <div className="text-xs text-zinc-500 mb-1">
+                    Think it through — {MIN_THINK_SECONDS - thinkSecondsElapsed}s before you can answer
+                  </div>
+                )}
                 {roundActive && (
-                  <div className="shrink-0 text-right">
-                    <div className={`text-lg font-mono font-bold leading-none ${timeLeft <= 5 ? "text-red-600 dark:text-red-400" : ""}`}>
-                      {timeLeft}s
-                    </div>
+                  <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-1000 ease-linear ${
+                        lockoutSecondsLeft > 0 ? "bg-amber-500" : "bg-zinc-900 dark:bg-zinc-100"
+                      }`}
+                      style={{ width: `${lockoutSecondsLeft > 0 ? lockoutPct : thinkPct}%` }}
+                    />
                   </div>
                 )}
               </div>
-              {roundActive && (
-                <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden mb-3">
-                  <div
-                    className={`h-full rounded-full transition-all duration-1000 ease-linear ${
-                      timeLeft <= 5 ? "bg-red-500" : "bg-zinc-900 dark:bg-zinc-100"
-                    }`}
-                    style={{ width: `${timerPct}%` }}
-                  />
-                </div>
-              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                 {question.options.map((opt, oi) => {
@@ -348,10 +393,12 @@ function ModuleCard({
                     <button
                       key={oi}
                       onClick={() => pickAnswer(oi)}
-                      disabled={revealed || !open}
+                      disabled={revealed || !open || !canAnswer}
                       className={`flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium text-white text-left transition-opacity ${style.bg} ${
                         dimmed ? "opacity-40" : ""
-                      } ${showCorrect ? "ring-4 ring-zinc-900 dark:ring-white" : ""} disabled:cursor-default`}
+                      } ${showCorrect ? "ring-4 ring-zinc-900 dark:ring-white" : ""} disabled:cursor-default ${
+                        roundActive && !canAnswer ? "opacity-50" : ""
+                      }`}
                     >
                       <span className="text-base leading-none shrink-0">{style.shape}</span>
                       <span className="flex-1">{opt}</span>
@@ -370,9 +417,7 @@ function ModuleCard({
                       : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
                   }`}
                 >
-                  <div className="font-medium mb-1">
-                    {isCorrect ? `Correct! +${awardedXp} XP` : timedOut ? "Time's up!" : "Not quite — try again"}
-                  </div>
+                  <div className="font-medium mb-1">{isCorrect ? `Correct! +${XP_PER_CORRECT_ANSWER} XP` : "Not quite"}</div>
                   {isCorrect ? (
                     <>
                       <div>{question.explanation}</div>
@@ -386,12 +431,21 @@ function ModuleCard({
                       )}
                     </>
                   ) : (
-                    <button
-                      onClick={retry}
-                      className="mt-1 text-xs font-medium underline underline-offset-2 hover:no-underline"
-                    >
-                      Try again
-                    </button>
+                    <>
+                      <div>{scaffoldedWrongAnswerFeedback(mod.tier)}</div>
+                      {lockoutSecondsLeft > 0 ? (
+                        <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                          Try again in {lockoutSecondsLeft}s
+                        </div>
+                      ) : (
+                        <button
+                          onClick={retry}
+                          className="mt-1 text-xs font-medium underline underline-offset-2 hover:no-underline"
+                        >
+                          Try again
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -753,12 +807,14 @@ function unlockedTiersFor(placementTier: LiteracyTier, completedModuleIds: strin
 
 function CurriculumView({
   placementTier,
+  placementBreakdown,
   progress,
   completeModule,
   onWrongAnswer,
   resetPlacement,
 }: {
   placementTier: LiteracyTier;
+  placementBreakdown?: Record<LiteracyTier, number>;
   progress: ReturnType<typeof useLiteracyProgress>["progress"];
   completeModule: (id: string, xpAwarded: number) => void;
   onWrongAnswer: () => void;
@@ -810,6 +866,12 @@ function CurriculumView({
               </span>
             ))}
           </div>
+        )}
+        {placementBreakdown && (
+          <p className="text-xs text-zinc-500 mb-3 max-w-2xl">
+            <span className="font-medium text-zinc-600 dark:text-zinc-400">Why here? </span>
+            {placementExplanation(placementBreakdown, 6, placementTier)}
+          </p>
         )}
         <button onClick={resetPlacement} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
           Retake placement
@@ -906,6 +968,7 @@ export function FinancialLiteracyTab() {
           {view === "learn" ? (
             <CurriculumView
               placementTier={placement.tier}
+              placementBreakdown={placement.breakdown}
               progress={progress}
               completeModule={completeModule}
               onWrongAnswer={recordWrongAnswer}

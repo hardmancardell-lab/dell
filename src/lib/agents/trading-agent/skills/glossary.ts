@@ -27,6 +27,14 @@ export const GLOSSARY_ENTRIES: GlossaryEntry[] = [
     seeAlso: ["fdrAdjustedP", "passesAllThreeBars"],
   },
   {
+    term: "entropyScore",
+    label: "Entropy Score",
+    category: "statistics",
+    definition:
+      "Shannon Information Entropy of the ticker's real daily-return distribution during the sweep, normalized to 0-1 (0 = highly structured/predictable, 1 = highly random). Logged on every Strategy Ledger row for context, not used to filter results — a real historical edge doesn't stop being real just because the market happens to be noisier today.",
+    seeAlso: ["passesAllThreeBars", "winRate"],
+  },
+  {
     term: "fdrAdjustedP",
     label: "FDR-adjusted p",
     category: "statistics",

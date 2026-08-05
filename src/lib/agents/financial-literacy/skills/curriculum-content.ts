@@ -1944,6 +1944,39 @@ export const PLACEMENT_QUESTIONS: PlacementQuestion[] = [
     options: ["A payday loan at 300% APR", "A mortgage on a home you can afford, at a reasonable rate", "Maxing out a credit card for a vacation", "All debt is equally bad"],
     correctIndex: 1,
   },
+  {
+    tier: "beginner",
+    prompt: "Your paycheck shows a smaller number than your stated salary implies. What's the most accurate reason why?",
+    options: [
+      "Your employer made a math error",
+      "Taxes and other withholdings are taken out before you receive gross pay as net pay",
+      "You're being paid less because you're new",
+      "Paychecks always match salary exactly",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "beginner",
+    prompt: "What's the core idea behind budgeting frameworks like the 50/30/20 rule?",
+    options: [
+      "Spend exactly 50% of your income on entertainment",
+      "Splitting income across needs, wants, and savings/debt paydown in deliberate proportions rather than spending until it runs out",
+      "Save 50% no matter what your expenses are",
+      "It only applies to people with high incomes",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "beginner",
+    prompt: "What's the main purpose of an emergency fund?",
+    options: [
+      "To invest aggressively for higher returns",
+      "To cover unexpected costs (job loss, medical bills, car repairs) without going into debt",
+      "To avoid ever having a savings account",
+      "It's the same thing as a retirement account",
+    ],
+    correctIndex: 1,
+  },
   // Intermediate probes
   {
     tier: "intermediate",
@@ -1978,6 +2011,39 @@ export const PLACEMENT_QUESTIONS: PlacementQuestion[] = [
     ],
     correctIndex: 1,
   },
+  {
+    tier: "intermediate",
+    prompt: "Your credit utilization ratio (balance owed vs. total available credit) jumps from 10% to 80% on one card. What's the most likely effect?",
+    options: [
+      "No effect — utilization doesn't matter",
+      "Your credit score is likely to drop, since high utilization signals higher risk to lenders",
+      "Your credit score automatically improves",
+      "It only matters if you miss a payment",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "intermediate",
+    prompt: "What's the main purpose of placing a stop-loss order on a position?",
+    options: [
+      "To guarantee a profit no matter what",
+      "To cap downside by automatically exiting if the price falls past a set level",
+      "To automatically buy more shares as the price rises",
+      "It has no real effect on risk",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "intermediate",
+    prompt: "As a bond's time to maturity increases (all else equal), what typically happens to its price sensitivity to interest rate changes?",
+    options: [
+      "It decreases",
+      "It increases — longer-duration bonds are more sensitive to rate moves",
+      "It stays exactly the same",
+      "Bonds have no interest rate sensitivity",
+    ],
+    correctIndex: 1,
+  },
   // Expert probes
   {
     tier: "expert",
@@ -2000,6 +2066,39 @@ export const PLACEMENT_QUESTIONS: PlacementQuestion[] = [
     tier: "expert",
     prompt: "What does the Net Current Asset Value (NCAV) approach deliberately exclude from a company's valuation?",
     options: ["Current liabilities", "Long-term/fixed assets and goodwill — a conservative, liquidation-style floor", "Current assets", "Cash on the balance sheet"],
+    correctIndex: 1,
+  },
+  {
+    tier: "expert",
+    prompt: "A portfolio's 95% 1-day Value at Risk (VaR) is $10,000. What does that actually mean?",
+    options: [
+      "The portfolio can never lose more than $10,000",
+      "On a typical day there's a 95% chance losses stay under $10,000 — it says nothing about how bad the remaining 5% tail can get",
+      "The portfolio will lose exactly $10,000 tomorrow",
+      "VaR guarantees the maximum possible loss",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "expert",
+    prompt: "On the efficient frontier, what does the maximum-Sharpe-ratio portfolio represent?",
+    options: [
+      "The single highest-return portfolio, risk ignored",
+      "The portfolio with the best risk-adjusted return — highest excess return per unit of volatility",
+      "The lowest-volatility portfolio regardless of return",
+      "An equal-weighted portfolio of every available asset",
+    ],
+    correctIndex: 1,
+  },
+  {
+    tier: "expert",
+    prompt: "The 10-year minus 2-year Treasury yield spread turns negative (inverts). What has this historically signaled?",
+    options: [
+      "Nothing — the yield curve has no predictive value",
+      "It has preceded every US recession since 1955 by roughly 6-24 months, though not with a fixed lead time",
+      "It guarantees a recession within exactly 12 months",
+      "It signals imminent inflation, not recession risk",
+    ],
     correctIndex: 1,
   },
 ];

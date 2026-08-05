@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { GlossaryTerm } from "./GlossaryTerm";
+import { classifyEntropyRegime } from "@/lib/agents/trading-agent/skills/entropy-analyzer";
 import type { StrategyHypothesis } from "@/lib/agents/trading-agent/types";
 
 function fmtPct(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "N/A";
   return `${n.toFixed(1)}%`;
 }
+
+const ENTROPY_REGIME_COLOR: Record<"low" | "medium" | "high", string> = {
+  low: "var(--signal)",
+  medium: "var(--verdict)",
+  high: "var(--danger)",
+};
 
 export function StrategyLedgerTab() {
   const [hypotheses, setHypotheses] = useState<StrategyHypothesis[] | null>(null);
@@ -61,9 +69,13 @@ export function StrategyLedgerTab() {
           <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--line)" }}>
-                {["Ticker", "Strategy", "Horizon", "Entry Rule", "Exit", "Win Rate", "Sample", "Status"].map((h) => (
+                {["Ticker", "Strategy", "Horizon", "Entry Rule", "Exit", "Win Rate", "Entropy", "Sample", "Status"].map((h) => (
                   <th key={h} className="text-left py-2 px-2" style={{ color: "var(--text-2)" }}>
-                    {h}
+                    {h === "Entropy" ? (
+                      <GlossaryTerm term="entropyScore">{h}</GlossaryTerm>
+                    ) : (
+                      h
+                    )}
                   </th>
                 ))}
               </tr>
@@ -92,6 +104,17 @@ export function StrategyLedgerTab() {
                     </div>
                   </td>
                   <td className="py-2 px-2">{fmtPct(h.winRatePct)}</td>
+                  <td className="py-2 px-2">
+                    {(() => {
+                      const regime = classifyEntropyRegime(h.entropyScore);
+                      if (!regime || h.entropyScore === null) return "N/A";
+                      return (
+                        <span style={{ color: ENTROPY_REGIME_COLOR[regime] }}>
+                          {h.entropyScore.toFixed(2)} ({regime})
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="py-2 px-2">{h.sampleSize}</td>
                   <td className="py-2 px-2">
                     {h.status === "validated" ? (

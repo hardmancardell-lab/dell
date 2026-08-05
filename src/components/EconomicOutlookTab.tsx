@@ -71,7 +71,8 @@ function CentralBankCard({ bank }: { bank: CentralBankEntry }) {
   );
 }
 
-function InternationalCentralBanksView() {
+/** Exported so Currency (Trading Agent) can mount the same real registry/content, reused rather than duplicated — see page.tsx's "Central Banks" tab. */
+export function InternationalCentralBanksView() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-zinc-500">

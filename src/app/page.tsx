@@ -6,7 +6,7 @@ import { Tabs } from "@/components/Tabs";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
 import { IndustryImpactTab } from "@/components/IndustryImpactTab";
 import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
-import { EconomicOutlookTab } from "@/components/EconomicOutlookTab";
+import { EconomicOutlookTab, InternationalCentralBanksView } from "@/components/EconomicOutlookTab";
 import { SectorFundamentalsTab } from "@/components/SectorFundamentalsTab";
 import { SectorRecommendationsTab } from "@/components/SectorRecommendationsTab";
 import { SectorStockAnalysisTab } from "@/components/SectorStockAnalysisTab";
@@ -374,7 +374,7 @@ export default async function Home() {
           tabs={[
             {
               id: "top-down",
-              label: "Top-Down Economic Analysis",
+              label: "Research Agent",
               content: (
                 <div>
                   <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
@@ -488,7 +488,7 @@ export default async function Home() {
             },
             {
               id: "trading",
-              label: "Trading Analysis",
+              label: "Trading Agent",
               content: (
                 <div>
                 <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
@@ -558,6 +558,21 @@ export default async function Home() {
                             tabs={[
                               { id: "overview", label: "Overview", content: <BondDashboardTab /> },
                               { id: "yield-curve", label: "Yield Curve", content: <YieldCurveTab /> },
+                              {
+                                id: "backtest",
+                                label: "Backtest",
+                                content: <HistoricalBacktestTab key="bonds-backtest" defaultTicker="TLT" assetClass="bond" />,
+                              },
+                              {
+                                id: "calendar-effects",
+                                label: "Calendar Effects",
+                                content: <CalendarEffectsTab key="bonds-calendar-effects" defaultTicker="TLT" assetClass="bond" />,
+                              },
+                              {
+                                id: "rolling-move-stats",
+                                label: "Rolling Move Stats",
+                                content: <RollingMoveStatsTab defaultTicker="TLT" defaultAssetClass="bond" />,
+                              },
                             ]}
                           />
                         </div>
@@ -600,6 +615,7 @@ export default async function Home() {
                               { id: "dashboard", label: "Dashboard", content: <CurrencyDashboardTab /> },
                               { id: "reference", label: "Reference Guide", content: <FxResearchSourcesTab /> },
                               { id: "macro-drivers", label: "Macro Drivers", content: <CurrencyDriversTab /> },
+                              { id: "central-banks", label: "Central Banks", content: <InternationalCentralBanksView /> },
                               { id: "pegs", label: "Currency Pegs", content: <CurrencyPegsTab /> },
                               {
                                 id: "backtest",
@@ -664,6 +680,11 @@ export default async function Home() {
                               },
                               { id: "orb-detail", label: "ORB Ticker Detail", content: <OrbDetailTab defaultTicker="SPY" /> },
                               {
+                                id: "rolling-move-stats",
+                                label: "Rolling Move Stats",
+                                content: <RollingMoveStatsTab defaultTicker="SPY" defaultAssetClass="future" />,
+                              },
+                              {
                                 id: "sources",
                                 label: "Research Sources",
                                 content: <FuturesCommoditiesResearchSourcesTab assetLabel="futures" />,
@@ -707,6 +728,11 @@ export default async function Home() {
                                 content: <OrbWatchlistTab filterAssetClass="commodity" />,
                               },
                               { id: "orb-detail", label: "ORB Ticker Detail", content: <OrbDetailTab defaultTicker="GLD" /> },
+                              {
+                                id: "rolling-move-stats",
+                                label: "Rolling Move Stats",
+                                content: <RollingMoveStatsTab defaultTicker="GLD" defaultAssetClass="commodity" />,
+                              },
                               {
                                 id: "sources",
                                 label: "Research Sources",
@@ -768,7 +794,7 @@ export default async function Home() {
             },
             {
               id: "portfolio",
-              label: "Portfolio Tracker",
+              label: "Portfolio Tracking Agent",
               content: (
                 <div>
                   <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Portfolio Tracker</div>

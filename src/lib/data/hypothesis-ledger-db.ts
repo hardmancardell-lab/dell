@@ -64,6 +64,7 @@ interface HypothesisRow {
   status: HypothesisStatus;
   rejection_reason: string | null;
   source_engine: string;
+  entropy_score: number | null;
 }
 
 function toHypothesis(row: HypothesisRow): StrategyHypothesis {
@@ -87,6 +88,7 @@ function toHypothesis(row: HypothesisRow): StrategyHypothesis {
     status: row.status,
     rejectionReason: row.rejection_reason,
     sourceEngine: row.source_engine,
+    entropyScore: row.entropy_score,
   };
 }
 
@@ -111,6 +113,7 @@ export async function insertHypothesis(h: Omit<StrategyHypothesis, "id" | "creat
       status: h.status,
       rejection_reason: h.rejectionReason,
       source_engine: h.sourceEngine,
+      entropy_score: h.entropyScore,
     },
   });
 }

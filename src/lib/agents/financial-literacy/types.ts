@@ -52,6 +52,10 @@ export interface PlacementResult {
   tier: LiteracyTier;
   goal: LearnerGoal;
   placedAt: string; // ISO date
+  // Per-tier correct-answer counts from the diagnostic, for the "why you
+  // placed here" explanation. Optional so results saved before this field
+  // existed still hydrate cleanly (no explanation shown until retaken).
+  breakdown?: Record<LiteracyTier, number>;
 }
 
 export interface LiteracyProgress {
