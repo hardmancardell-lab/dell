@@ -32,7 +32,7 @@ export function RollingMoveStatsTab({ defaultTicker = "EUR/USD", defaultAssetCla
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="jarvis flex flex-col gap-8">
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real rolling 20/40/100-day move statistics, computed directly from actual daily bars — average up-day
         return and average down-day return are reported separately, not collapsed into one symmetric figure, since
