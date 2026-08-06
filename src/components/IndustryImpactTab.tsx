@@ -15,7 +15,7 @@ const DRIVER_GLOSSARY_TERM: Record<string, string> = {
 
 export function IndustryImpactTab() {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="jarvis flex flex-col gap-6">
       <p className="text-sm" style={{ color: "var(--text-2)" }}>
         How the macro environment translates into industry-level risk and opportunity —
         which indicators matter most for each industry, and why.

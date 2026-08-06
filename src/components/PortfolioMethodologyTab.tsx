@@ -2,8 +2,8 @@ import { PORTFOLIO_METHODOLOGY_OUTLINES } from "@/lib/agents/trading-agent/skill
 
 export function PortfolioMethodologyTab() {
   return (
-    <div className="space-y-10">
-      <p className="text-zinc-500">
+    <div className="jarvis flex flex-col gap-10">
+      <p className="jv-lede">
         Two different answers to the same question — how do you build a portfolio that isn&apos;t just a pile of
         stocks you like? Traditional and Modern Portfolio Theory approach it from opposite ends: one starts with the
         individual security, the other starts with how securities relate to each other.
@@ -11,14 +11,15 @@ export function PortfolioMethodologyTab() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {PORTFOLIO_METHODOLOGY_OUTLINES.map((outline) => (
-          <section key={outline.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
-            <h2 className="text-lg font-semibold mb-2">{outline.title}</h2>
-            <p className="text-sm text-zinc-500 mb-5">{outline.summary}</p>
-            <div className="space-y-4">
+          <section key={outline.id} className="jv-card">
+            <div className="jv-br-b" />
+            <h2 className="text-lg font-semibold mb-2" style={{ color: "var(--text-0)" }}>{outline.title}</h2>
+            <p className="text-sm mb-5" style={{ color: "var(--text-1)" }}>{outline.summary}</p>
+            <div className="flex flex-col gap-4">
               {outline.points.map((p) => (
                 <div key={p.heading}>
-                  <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">{p.heading}</div>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">{p.detail}</p>
+                  <div className="jv-label">{p.heading}</div>
+                  <p className="text-sm" style={{ color: "var(--text-1)" }}>{p.detail}</p>
                 </div>
               ))}
             </div>
@@ -26,11 +27,14 @@ export function PortfolioMethodologyTab() {
         ))}
       </div>
 
-      <section className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-6">
-        <h2 className="text-lg font-semibold mb-2 text-amber-900 dark:text-amber-300">Neither Is "Correct"</h2>
-        <p className="text-sm text-amber-800 dark:text-amber-400 leading-relaxed">
+      <section className="jv-verdict-panel">
+        <div className="jv-vp-label">
+          <span className="jv-dot" />
+          Neither Is &quot;Correct&quot;
+        </div>
+        <p>
           These aren&apos;t competing predictions about which stocks will go up — they&apos;re different frameworks
-          for the same job, and they're not mutually exclusive. You can use the Traditional tab to source
+          for the same job, and they&apos;re not mutually exclusive. You can use the Traditional tab to source
           individually-strong candidates via the Value Checklist, then use the Modern Portfolio Theory tab to check
           whether the resulting combination is actually diversified, or just a collection of stocks that happen to
           move together. Both tabs work off the same holdings on the Dashboard tab.

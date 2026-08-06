@@ -10,13 +10,19 @@ function fmtPct(v: number | null): string {
   return v !== null ? `${(v * 100).toFixed(2)}%` : "N/A";
 }
 
-function corrColor(v: number | null): string {
-  if (v === null) return "";
-  if (v >= 0.7) return "bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-400";
-  if (v >= 0.3) return "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400";
-  if (v <= -0.3) return "bg-green-100 dark:bg-green-950/40 text-green-800 dark:text-green-400";
-  return "bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400";
+function corrStyle(v: number | null): { color: string; background: string } {
+  if (v === null) return { color: "var(--text-2)", background: "transparent" };
+  if (v >= 0.7) return { color: "var(--danger)", background: "rgba(232, 99, 122, 0.1)" };
+  if (v >= 0.3) return { color: "var(--verdict)", background: "rgba(240, 168, 104, 0.1)" };
+  if (v <= -0.3) return { color: "var(--signal)", background: "rgba(79, 232, 208, 0.08)" };
+  return { color: "var(--text-1)", background: "transparent" };
 }
+
+const RISK_TIER_STYLE: Record<string, { color: string; borderColor: string; background: string }> = {
+  low: { color: "var(--signal)", borderColor: "var(--signal-dim)", background: "rgba(79, 232, 208, 0.06)" },
+  medium: { color: "var(--verdict)", borderColor: "var(--verdict-dim)", background: "rgba(240, 168, 104, 0.08)" },
+  high: { color: "var(--danger)", borderColor: "var(--danger)", background: "rgba(232, 99, 122, 0.08)" },
+};
 
 export function ModernPortfolioTab() {
   const { holdings, hydrated } = usePortfolio();
@@ -72,9 +78,9 @@ export function ModernPortfolioTab() {
     : [];
 
   return (
-    <div className="space-y-8">
+    <div className="jarvis flex flex-col gap-8">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-zinc-500 flex-1">
+        <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           How your holdings move together, not how good any one of them is. Beta measures each holding&apos;s
           sensitivity to the market (via SPY); the correlation matrix and simulated efficient frontier show whether
           your portfolio is actually diversified or just holds a lot of names that move in lockstep.
@@ -82,59 +88,51 @@ export function ModernPortfolioTab() {
         <button
           onClick={runAnalytics}
           disabled={loading || holdings.length === 0}
-          className="shrink-0 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
+          className="jv-btn-outline shrink-0"
         >
           {loading ? "Computing…" : "Refresh"}
         </button>
       </div>
 
-      {holdings.length === 0 && <p className="text-sm text-zinc-500">Add holdings on the Dashboard tab first.</p>}
+      {holdings.length === 0 && <p className="text-sm" style={{ color: "var(--text-2)" }}>Add holdings on the Dashboard tab first.</p>}
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+        <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {result && (
-        <div className="space-y-8">
+        <div className="flex flex-col gap-8">
           <section>
-            <h3 className="text-sm font-semibold mb-3">Beta vs. {result.benchmark} ({result.lookbackDays}-day lookback)</h3>
+            <h3 className="jv-strip-title">Beta vs. {result.benchmark} ({result.lookbackDays}-day lookback)</h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="jv-table">
                 <thead>
-                  <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                    <th className="py-2 pr-4">Symbol</th>
-                    <th className="py-2 pr-4">Beta</th>
-                    <th className="py-2 pr-4">Alpha (daily)</th>
-                    <th className="py-2 pr-4">R²</th>
-                    <th className="py-2 pr-4">N</th>
-                    <th className="py-2 pr-4">Volatility (ann.)</th>
-                    <th className="py-2 pr-4">Risk Tier</th>
+                  <tr>
+                    <th className="text-left">Symbol</th>
+                    <th className="text-right">Beta</th>
+                    <th className="text-right">Alpha (daily)</th>
+                    <th className="text-right">R²</th>
+                    <th className="text-right">N</th>
+                    <th className="text-right">Volatility (ann.)</th>
+                    <th className="text-left">Risk Tier</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.betas.map((b) => (
-                    <tr key={b.symbol} className="border-b border-zinc-100 dark:border-zinc-900">
-                      <td className="py-2 pr-4 font-medium">{b.symbol}</td>
-                      <td className="py-2 pr-4">{b.beta !== null ? b.beta.toFixed(2) : <span className="text-zinc-500 text-xs">{b.error}</span>}</td>
-                      <td className="py-2 pr-4 text-zinc-500">{b.alpha !== null ? b.alpha.toFixed(4) : "N/A"}</td>
-                      <td className="py-2 pr-4 text-zinc-500">{b.rSquared !== null ? b.rSquared.toFixed(3) : "N/A"}</td>
-                      <td className="py-2 pr-4 text-zinc-500">{b.n}</td>
-                      <td className="py-2 pr-4 text-zinc-500">
+                    <tr key={b.symbol}>
+                      <td className="font-medium">{b.symbol}</td>
+                      <td className="jv-num">{b.beta !== null ? b.beta.toFixed(2) : <span className="text-xs" style={{ color: "var(--text-2)" }}>{b.error}</span>}</td>
+                      <td className="jv-num" style={{ color: "var(--text-2)" }}>{b.alpha !== null ? b.alpha.toFixed(4) : "N/A"}</td>
+                      <td className="jv-num" style={{ color: "var(--text-2)" }}>{b.rSquared !== null ? b.rSquared.toFixed(3) : "N/A"}</td>
+                      <td className="jv-num" style={{ color: "var(--text-2)" }}>{b.n}</td>
+                      <td className="jv-num" style={{ color: "var(--text-2)" }}>
                         {b.volatilityAnnualizedPercent !== null ? `${b.volatilityAnnualizedPercent.toFixed(1)}%` : "N/A"}
                       </td>
-                      <td className="py-2 pr-4">
+                      <td>
                         {b.riskTier && (
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                              b.riskTier === "low"
-                                ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-                                : b.riskTier === "medium"
-                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
-                                  : "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400"
-                            }`}
-                          >
+                          <span className="jv-badge" style={RISK_TIER_STYLE[b.riskTier]}>
                             {b.riskTier}
                           </span>
                         )}
@@ -147,24 +145,24 @@ export function ModernPortfolioTab() {
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold mb-3">Correlation Matrix</h3>
+            <h3 className="jv-strip-title">Correlation Matrix</h3>
             {result.correlationMatrix.symbols.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="text-sm border-collapse">
+                <table className="text-sm" style={{ borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
                       <th className="p-2"></th>
                       {result.correlationMatrix.symbols.map((s) => (
-                        <th key={s} className="p-2 text-xs font-medium text-zinc-500">{s}</th>
+                        <th key={s} className="p-2 text-xs font-medium" style={{ color: "var(--text-2)" }}>{s}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {result.correlationMatrix.symbols.map((rowSym, i) => (
                       <tr key={rowSym}>
-                        <td className="p-2 text-xs font-medium text-zinc-500">{rowSym}</td>
+                        <td className="p-2 text-xs font-medium" style={{ color: "var(--text-2)" }}>{rowSym}</td>
                         {result.correlationMatrix.matrix[i].map((v, j) => (
-                          <td key={j} className={`p-2 text-center text-xs ${corrColor(v)}`}>
+                          <td key={j} className="p-2 text-center text-xs" style={corrStyle(v)}>
                             {v !== null ? v.toFixed(2) : "N/A"}
                           </td>
                         ))}
@@ -174,75 +172,78 @@ export function ModernPortfolioTab() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-zinc-500">Not enough overlapping history to compute a correlation matrix.</p>
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>Not enough overlapping history to compute a correlation matrix.</p>
             )}
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold mb-3">Simulated Efficient Frontier</h3>
+            <h3 className="jv-strip-title">Simulated Efficient Frontier</h3>
             {cloud.length > 0 ? (
               <>
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-2">
+                <div className="jv-card">
+                  <div className="jv-br-b" />
                   <ScatterChart width={640} height={360} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
-                    <XAxis type="number" dataKey="x" name="Volatility" unit="%" tick={{ fontSize: 11 }} />
-                    <YAxis type="number" dataKey="y" name="Expected Return" unit="%" tick={{ fontSize: 11 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+                    <XAxis type="number" dataKey="x" name="Volatility" unit="%" tick={{ fontSize: 11, fill: "var(--text-2)" }} stroke="var(--line)" />
+                    <YAxis type="number" dataKey="y" name="Expected Return" unit="%" tick={{ fontSize: 11, fill: "var(--text-2)" }} stroke="var(--line)" />
                     <ZAxis range={[10, 10]} />
-                    <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(v) => `${Number(v).toFixed(2)}%`} />
-                    <Scatter name="Simulated" data={cloud} fill="#a1a1aa" opacity={0.35} />
-                    <Scatter name="Max Sharpe" data={maxSharpePt} fill="#22c55e" shape="star" />
-                    <Scatter name="Min Volatility" data={minVolPt} fill="#3b82f6" shape="diamond" />
-                    <Scatter name="Current Portfolio" data={currentPt} fill="#ef4444" shape="cross" />
+                    <Tooltip
+                      cursor={{ strokeDasharray: "3 3", stroke: "var(--line-bright)" }}
+                      formatter={(v) => `${Number(v).toFixed(2)}%`}
+                      contentStyle={{ background: "var(--ink-800)", border: "1px solid var(--line-bright)", color: "var(--text-0)", fontSize: 12 }}
+                      labelStyle={{ color: "var(--text-1)" }}
+                    />
+                    <Scatter name="Simulated" data={cloud} fill="var(--line-bright)" opacity={0.35} />
+                    <Scatter name="Max Sharpe" data={maxSharpePt} fill="var(--signal)" shape="star" />
+                    <Scatter name="Min Volatility" data={minVolPt} fill="var(--verdict)" shape="diamond" />
+                    <Scatter name="Current Portfolio" data={currentPt} fill="var(--danger)" shape="cross" />
                   </ScatterChart>
                 </div>
                 {result.frontier.maxSharpe && result.frontier.minVolatility && result.frontier.current && (
                   <div className="grid grid-cols-3 gap-4 mt-4 text-sm">
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-green-700 dark:text-green-500 mb-1">Max Sharpe</div>
-                      <div>Return {fmtPct(result.frontier.maxSharpe.expectedReturn)}, Vol {fmtPct(result.frontier.maxSharpe.volatility)}</div>
+                      <div className="jv-label" style={{ color: "var(--signal)" }}>Max Sharpe</div>
+                      <div style={{ color: "var(--text-1)" }}>Return {fmtPct(result.frontier.maxSharpe.expectedReturn)}, Vol {fmtPct(result.frontier.maxSharpe.volatility)}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-500 mb-1">Min Volatility</div>
-                      <div>Return {fmtPct(result.frontier.minVolatility.expectedReturn)}, Vol {fmtPct(result.frontier.minVolatility.volatility)}</div>
+                      <div className="jv-label" style={{ color: "var(--verdict)" }}>Min Volatility</div>
+                      <div style={{ color: "var(--text-1)" }}>Return {fmtPct(result.frontier.minVolatility.expectedReturn)}, Vol {fmtPct(result.frontier.minVolatility.volatility)}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-red-700 dark:text-red-500 mb-1">Your Portfolio</div>
-                      <div>Return {fmtPct(result.frontier.current.expectedReturn)}, Vol {fmtPct(result.frontier.current.volatility)}</div>
+                      <div className="jv-label" style={{ color: "var(--danger)" }}>Your Portfolio</div>
+                      <div style={{ color: "var(--text-1)" }}>Return {fmtPct(result.frontier.current.expectedReturn)}, Vol {fmtPct(result.frontier.current.volatility)}</div>
                     </div>
                   </div>
                 )}
                 {(result.portfolioSortinoRatioAnnualized !== null ||
                   result.portfolioMaxDrawdownPct !== null ||
                   result.portfolioHistoricalVaR95Pct !== null) && (
-                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800 text-sm">
+                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 text-sm" style={{ borderTop: "1px solid var(--line)" }}>
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Sortino Ratio (ann.)</div>
-                      <div>{result.portfolioSortinoRatioAnnualized !== null ? result.portfolioSortinoRatioAnnualized.toFixed(2) : "N/A"}</div>
+                      <div className="jv-label">Sortino Ratio (ann.)</div>
+                      <div style={{ color: "var(--text-0)" }}>{result.portfolioSortinoRatioAnnualized !== null ? result.portfolioSortinoRatioAnnualized.toFixed(2) : "N/A"}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Max Drawdown</div>
-                      <div>{result.portfolioMaxDrawdownPct !== null ? `${result.portfolioMaxDrawdownPct.toFixed(2)}%` : "N/A"}</div>
+                      <div className="jv-label">Max Drawdown</div>
+                      <div style={{ color: "var(--text-0)" }}>{result.portfolioMaxDrawdownPct !== null ? `${result.portfolioMaxDrawdownPct.toFixed(2)}%` : "N/A"}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">1-Day 95% VaR</div>
-                      <div>{result.portfolioHistoricalVaR95Pct !== null ? `${result.portfolioHistoricalVaR95Pct.toFixed(2)}%` : "N/A"}</div>
+                      <div className="jv-label">1-Day 95% VaR</div>
+                      <div style={{ color: "var(--text-0)" }}>{result.portfolioHistoricalVaR95Pct !== null ? `${result.portfolioHistoricalVaR95Pct.toFixed(2)}%` : "N/A"}</div>
                     </div>
                   </div>
                 )}
               </>
             ) : (
-              <p className="text-sm text-zinc-500">Not enough overlapping history to simulate a frontier.</p>
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>Not enough overlapping history to simulate a frontier.</p>
             )}
           </section>
 
           {result.dataLimitations.length > 0 && (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               {result.dataLimitations.map((d) => (
-                <div
-                  key={d.slice(0, 30)}
-                  className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-                >
-                  {d}
+                <div key={d.slice(0, 30)} className="jv-card" style={{ borderColor: "var(--verdict-dim)" }}>
+                  <div className="text-xs" style={{ color: "var(--verdict)" }}>{d}</div>
                 </div>
               ))}
             </div>

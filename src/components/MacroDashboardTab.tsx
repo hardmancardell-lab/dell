@@ -10,7 +10,7 @@ export function MacroDashboardTab() {
   const [selectedOther, setSelectedOther] = useState(others[0]?.id ?? "");
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="jarvis flex flex-col gap-10">
       <section>
         <div className="jv-strip-title">Six Flagship Indicators</div>
         <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>

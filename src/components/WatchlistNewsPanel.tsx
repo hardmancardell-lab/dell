@@ -14,24 +14,24 @@ function fmtDate(d: string): string {
 
 function ItemCard({ item }: { item: WatchlistNewsItem }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-3">
+    <div className="jv-card">
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="text-sm font-medium font-mono">{item.symbol}</span>
-        {item.label !== item.symbol && <span className="text-xs text-zinc-500 truncate">{item.label}</span>}
+        <span className="text-sm font-medium" style={{ color: "var(--text-0)", fontFamily: "var(--font-mono)" }}>{item.symbol}</span>
+        {item.label !== item.symbol && <span className="text-xs truncate" style={{ color: "var(--text-2)" }}>{item.label}</span>}
         {!item.curated && item.articles.length > 0 && (
-          <span className="text-[10px] uppercase tracking-wide text-zinc-400 shrink-0">generic query</span>
+          <span className="text-[10px] uppercase tracking-wide shrink-0" style={{ color: "var(--text-2)" }}>generic query</span>
         )}
       </div>
       {item.articles.length === 0 ? (
-        <p className="text-xs text-zinc-500">{item.error ?? "No articles found."}</p>
+        <p className="text-xs" style={{ color: "var(--text-2)" }}>{item.error ?? "No articles found."}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {item.articles.map((a) => (
             <li key={a.url} className="text-sm">
-              <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+              <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: "var(--text-0)" }}>
                 {a.title}
               </a>
-              <div className="text-[11px] text-zinc-400">
+              <div className="text-[11px]" style={{ color: "var(--text-2)" }}>
                 {a.domain} — {fmtDate(a.date)}
               </div>
             </li>
@@ -82,46 +82,46 @@ export function WatchlistNewsPanel({ kind, entries }: { kind: "company" | "curre
   if (uniqueCount === 0) return null;
 
   return (
-    <div className="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
-      <div className="text-sm font-semibold mb-1">
-        {kind === "company" ? "News for Your Watchlist" : "News for Your Watchlist Pairs"}
-      </div>
-      <p className="text-xs text-zinc-500 mb-3">
-        Real headlines per {kind === "company" ? "company" : "currency pair"} on your watchlist, via GDELT (the same
-        source Global News uses) since {kind === "company" ? "FMP's company-news endpoint is blocked on the free plan" : "coverage needs to be per-pair, not just the 6 curated majors"}.
-        GDELT rate-limits to ~1 request/5s, so {uniqueCount} {uniqueCount === 1 ? "symbol" : "symbols"} takes roughly {estimatedSeconds}s — this only runs when you ask it to.
-      </p>
-      <button
-        onClick={run}
-        disabled={loading}
-        className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-2 text-sm font-medium disabled:opacity-50 mb-4"
-      >
-        {loading ? `Fetching… (~${estimatedSeconds}s)` : `Fetch News for ${uniqueCount} ${uniqueCount === 1 ? "Symbol" : "Symbols"}`}
-      </button>
-
-      {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-3 text-red-700 dark:text-red-400 text-sm mb-4">
-          {error}
+    <div className="jarvis mt-4">
+      <div className="jv-card">
+        <div className="jv-br-b" />
+        <div className="text-sm font-semibold mb-1" style={{ color: "var(--text-0)" }}>
+          {kind === "company" ? "News for Your Watchlist" : "News for Your Watchlist Pairs"}
         </div>
-      )}
+        <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+          Real headlines per {kind === "company" ? "company" : "currency pair"} on your watchlist, via GDELT (the same
+          source Global News uses) since {kind === "company" ? "FMP's company-news endpoint is blocked on the free plan" : "coverage needs to be per-pair, not just the 6 curated majors"}.
+          GDELT rate-limits to ~1 request/5s, so {uniqueCount} {uniqueCount === 1 ? "symbol" : "symbols"} takes roughly {estimatedSeconds}s — this only runs when you ask it to.
+        </p>
+        <button
+          onClick={run}
+          disabled={loading}
+          className="jv-btn mb-4"
+        >
+          {loading ? `Fetching… (~${estimatedSeconds}s)` : `Fetch News for ${uniqueCount} ${uniqueCount === 1 ? "Symbol" : "Symbols"}`}
+        </button>
 
-      {result && (
-        <div className="flex flex-col gap-3">
-          {result.dataLimitations.map((d) => (
-            <div
-              key={d.slice(0, 40)}
-              className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-            >
-              {d}
-            </div>
-          ))}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {result.items.map((item) => (
-              <ItemCard key={item.symbol} item={item} />
-            ))}
+        {error && (
+          <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+            <div className="text-sm">{error}</div>
           </div>
-        </div>
-      )}
+        )}
+
+        {result && (
+          <div className="flex flex-col gap-3">
+            {result.dataLimitations.map((d) => (
+              <div key={d.slice(0, 40)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
+                {d}
+              </div>
+            ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {result.items.map((item) => (
+                <ItemCard key={item.symbol} item={item} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

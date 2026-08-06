@@ -21,52 +21,54 @@ const REFRESH_REASONS: { id: RefreshReason; label: string }[] = [
   { id: "ad_hoc_material_change", label: "Ad hoc / material change" },
 ];
 
-const RATE_PATH_META: Record<RatePathTransparency, { label: string; classes: string }> = {
+const RATE_PATH_META: Record<RatePathTransparency, { label: string; badgeClass: string; badgeStyle?: React.CSSProperties }> = {
   EXPLICIT_OWN_PATH: {
     label: "Explicit own path",
-    classes: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400",
+    badgeClass: "jv-badge c-signal",
   },
   MARKET_CONDITIONED: {
     label: "Market-conditioned",
-    classes: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
+    badgeClass: "jv-badge",
+    badgeStyle: { color: "var(--verdict)", borderColor: "var(--verdict-dim)", background: "rgba(240, 168, 104, 0.06)" },
   },
   OPAQUE_OR_POLITICAL: {
     label: "Opaque / political",
-    classes: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+    badgeClass: "jv-badge c-neutral",
   },
 };
 
 function CentralBankCard({ bank }: { bank: CentralBankEntry }) {
   const meta = RATE_PATH_META[bank.ratePathTransparency];
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-2">
+    <div className="jv-card flex flex-col gap-2">
+      <div className="jv-br-b" />
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold">{bank.countryOrArea}</div>
-          <div className="text-xs text-zinc-500">{bank.institution}</div>
+          <div className="text-sm font-semibold" style={{ color: "var(--text-0)" }}>{bank.countryOrArea}</div>
+          <div className="text-xs" style={{ color: "var(--text-2)" }}>{bank.institution}</div>
         </div>
-        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${meta.classes}`}>{meta.label}</span>
+        <span className={`${meta.badgeClass} whitespace-nowrap`} style={meta.badgeStyle}>{meta.label}</span>
       </div>
-      <div className="text-xs text-zinc-500">
-        <span className="font-medium text-zinc-700 dark:text-zinc-300">{bank.publication}</span> — {bank.cadence}, {bank.horizon}
+      <div className="text-xs" style={{ color: "var(--text-2)" }}>
+        <span className="font-medium" style={{ color: "var(--text-1)" }}>{bank.publication}</span> — {bank.cadence}, {bank.horizon}
       </div>
-      <p className="text-sm text-zinc-600 dark:text-zinc-300">{bank.methodology}</p>
-      <div className="text-xs text-zinc-500">
+      <p className="text-sm" style={{ color: "var(--text-1)" }}>{bank.methodology}</p>
+      <div className="text-xs" style={{ color: "var(--text-2)" }}>
         <span className="font-medium">Forecasts:</span> {bank.forecasts.join("; ")}
       </div>
-      <div className="text-xs text-zinc-500">
+      <div className="text-xs" style={{ color: "var(--text-2)" }}>
         <span className="font-medium">Access:</span> {bank.access.method}
         {bank.access.cost ? ` (${bank.access.cost})` : ""} — automation: {bank.automationFeasibility}
         {bank.access.url && (
           <>
             {" · "}
-            <a href={bank.access.url} target="_blank" rel="noopener noreferrer" className="underline">
+            <a href={bank.access.url} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--text-1)" }}>
               source ↗
             </a>
           </>
         )}
       </div>
-      <p className="text-xs text-zinc-400 italic">{bank.pipelineRole}</p>
+      <p className="text-xs italic" style={{ color: "var(--text-2)" }}>{bank.pipelineRole}</p>
     </div>
   );
 }
@@ -74,16 +76,19 @@ function CentralBankCard({ bank }: { bank: CentralBankEntry }) {
 /** Exported so Currency (Trading Agent) can mount the same real registry/content, reused rather than duplicated — see page.tsx's "Central Banks" tab. */
 export function InternationalCentralBanksView() {
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-zinc-500">
+    <div className="jarvis flex flex-col gap-4">
+      <p className="text-sm" style={{ color: "var(--text-2)" }}>
         Static reference content extending this app&apos;s Fed-only Economic Outlook to 13 other central banks — real
         institutions, real publications, and an honest read on how much to trust each one&apos;s rate-path signal.
         Nothing here is fetched live; this is a lookup for where to go get real international rate data, not an
         automated pipeline.
       </p>
-      <div className="rounded-lg border-2 border-zinc-900 dark:border-zinc-100 p-4">
-        <h3 className="text-xs uppercase tracking-wide text-zinc-500 mb-1">The Critical Distinction</h3>
-        <p className="text-sm leading-relaxed">{CENTRAL_BANK_CRITICAL_DISTINCTION}</p>
+      <div className="jv-verdict-panel">
+        <div className="jv-vp-label">
+          <span className="jv-dot" aria-hidden="true" />
+          The Critical Distinction
+        </div>
+        <p>{CENTRAL_BANK_CRITICAL_DISTINCTION}</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {CENTRAL_BANKS.map((bank) => (
@@ -93,7 +98,8 @@ export function InternationalCentralBanksView() {
       {CENTRAL_BANK_COVERAGE_GAPS.map((g) => (
         <div
           key={g.slice(0, 40)}
-          className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
+          className="jv-card text-xs"
+          style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}
         >
           {g}
         </div>
@@ -109,8 +115,9 @@ function fmtDate(d: string): string {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-3">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
+    <div className="jv-card flex flex-col gap-3">
+      <div className="jv-br-b" />
+      <h3 className="jv-label" style={{ marginBottom: 0 }}>{title}</h3>
       {children}
     </div>
   );
@@ -118,14 +125,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function IndicatorCard({ item }: { item: OutlookIndicator }) {
   return (
-    <div className="border-t border-zinc-100 dark:border-zinc-900 pt-2 first:border-t-0 first:pt-0">
+    <div className="pt-2 first:pt-0 first:border-t-0" style={{ borderTop: "1px solid var(--line)" }}>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-sm font-medium">{item.indicator}</span>
-        <span className="text-sm font-mono">{item.currentReading}</span>
+        <span className="text-sm font-medium" style={{ color: "var(--text-0)" }}>{item.indicator}</span>
+        <span className="text-sm font-mono" style={{ color: "var(--text-1)" }}>{item.currentReading}</span>
       </div>
-      <p className="text-xs text-zinc-500 mt-0.5">{item.roleInOutlook}</p>
-      <p className="text-xs text-zinc-400 mt-0.5 italic">How derived: {item.howDerived}</p>
-      <div className="text-[11px] text-zinc-400 mt-0.5 flex gap-3">
+      <p className="text-xs mt-0.5" style={{ color: "var(--text-2)" }}>{item.roleInOutlook}</p>
+      <p className="text-xs mt-0.5 italic" style={{ color: "var(--text-2)" }}>How derived: {item.howDerived}</p>
+      <div className="text-[11px] mt-0.5 flex gap-3" style={{ color: "var(--text-2)" }}>
         <span>Source: {item.source}</span>
         {item.lastChangedMeaningfully && <span>Last meaningful change: {item.lastChangedMeaningfully}</span>}
       </div>
@@ -157,25 +164,21 @@ function ScorecardRow({ entry, onGraded }: { entry: ScorecardEntry; onGraded: ()
   }, [entry.versionId, form, onGraded]);
 
   return (
-    <div className="border-t border-zinc-100 dark:border-zinc-900 pt-3 first:border-t-0 first:pt-0">
+    <div className="pt-3 first:pt-0 first:border-t-0" style={{ borderTop: "1px solid var(--line)" }}>
       <div className="flex items-center justify-between gap-2">
         <div>
-          <span className="text-sm font-semibold">{entry.versionId}</span>
-          <span className="text-xs text-zinc-400 ml-2">logged {fmtDate(entry.loggedDate)}</span>
+          <span className="text-sm font-semibold" style={{ color: "var(--text-0)" }}>{entry.versionId}</span>
+          <span className="text-xs ml-2" style={{ color: "var(--text-2)" }}>logged {fmtDate(entry.loggedDate)}</span>
         </div>
-        <span
-          className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full ${
-            graded ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-          }`}
-        >
+        <span className={graded ? "jv-badge c-signal" : "jv-badge c-neutral"}>
           {graded ? "Graded" : "Ungraded"}
         </span>
       </div>
-      <p className="text-xs text-zinc-500 mt-1">
-        Regime at call: <span className="font-medium">{entry.regimeTagAtCall}</span> — house view: {entry.houseViewPathAtCall}
+      <p className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
+        Regime at call: <span className="font-medium" style={{ color: "var(--text-1)" }}>{entry.regimeTagAtCall}</span> — house view: {entry.houseViewPathAtCall}
       </p>
       {entry.keyFalsificationTriggers.length > 0 && (
-        <ul className="text-xs text-zinc-400 mt-1 list-disc list-inside">
+        <ul className="text-xs mt-1 list-disc list-inside" style={{ color: "var(--text-2)" }}>
           {entry.keyFalsificationTriggers.map((t) => (
             <li key={t.slice(0, 40)}>{t}</li>
           ))}
@@ -183,7 +186,7 @@ function ScorecardRow({ entry, onGraded }: { entry: ScorecardEntry; onGraded: ()
       )}
 
       {graded && !editing && (
-        <div className="text-xs text-zinc-600 dark:text-zinc-300 mt-2 flex flex-col gap-1">
+        <div className="text-xs mt-2 flex flex-col gap-1" style={{ color: "var(--text-1)" }}>
           <span>Triggers fired: {g.didTriggersFire === null ? "—" : g.didTriggersFire ? "Yes" : "No"}</span>
           <span>Actual Fed action: {g.actualFedAction ?? "—"}</span>
           <span>Actual market reaction: {g.actualMarketReaction ?? "—"}</span>
@@ -196,23 +199,23 @@ function ScorecardRow({ entry, onGraded }: { entry: ScorecardEntry; onGraded: ()
 
       {editing ? (
         <div className="mt-2 flex flex-col gap-2 text-xs">
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-2" style={{ color: "var(--text-1)" }}>
             <input type="checkbox" checked={form.didTriggersFire === true} onChange={(e) => setForm((f) => ({ ...f, didTriggersFire: e.target.checked }))} />
             Triggers fired
           </label>
           <input
-            className="border border-zinc-300 dark:border-zinc-700 rounded px-2 py-1 bg-transparent"
+            className="jv-input"
             placeholder="Actual Fed action"
             value={form.actualFedAction ?? ""}
             onChange={(e) => setForm((f) => ({ ...f, actualFedAction: e.target.value || null }))}
           />
           <input
-            className="border border-zinc-300 dark:border-zinc-700 rounded px-2 py-1 bg-transparent"
+            className="jv-input"
             placeholder="Actual market reaction"
             value={form.actualMarketReaction ?? ""}
             onChange={(e) => setForm((f) => ({ ...f, actualMarketReaction: e.target.value || null }))}
           />
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-2" style={{ color: "var(--text-1)" }}>
             <input
               type="checkbox"
               checked={form.wasRegimeTagCorrect === true}
@@ -220,7 +223,7 @@ function ScorecardRow({ entry, onGraded }: { entry: ScorecardEntry; onGraded: ()
             />
             Regime tag was correct
           </label>
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-2" style={{ color: "var(--text-1)" }}>
             <input
               type="checkbox"
               checked={form.wasHouseViewPathCorrect === true}
@@ -229,32 +232,28 @@ function ScorecardRow({ entry, onGraded }: { entry: ScorecardEntry; onGraded: ()
             House view path was correct
           </label>
           <textarea
-            className="border border-zinc-300 dark:border-zinc-700 rounded px-2 py-1 bg-transparent"
+            className="jv-input"
             placeholder="What broke or held?"
             value={form.notesOnWhatBrokeOrHeld ?? ""}
             onChange={(e) => setForm((f) => ({ ...f, notesOnWhatBrokeOrHeld: e.target.value || null }))}
           />
           <textarea
-            className="border border-zinc-300 dark:border-zinc-700 rounded px-2 py-1 bg-transparent"
+            className="jv-input"
             placeholder="Lesson for next version"
             value={form.lessonForNextVersion ?? ""}
             onChange={(e) => setForm((f) => ({ ...f, lessonForNextVersion: e.target.value || null }))}
           />
           <div className="flex gap-2">
-            <button
-              disabled={saving}
-              onClick={save}
-              className="px-3 py-1 rounded bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 disabled:opacity-50"
-            >
+            <button disabled={saving} onClick={save} className="jv-btn" style={{ padding: "6px 14px" }}>
               {saving ? "Saving…" : "Save grading"}
             </button>
-            <button onClick={() => setEditing(false)} className="px-3 py-1 rounded border border-zinc-300 dark:border-zinc-700">
+            <button onClick={() => setEditing(false)} className="jv-btn-outline">
               Cancel
             </button>
           </div>
         </div>
       ) : (
-        <button onClick={() => setEditing(true)} className="text-xs underline text-zinc-500 mt-2">
+        <button onClick={() => setEditing(true)} className="text-xs underline mt-2" style={{ color: "var(--text-2)" }}>
           {graded ? "Edit grading" : "Grade this call"}
         </button>
       )}
@@ -353,8 +352,8 @@ export function EconomicOutlookTab() {
   const alreadyLogged = outlook ? scorecard.some((s) => s.versionId === outlook.meta.versionId) : false;
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-zinc-500 text-sm">
+    <div className="jarvis flex flex-col gap-4">
+      <p className="jv-lede" style={{ marginBottom: 0 }}>
         A versioned macro workstream modeled on the College Fed Challenge format — real FRED data for every hard
         number, one Claude pass to synthesize the qualitative read (regime, risk balance, adversarial self-Q&amp;A),
         never fabricating a figure it doesn&apos;t have (market-implied rate path, r-star, and a live FOMC calendar
@@ -366,7 +365,7 @@ export function EconomicOutlookTab() {
         <select
           value={refreshReason}
           onChange={(e) => setRefreshReason(e.target.value as RefreshReason)}
-          className="text-sm border border-zinc-300 dark:border-zinc-700 rounded px-2 py-1.5 bg-transparent"
+          className="jv-select"
         >
           {REFRESH_REASONS.map((r) => (
             <option key={r.id} value={r.id}>
@@ -374,44 +373,31 @@ export function EconomicOutlookTab() {
             </option>
           ))}
         </select>
-        <button
-          onClick={runRefresh}
-          disabled={refreshing}
-          className="text-sm px-3 py-1.5 rounded bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 disabled:opacity-50"
-        >
+        <button onClick={runRefresh} disabled={refreshing} className="jv-btn">
           {refreshing ? "Generating (real FRED data + one Claude pass, ~15-30s)…" : outlook ? "Refresh Outlook" : "Generate First Outlook"}
         </button>
-        <div className="flex rounded overflow-hidden border border-zinc-300 dark:border-zinc-700 text-sm ml-auto">
-          <button
-            onClick={() => setView("narrative")}
-            className={`px-3 py-1.5 ${view === "narrative" ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : ""}`}
-          >
+        <div className="flex gap-2 ml-auto">
+          <button onClick={() => setView("narrative")} className={view === "narrative" ? "jv-btn" : "jv-btn-outline"}>
             Narrative
           </button>
-          <button
-            onClick={() => setView("scorecard")}
-            className={`px-3 py-1.5 ${view === "scorecard" ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : ""}`}
-          >
+          <button onClick={() => setView("scorecard")} className={view === "scorecard" ? "jv-btn" : "jv-btn-outline"}>
             Scorecard ({scorecard.length})
           </button>
-          <button
-            onClick={() => setView("international")}
-            className={`px-3 py-1.5 ${view === "international" ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : ""}`}
-          >
+          <button onClick={() => setView("international")} className={view === "international" ? "jv-btn" : "jv-btn-outline"}>
             International
           </button>
         </div>
       </div>
 
-      {loading && <p className="text-sm text-zinc-500">Loading…</p>}
+      {loading && <p className="text-sm" style={{ color: "var(--text-2)" }}>Loading…</p>}
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-3 text-red-700 dark:text-red-400 text-sm">
+        <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {!loading && !outlook && !error && (
-        <div className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 p-6 text-center text-sm text-zinc-500">
+        <div className="jv-card text-center text-sm" style={{ borderStyle: "dashed", color: "var(--text-2)" }}>
           No Economic Outlook version exists yet. Click &quot;Generate First Outlook&quot; above — real FRED data
           feeds are fetched, then one Claude call synthesizes the qualitative layer strictly from those real numbers.
         </div>
@@ -419,7 +405,7 @@ export function EconomicOutlookTab() {
 
       {outlook && view === "narrative" && (
         <>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-2)" }}>
             <span>
               Version <span className="font-mono">{outlook.meta.versionId}</span>
             </span>
@@ -429,23 +415,26 @@ export function EconomicOutlookTab() {
             <span>Next scheduled: {fmtDate(outlook.meta.nextScheduledRefresh)}</span>
           </div>
 
-          <div className="rounded-lg border-2 border-zinc-900 dark:border-zinc-100 p-4">
-            <h3 className="text-xs uppercase tracking-wide text-zinc-500 mb-1">At a Glance</h3>
-            <p className="text-sm leading-relaxed">{outlook.outputLayers.glance}</p>
+          <div className="jv-verdict-panel">
+            <div className="jv-vp-label">
+              <span className="jv-dot" aria-hidden="true" />
+              At a Glance
+            </div>
+            <p>{outlook.outputLayers.glance}</p>
           </div>
 
           <Section title={`Regime — ${outlook.regimeTag.label}`}>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm" style={{ color: "var(--text-1)" }}>
               <div>
-                <span className="text-xs text-zinc-500 block">Cycle phase</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Cycle phase</span>
                 {outlook.regimeTag.cyclePhase.replace(/_/g, " ")}
               </div>
               <div>
-                <span className="text-xs text-zinc-500 block">Dual-mandate balance</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Dual-mandate balance</span>
                 {outlook.regimeTag.dualMandateBalance}
               </div>
               <div>
-                <span className="text-xs text-zinc-500 block">Financial conditions</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Financial conditions</span>
                 {outlook.regimeTag.financialConditionsStance}
               </div>
             </div>
@@ -470,21 +459,21 @@ export function EconomicOutlookTab() {
           </Section>
 
           <Section title="Policy Stance">
-            <div className="text-sm flex flex-col gap-1.5">
+            <div className="text-sm flex flex-col gap-1.5" style={{ color: "var(--text-1)" }}>
               <p>
-                <span className="text-xs text-zinc-500 block">Current target range</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Current target range</span>
                 {outlook.policyStance.currentTargetRange}
               </p>
               <p>
-                <span className="text-xs text-zinc-500 block">House view path</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>House view path</span>
                 {outlook.policyStance.houseViewPath}
               </p>
               <p>
-                <span className="text-xs text-zinc-500 block">Market-implied path</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Market-implied path</span>
                 {outlook.policyStance.marketImpliedPath}
               </p>
               <p>
-                <span className="text-xs text-zinc-500 block">Gap analysis</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Gap analysis</span>
                 {outlook.policyStance.gapAnalysis}
               </p>
             </div>
@@ -493,19 +482,19 @@ export function EconomicOutlookTab() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Section title="Upside Risks">
               {outlook.riskBalance.upsideRisks.map((r) => (
-                <div key={r.scenario} className="border-t border-zinc-100 dark:border-zinc-900 pt-2 first:border-t-0 first:pt-0 text-sm">
-                  <div className="font-medium">{r.scenario}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">Trigger: {r.trigger}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">Market implication: {r.marketImplication}</div>
+                <div key={r.scenario} className="pt-2 first:pt-0 first:border-t-0 text-sm" style={{ borderTop: "1px solid var(--line)" }}>
+                  <div className="font-medium" style={{ color: "var(--text-0)" }}>{r.scenario}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--text-2)" }}>Trigger: {r.trigger}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--text-2)" }}>Market implication: {r.marketImplication}</div>
                 </div>
               ))}
             </Section>
             <Section title="Downside Risks">
               {outlook.riskBalance.downsideRisks.map((r) => (
-                <div key={r.scenario} className="border-t border-zinc-100 dark:border-zinc-900 pt-2 first:border-t-0 first:pt-0 text-sm">
-                  <div className="font-medium">{r.scenario}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">Trigger: {r.trigger}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">Market implication: {r.marketImplication}</div>
+                <div key={r.scenario} className="pt-2 first:pt-0 first:border-t-0 text-sm" style={{ borderTop: "1px solid var(--line)" }}>
+                  <div className="font-medium" style={{ color: "var(--text-0)" }}>{r.scenario}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--text-2)" }}>Trigger: {r.trigger}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "var(--text-2)" }}>Market implication: {r.marketImplication}</div>
                 </div>
               ))}
             </Section>
@@ -513,34 +502,34 @@ export function EconomicOutlookTab() {
 
           <Section title="Adversarial Self-Q&A">
             {outlook.selfQa.map((qa) => (
-              <div key={qa.question} className="border-t border-zinc-100 dark:border-zinc-900 pt-2 first:border-t-0 first:pt-0 text-sm">
-                <div className="font-medium">{qa.question}</div>
-                <div className="text-zinc-600 dark:text-zinc-300 mt-0.5">{qa.answer}</div>
-                <div className="text-xs text-amber-700 dark:text-amber-500 mt-0.5">Falsification trigger: {qa.falsificationTrigger}</div>
+              <div key={qa.question} className="pt-2 first:pt-0 first:border-t-0 text-sm" style={{ borderTop: "1px solid var(--line)" }}>
+                <div className="font-medium" style={{ color: "var(--text-0)" }}>{qa.question}</div>
+                <div className="mt-0.5" style={{ color: "var(--text-1)" }}>{qa.answer}</div>
+                <div className="text-xs mt-0.5" style={{ color: "var(--verdict)" }}>Falsification trigger: {qa.falsificationTrigger}</div>
               </div>
             ))}
           </Section>
 
           <Section title="Trading Parameters">
-            <div className="text-sm flex flex-col gap-2">
+            <div className="text-sm flex flex-col gap-2" style={{ color: "var(--text-1)" }}>
               <p>
-                <span className="text-xs text-zinc-500 block">Vol regime</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Vol regime</span>
                 {outlook.tradingParameters.volRegime.replace(/_/g, " ")}
               </p>
               <p>
-                <span className="text-xs text-zinc-500 block">Calendar-effects priority</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Calendar-effects priority</span>
                 {outlook.tradingParameters.calendarEffectsPriority.length > 0
                   ? outlook.tradingParameters.calendarEffectsPriority.join(", ")
                   : "—"}
               </p>
               <p>
-                <span className="text-xs text-zinc-500 block">Mean-reversion window confidence</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Mean-reversion window confidence</span>
                 {outlook.tradingParameters.meanReversionWindowConfidence}
               </p>
               <div>
-                <span className="text-xs text-zinc-500 block">Event-vol catalysts</span>
+                <span className="text-xs block" style={{ color: "var(--text-2)" }}>Event-vol catalysts</span>
                 {outlook.tradingParameters.eventVolCatalysts.length === 0 ? (
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-xs" style={{ color: "var(--text-2)" }}>
                     None populated — no live FOMC/economic-calendar data source is integrated in this app.
                   </span>
                 ) : (
@@ -558,9 +547,9 @@ export function EconomicOutlookTab() {
 
           <Section title="Trigger Feed">
             {outlook.outputLayers.triggerFeed.length === 0 ? (
-              <p className="text-sm text-zinc-400">No triggers flagged in this version.</p>
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>No triggers flagged in this version.</p>
             ) : (
-              <ul className="text-sm list-disc list-inside">
+              <ul className="text-sm list-disc list-inside" style={{ color: "var(--text-1)" }}>
                 {outlook.outputLayers.triggerFeed.map((t) => (
                   <li key={t.slice(0, 40)}>{t}</li>
                 ))}
@@ -571,7 +560,8 @@ export function EconomicOutlookTab() {
           {outlook.dataLimitations.map((d) => (
             <div
               key={d.slice(0, 40)}
-              className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
+              className="jv-card text-xs"
+              style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}
             >
               {d}
             </div>
@@ -580,7 +570,7 @@ export function EconomicOutlookTab() {
           <button
             onClick={logToScorecard}
             disabled={loggingToScorecard || alreadyLogged}
-            className="text-sm self-start px-3 py-1.5 rounded border border-zinc-300 dark:border-zinc-700 disabled:opacity-50"
+            className="jv-btn-outline self-start"
           >
             {alreadyLogged ? "This version is already logged to the Scorecard" : loggingToScorecard ? "Logging…" : "Log This Version to Scorecard"}
           </button>
@@ -589,13 +579,13 @@ export function EconomicOutlookTab() {
 
       {view === "scorecard" && (
         <Section title="Scorecard Log">
-          <p className="text-xs text-zinc-500 -mt-1">
+          <p className="text-xs -mt-1" style={{ color: "var(--text-2)" }}>
             Append-only. Each entry captures the real call (regime tag, house-view path, falsification triggers) at
             the moment it was logged; grading is filled in later, once outcome data exists (recommended cadence:
             6-8 weeks after logging).
           </p>
           {scorecard.length === 0 ? (
-            <p className="text-sm text-zinc-400">No entries logged yet.</p>
+            <p className="text-sm" style={{ color: "var(--text-2)" }}>No entries logged yet.</p>
           ) : (
             scorecard.map((entry) => <ScorecardRow key={entry.versionId} entry={entry} onGraded={loadScorecard} />)
           )}

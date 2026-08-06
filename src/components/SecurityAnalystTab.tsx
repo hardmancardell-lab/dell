@@ -110,7 +110,7 @@ export function SecurityAnalystTab() {
   const passedCount = data?.checklist.filter((c) => c.passed).length ?? 0;
 
   return (
-    <div>
+    <div className="jarvis">
       <p className="jv-lede" style={{ marginBottom: 20 }}>
         A cold-blooded interrogation of one company&apos;s financial statements &mdash; NCAV, earnings
         stability, debt coverage, and the value multiplier.

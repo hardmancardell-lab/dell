@@ -47,7 +47,7 @@ export function SectorFundamentalsTab() {
   }
 
   return (
-    <div>
+    <div className="jarvis">
       <p className="jv-lede" style={{ marginBottom: 20 }}>
         Debt-to-Equity, Interest Coverage, CapEx/Depreciation, and margin variance across a curated set
         of large-cap bellwethers &mdash; closes the gaps FRED can&apos;t fill. Not a live market-cap

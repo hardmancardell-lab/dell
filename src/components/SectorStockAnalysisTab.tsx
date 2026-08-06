@@ -67,7 +67,7 @@ export function SectorStockAnalysisTab() {
   }
 
   return (
-    <div>
+    <div className="jarvis">
       <p className="jv-lede" style={{ marginBottom: 20 }}>
         Real fundamentals for the curated companies in one sector, tagged by where the current
         macro read places that sector in the business cycle. Optional forecast mode adds an

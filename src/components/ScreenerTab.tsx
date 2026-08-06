@@ -54,7 +54,7 @@ export function ScreenerTab() {
   }, [hydrated, checked]);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="jarvis flex flex-col gap-8">
       <div className="flex items-center justify-between gap-4">
         <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           Candidate securities seeded from the Research Agent&apos;s own Sector Recommendations (real

@@ -42,22 +42,22 @@ export function FuturesDashboardTab() {
   }, [loadRates]);
 
   return (
-    <div className="space-y-10">
+    <div className="jarvis flex flex-col gap-10">
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Live Rates</h2>
-          <span className="text-xs text-zinc-400">
+          <h2 className="jv-title" style={{ fontSize: 16, marginBottom: 0 }}>Live Rates</h2>
+          <span className="text-xs" style={{ color: "var(--text-2)" }}>
             {rates ? `Updated ${new Date(rates.asOf).toLocaleTimeString()}` : ""}
           </span>
         </div>
-        <p className="text-sm text-zinc-500 mb-4">
+        <p className="jv-lede" style={{ marginBottom: 16 }}>
           The 10 most-watched futures-market exposures (equity index, rates, energy, metals, agriculture) via real
           ETF proxies — not literal futures contracts, since no free source exists for those anywhere (see note
           below). Polling every 15 seconds while this tab is open. Click one for a chart.
         </p>
         {ratesError && (
-          <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm mb-4">
-            {ratesError}
+          <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+            <div className="text-sm">{ratesError}</div>
           </div>
         )}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
@@ -67,16 +67,17 @@ export function FuturesDashboardTab() {
               <button
                 key={symbol}
                 onClick={() => setSelectedSymbol(symbol)}
-                className={`rounded-lg border p-3 text-left transition-colors ${
-                  selectedSymbol === symbol
-                    ? "border-zinc-900 dark:border-zinc-100"
-                    : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600"
-                }`}
+                className="text-left p-3"
+                style={{
+                  border: "1px solid",
+                  borderColor: selectedSymbol === symbol ? "var(--line-bright)" : "var(--line)",
+                  background: "var(--ink-900)",
+                }}
               >
-                <div className="text-xs font-medium text-zinc-500">{symbol}</div>
-                <div className="text-sm font-semibold mt-0.5">
+                <div className="text-xs font-medium" style={{ color: "var(--text-2)" }}>{symbol}</div>
+                <div className="text-sm font-semibold mt-0.5" style={{ color: "var(--text-0)", fontFamily: "var(--font-mono)" }}>
                   {rate?.error ? (
-                    <span className="text-xs text-zinc-400 font-normal">N/A</span>
+                    <span className="text-xs font-normal" style={{ color: "var(--text-2)" }}>N/A</span>
                   ) : rate?.price !== null && rate?.price !== undefined ? (
                     rate.price.toFixed(2)
                   ) : (
@@ -88,10 +89,7 @@ export function FuturesDashboardTab() {
           })}
         </div>
         {rates?.dataLimitations.map((d) => (
-          <div
-            key={d.slice(0, 30)}
-            className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400 mb-2"
-          >
+          <div key={d.slice(0, 30)} className="jv-card text-xs mb-2" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
             {d}
           </div>
         ))}

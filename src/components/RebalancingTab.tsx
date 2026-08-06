@@ -5,6 +5,7 @@ import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import { computeRebalancing } from "@/lib/agents/trading-agent/skills/portfolio-rebalancing";
 import { computeHedge } from "@/lib/agents/trading-agent/skills/hedge-calculator";
 import { useTrackEvent } from "@/lib/analytics/use-track";
+import { StatCard } from "./StatCard";
 import type { OptionType } from "@/lib/agents/trading-agent/black-scholes";
 import type { PortfolioSummary } from "@/lib/agents/trading-agent/types";
 
@@ -39,33 +40,33 @@ function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
   );
 
   if (!summary) {
-    return <p className="text-sm text-zinc-500">Value your portfolio on the Dashboard tab first.</p>;
+    return <p className="text-sm" style={{ color: "var(--text-2)" }}>Value your portfolio on the Dashboard tab first.</p>;
   }
 
   return (
     <div>
-      <p className="text-zinc-500 mb-4">
+      <p className="text-sm mb-4" style={{ color: "var(--text-1)" }}>
         Set a target allocation per holding — this sizes the buy/sell needed to get there, it doesn&apos;t place any
         trades (this app has no order-execution code anywhere).
       </p>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="jv-table">
           <thead>
-            <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-              <th className="py-2 pr-4">Symbol</th>
-              <th className="py-2 pr-4">Current %</th>
-              <th className="py-2 pr-4">Target %</th>
-              <th className="py-2 pr-4">Delta $</th>
-              <th className="py-2 pr-4">Delta Shares</th>
-              <th className="py-2 pr-4">Action</th>
+            <tr>
+              <th className="text-left">Symbol</th>
+              <th className="text-right">Current %</th>
+              <th className="text-right">Target %</th>
+              <th className="text-right">Delta $</th>
+              <th className="text-right">Delta Shares</th>
+              <th className="text-left">Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.symbol} className="border-b border-zinc-100 dark:border-zinc-900">
-                <td className="py-2 pr-4 font-medium">{r.symbol}</td>
-                <td className="py-2 pr-4 text-zinc-500">{r.currentPercent.toFixed(1)}%</td>
-                <td className="py-2 pr-4">
+              <tr key={r.symbol}>
+                <td className="font-medium">{r.symbol}</td>
+                <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.currentPercent.toFixed(1)}%</td>
+                <td className="jv-num">
                   <input
                     type="number"
                     step="any"
@@ -73,22 +74,23 @@ function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
                     onChange={(e) => setTargets((prev) => ({ ...prev, [r.symbol]: e.target.value }))}
                     onBlur={() => track("rebalancing_computed", { tab: "Rebalancing", metadata: { symbolCount: uniqueSymbols.length } })}
                     placeholder="0"
-                    className="w-20 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 py-1 text-sm"
+                    className="jv-input w-20 text-right"
                   />
                 </td>
-                <td className={`py-2 pr-4 ${r.deltaValue > 0 ? "text-green-600 dark:text-green-400" : r.deltaValue < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                <td className={`jv-num ${r.deltaValue > 0 ? "jv-pnl-up" : r.deltaValue < 0 ? "jv-pnl-down" : "jv-pnl-flat"}`}>
                   {fmtUsd(r.deltaValue)}
                 </td>
-                <td className="py-2 pr-4 text-zinc-500">{r.deltaShares !== null ? r.deltaShares.toFixed(2) : "N/A"}</td>
-                <td className="py-2 pr-4">
+                <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.deltaShares !== null ? r.deltaShares.toFixed(2) : "N/A"}</td>
+                <td>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    className="jv-badge"
+                    style={
                       r.action === "buy"
-                        ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
+                        ? { color: "var(--signal)", borderColor: "var(--signal-dim)", background: "rgba(79, 232, 208, 0.06)" }
                         : r.action === "sell"
-                          ? "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400"
-                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                    }`}
+                          ? { color: "var(--danger)", borderColor: "var(--danger)", background: "rgba(232, 99, 122, 0.08)" }
+                          : { color: "var(--text-1)", borderColor: "var(--line-bright)" }
+                    }
                   >
                     {r.action}
                   </span>
@@ -98,7 +100,7 @@ function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
           </tbody>
         </table>
       </div>
-      <p className={`text-xs mt-3 ${Math.abs(totalTargetPercent - 100) < 0.5 ? "text-zinc-400" : "text-amber-600 dark:text-amber-400"}`}>
+      <p className="text-xs mt-3" style={{ color: Math.abs(totalTargetPercent - 100) < 0.5 ? "var(--text-2)" : "var(--verdict)" }}>
         Targets sum to {totalTargetPercent.toFixed(1)}% (should total 100% for a fully-allocated rebalance).
       </p>
     </div>
@@ -134,7 +136,7 @@ function HedgeCalculatorSection() {
 
   return (
     <div>
-      <p className="text-zinc-500 mb-4">
+      <p className="text-sm mb-4" style={{ color: "var(--text-1)" }}>
         How many option contracts it takes to balance a stock position — reuses this app&apos;s Black-Scholes Greeks
         (Options Calculator) to find the option&apos;s delta, then solves for the contract count that offsets your
         target share of the position&apos;s directional exposure.
@@ -144,63 +146,57 @@ function HedgeCalculatorSection() {
         onBlur={() => track("hedge_calc_used", { tab: "Rebalancing", metadata: { optionType } })}
       >
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">Position (shares, + long / - short)</span>
-          <input type="number" step="any" value={positionShares} onChange={(e) => setPositionShares(e.target.value)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm" />
+          <span className="jv-label" style={{ marginBottom: 0 }}>Position (shares, + long / - short)</span>
+          <input type="number" step="any" value={positionShares} onChange={(e) => setPositionShares(e.target.value)} className="jv-input" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">Option Type</span>
+          <span className="jv-label" style={{ marginBottom: 0 }}>Option Type</span>
           <select
             value={optionType}
             onChange={(e) => {
               setOptionType(e.target.value as OptionType);
               track("hedge_calc_used", { tab: "Rebalancing", metadata: { optionType: e.target.value } });
             }}
-            className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+            className="jv-select"
           >
             <option value="put">Put</option>
             <option value="call">Call</option>
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">Spot</span>
-          <input type="number" step="any" value={spot} onChange={(e) => setSpot(e.target.value)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm" />
+          <span className="jv-label" style={{ marginBottom: 0 }}>Spot</span>
+          <input type="number" step="any" value={spot} onChange={(e) => setSpot(e.target.value)} className="jv-input" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">Strike</span>
-          <input type="number" step="any" value={strike} onChange={(e) => setStrike(e.target.value)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm" />
+          <span className="jv-label" style={{ marginBottom: 0 }}>Strike</span>
+          <input type="number" step="any" value={strike} onChange={(e) => setStrike(e.target.value)} className="jv-input" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">Days to Expiration</span>
-          <input type="number" step="any" value={dte} onChange={(e) => setDte(e.target.value)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm" />
+          <span className="jv-label" style={{ marginBottom: 0 }}>Days to Expiration</span>
+          <input type="number" step="any" value={dte} onChange={(e) => setDte(e.target.value)} className="jv-input" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">Implied Vol %</span>
-          <input type="number" step="any" value={iv} onChange={(e) => setIv(e.target.value)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm" />
+          <span className="jv-label" style={{ marginBottom: 0 }}>Implied Vol %</span>
+          <input type="number" step="any" value={iv} onChange={(e) => setIv(e.target.value)} className="jv-input" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">Risk-Free Rate %</span>
-          <input type="number" step="any" value={riskFreeRate} onChange={(e) => setRiskFreeRate(e.target.value)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm" />
+          <span className="jv-label" style={{ marginBottom: 0 }}>Risk-Free Rate %</span>
+          <input type="number" step="any" value={riskFreeRate} onChange={(e) => setRiskFreeRate(e.target.value)} className="jv-input" />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">Target Hedge Ratio (1 = full)</span>
-          <input type="number" step="any" value={targetHedgeRatio} onChange={(e) => setTargetHedgeRatio(e.target.value)} className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm" />
+          <span className="jv-label" style={{ marginBottom: 0 }}>Target Hedge Ratio (1 = full)</span>
+          <input type="number" step="any" value={targetHedgeRatio} onChange={(e) => setTargetHedgeRatio(e.target.value)} className="jv-input" />
         </label>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-          <div className="text-xs uppercase tracking-wide text-zinc-500">Option Delta</div>
-          <div className="text-2xl font-semibold mt-1">{result.delta.toFixed(3)}</div>
-        </div>
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-          <div className="text-xs uppercase tracking-wide text-zinc-500">Contracts Needed</div>
-          <div className="text-2xl font-semibold mt-1">{result.contractsNeededRounded}</div>
-          <div className="text-sm text-zinc-500 mt-1">{result.contractsNeededRounded >= 0 ? "Buy / go long" : "Sell / write"} (exact: {result.contractsNeeded.toFixed(2)})</div>
-        </div>
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-          <div className="text-xs uppercase tracking-wide text-zinc-500">Shares Hedged / Contract</div>
-          <div className="text-2xl font-semibold mt-1">{result.sharesHedgedPerContract.toFixed(1)}</div>
-        </div>
+        <StatCard label="Option Delta" value={result.delta.toFixed(3)} />
+        <StatCard
+          label="Contracts Needed"
+          value={String(result.contractsNeededRounded)}
+          sub={`${result.contractsNeededRounded >= 0 ? "Buy / go long" : "Sell / write"} (exact: ${result.contractsNeeded.toFixed(2)})`}
+        />
+        <StatCard label="Shares Hedged / Contract" value={result.sharesHedgedPerContract.toFixed(1)} />
       </div>
     </div>
   );
@@ -237,14 +233,14 @@ export function RebalancingTab() {
   }, [hydrated, checked, holdings.length]);
 
   return (
-    <div className="space-y-10">
+    <div className="jarvis flex flex-col gap-10">
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Rebalancing</h2>
+          <h2 className="text-lg font-semibold" style={{ color: "var(--text-0)" }}>Rebalancing</h2>
           <button
             onClick={loadValuation}
             disabled={loading || holdings.length === 0}
-            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
+            className="jv-btn-outline"
           >
             {loading ? "Loading…" : "Refresh"}
           </button>
@@ -253,7 +249,7 @@ export function RebalancingTab() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-4">Options Position Hedge Calculator</h2>
+        <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--text-0)" }}>Options Position Hedge Calculator</h2>
         <HedgeCalculatorSection />
       </section>
     </div>

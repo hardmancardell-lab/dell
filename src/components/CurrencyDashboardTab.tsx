@@ -90,22 +90,22 @@ export function CurrencyDashboardTab() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="jarvis flex flex-col gap-10">
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Live Rates</h2>
-          <span className="text-xs text-zinc-400">
+          <h2 className="jv-title" style={{ fontSize: 16, marginBottom: 0 }}>Live Rates</h2>
+          <span className="text-xs" style={{ color: "var(--text-2)" }}>
             {rates ? `Updated ${new Date(rates.asOf).toLocaleTimeString()}` : ""}
           </span>
         </div>
-        <p className="text-sm text-zinc-500 mb-4">
+        <p className="jv-lede" style={{ marginBottom: 16 }}>
           The 10 most-traded currency pairs, polling every 15 seconds while
           this tab is open (not a real push/websocket stream — see note
           below). Click a pair for a chart.
         </p>
         {ratesError && (
-          <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm mb-4">
-            {ratesError}
+          <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+            <div className="text-sm">{ratesError}</div>
           </div>
         )}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
@@ -119,16 +119,17 @@ export function CurrencyDashboardTab() {
                   setExpertAnalysis(null);
                   setExpertError(null);
                 }}
-                className={`rounded-lg border p-3 text-left transition-colors ${
-                  selectedPair === pair
-                    ? "border-zinc-900 dark:border-zinc-100"
-                    : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600"
-                }`}
+                className="text-left p-3"
+                style={{
+                  border: "1px solid",
+                  borderColor: selectedPair === pair ? "var(--line-bright)" : "var(--line)",
+                  background: "var(--ink-900)",
+                }}
               >
-                <div className="text-xs font-medium text-zinc-500">{pair}</div>
-                <div className="text-sm font-semibold mt-0.5">
+                <div className="text-xs font-medium" style={{ color: "var(--text-2)" }}>{pair}</div>
+                <div className="text-sm font-semibold mt-0.5" style={{ color: "var(--text-0)", fontFamily: "var(--font-mono)" }}>
                   {rate?.error ? (
-                    <span className="text-xs text-zinc-400 font-normal">N/A</span>
+                    <span className="text-xs font-normal" style={{ color: "var(--text-2)" }}>N/A</span>
                   ) : rate?.price !== null && rate?.price !== undefined ? (
                     rate.price.toFixed(4)
                   ) : (
@@ -140,10 +141,7 @@ export function CurrencyDashboardTab() {
           })}
         </div>
         {rates?.dataLimitations.map((d) => (
-          <div
-            key={d.slice(0, 30)}
-            className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400 mb-2"
-          >
+          <div key={d.slice(0, 30)} className="jv-card text-xs mb-2" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
             {d}
           </div>
         ))}
@@ -152,47 +150,49 @@ export function CurrencyDashboardTab() {
             <PriceChart symbol={selectedPair} assetClass="forex" />
             <TickerNewsPanel symbol={selectedPair} assetClass="forex" />
 
-            <div className="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
+            <div className="mt-4 jv-card">
+              <div className="jv-br-b" />
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold">Expert Read &mdash; {selectedPair}</h3>
+                <h3 className="text-sm font-semibold" style={{ color: "var(--text-0)" }}>Expert Read &mdash; {selectedPair}</h3>
                 <button
                   onClick={runExpertAnalysis}
                   disabled={expertLoading}
-                  className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
+                  className="jv-btn"
+                  style={{ padding: "6px 14px", fontSize: 12 }}
                 >
                   {expertLoading ? "Analyzing… (~10s)" : "Get Expert Read"}
                 </button>
               </div>
-              <p className="text-xs text-zinc-500 mb-3">
+              <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
                 Real GDELT news headlines + real US rate context, synthesized by a PhD
                 international-finance/macro persona &mdash; see the Macro Drivers tab for the
                 underlying reference framework.
               </p>
               {expertError && (
-                <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-3 text-red-700 dark:text-red-400 text-xs mb-3">
-                  {expertError}
+                <div className="jv-card mb-3" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+                  <div className="text-xs">{expertError}</div>
                 </div>
               )}
               {expertAnalysis && (
-                <div className="space-y-3">
+                <div className="flex flex-col gap-3">
                   {expertAnalysis.news.mechanismNote && (
-                    <p className="text-xs text-zinc-500 italic">{expertAnalysis.news.mechanismNote}</p>
+                    <p className="text-xs italic" style={{ color: "var(--text-2)" }}>{expertAnalysis.news.mechanismNote}</p>
                   )}
                   {expertAnalysis.expertRead && (
-                    <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-3 text-sm whitespace-pre-wrap">
+                    <div className="text-sm whitespace-pre-wrap p-3" style={{ background: "var(--ink-800)", color: "var(--text-0)" }}>
                       {expertAnalysis.expertRead}
                     </div>
                   )}
                   {expertAnalysis.news.articles.length > 0 && (
                     <div>
-                      <div className="text-xs font-medium text-zinc-500 mb-1">Recent Headlines</div>
-                      <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1">
+                      <div className="jv-label" style={{ marginBottom: 4 }}>Recent Headlines</div>
+                      <ul className="text-xs flex flex-col gap-1" style={{ color: "var(--text-1)" }}>
                         {expertAnalysis.news.articles.slice(0, 8).map((a) => (
                           <li key={a.url}>
                             <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
                               {a.title}
                             </a>
-                            <span className="text-zinc-400"> &mdash; {a.domain}, {a.date}</span>
+                            <span style={{ color: "var(--text-2)" }}> &mdash; {a.domain}, {a.date}</span>
                           </li>
                         ))}
                       </ul>
@@ -200,16 +200,16 @@ export function CurrencyDashboardTab() {
                   )}
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
-                      <div className="text-zinc-500">3-Month Treasury Yield</div>
-                      <div className="font-medium">
+                      <div style={{ color: "var(--text-2)" }}>3-Month Treasury Yield</div>
+                      <div className="font-medium" style={{ color: "var(--text-0)", fontFamily: "var(--font-mono)" }}>
                         {expertAnalysis.usRateContext.threeMonthYield
                           ? `${expertAnalysis.usRateContext.threeMonthYield.value.toFixed(2)}%`
                           : "N/A"}
                       </div>
                     </div>
                     <div>
-                      <div className="text-zinc-500">10Y-2Y Spread</div>
-                      <div className="font-medium">
+                      <div style={{ color: "var(--text-2)" }}>10Y-2Y Spread</div>
+                      <div className="font-medium" style={{ color: "var(--text-0)", fontFamily: "var(--font-mono)" }}>
                         {expertAnalysis.usRateContext.yieldCurveSpread
                           ? `${expertAnalysis.usRateContext.yieldCurveSpread.value.toFixed(2)} pp`
                           : "N/A"}
@@ -217,10 +217,7 @@ export function CurrencyDashboardTab() {
                     </div>
                   </div>
                   {expertAnalysis.dataLimitations.map((d) => (
-                    <div
-                      key={d.slice(0, 30)}
-                      className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-                    >
+                    <div key={d.slice(0, 30)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
                       {d}
                     </div>
                   ))}
@@ -233,16 +230,17 @@ export function CurrencyDashboardTab() {
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">FX News Coverage Spike Check</h2>
+          <h2 className="jv-title" style={{ fontSize: 16, marginBottom: 0 }}>FX News Coverage Spike Check</h2>
           <button
             onClick={runCheck}
             disabled={loading}
-            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
+            className="jv-btn"
+            style={{ padding: "6px 14px", fontSize: 12 }}
           >
             {loading ? "Checking… (~30s)" : "Check FX News Signals"}
           </button>
         </div>
-        <p className="text-sm text-zinc-500 mb-4">
+        <p className="jv-lede" style={{ marginBottom: 16 }}>
           Checks each major pair&apos;s GDELT news-coverage volume against its
           7-day average, flagging a spike (&ge;3x) as a signal something is
           actively moving that pair. Runs on demand, not automatically on
@@ -250,32 +248,23 @@ export function CurrencyDashboardTab() {
           of its rate limit.
         </p>
         {error && (
-          <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm mb-4">
-            {error}
+          <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+            <div className="text-sm">{error}</div>
           </div>
         )}
         {results && (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             {results.map((r) => (
-              <div
-                key={r.pair}
-                className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 flex items-center justify-between"
-              >
-                <div className="font-medium text-sm">{r.pair}</div>
+              <div key={r.pair} className="jv-card flex items-center justify-between">
+                <div className="font-medium text-sm" style={{ color: "var(--text-0)" }}>{r.pair}</div>
                 {r.error ? (
-                  <div className="text-sm text-zinc-500">{r.error}</div>
+                  <div className="text-sm" style={{ color: "var(--text-2)" }}>{r.error}</div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-zinc-500">
+                    <span className="text-sm" style={{ color: "var(--text-2)" }}>
                       {r.multiple !== null ? `${r.multiple.toFixed(1)}x avg` : "N/A"}
                     </span>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
-                        r.triggered
-                          ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
-                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                      }`}
-                    >
+                    <span className={`jv-badge ${r.triggered ? "c-signal" : "c-neutral"}`}>
                       {r.triggered ? "Spike" : "Normal"}
                     </span>
                   </div>

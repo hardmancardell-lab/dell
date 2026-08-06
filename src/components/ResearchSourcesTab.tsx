@@ -2,7 +2,7 @@ import { RESEARCH_SOURCE_CATEGORIES, SYNTHESIS_TABLE } from "@/lib/agents/resear
 
 export function ResearchSourcesTab() {
   return (
-    <div className="flex flex-col gap-10">
+    <div className="jarvis flex flex-col gap-10">
       <p className="jv-lede">
         Where institutional-grade sector analysis actually comes from — past the noise of retail
         financial news and sell-side consensus upgrades, which are lagging, sentiment-driven, and

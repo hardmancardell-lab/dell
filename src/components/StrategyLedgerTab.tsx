@@ -41,7 +41,7 @@ export function StrategyLedgerTab() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="jarvis flex flex-col gap-8">
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Every row here is a real result from this app&apos;s own backtest engines, swept automatically once a week
         against a fixed ticker universe — validated rows passed real BH-FDR significance, a bootstrap confidence
@@ -66,11 +66,11 @@ export function StrategyLedgerTab() {
 
       {hypotheses && hypotheses.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+          <table className="jv-table">
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--line)" }}>
+              <tr>
                 {["Ticker", "Strategy", "Horizon", "Entry Rule", "Exit", "Win Rate", "Entropy", "Sample", "Status"].map((h) => (
-                  <th key={h} className="text-left py-2 px-2" style={{ color: "var(--text-2)" }}>
+                  <th key={h}>
                     {h === "Entropy" ? (
                       <GlossaryTerm term="entropyScore">{h}</GlossaryTerm>
                     ) : (
@@ -82,29 +82,23 @@ export function StrategyLedgerTab() {
             </thead>
             <tbody>
               {hypotheses.map((h) => (
-                <tr key={h.id} style={{ borderBottom: "1px solid var(--line)" }}>
-                  <td className="py-2 px-2 font-medium">{h.ticker}</td>
-                  <td className="py-2 px-2">{h.strategyType}</td>
-                  <td className="py-2 px-2">{h.horizonLabel}</td>
-                  <td className="py-2 px-2 text-xs" style={{ color: "var(--text-2)", maxWidth: 260 }}>
+                <tr key={h.id}>
+                  <td className="font-medium">{h.ticker}</td>
+                  <td>{h.strategyType}</td>
+                  <td>{h.horizonLabel}</td>
+                  <td className="text-xs" style={{ color: "var(--text-2)", maxWidth: 260, whiteSpace: "normal" }}>
                     {h.entryRule}
                   </td>
-                  <td className="py-2 px-2">
-                    <span
-                      className="text-xs px-2 py-0.5"
-                      style={{
-                        border: "1px solid var(--line-bright)",
-                        color: h.exitType === "time" ? "var(--text-1)" : "var(--signal)",
-                      }}
-                    >
+                  <td>
+                    <span className={`jv-badge ${h.exitType === "time" ? "c-neutral" : "c-signal"}`}>
                       {h.exitType === "time" ? "Time-based" : "Price-based"}
                     </span>
-                    <div className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
+                    <div className="text-xs mt-1" style={{ color: "var(--text-2)", whiteSpace: "normal" }}>
                       {h.exitRule}
                     </div>
                   </td>
-                  <td className="py-2 px-2">{fmtPct(h.winRatePct)}</td>
-                  <td className="py-2 px-2">
+                  <td className="jv-num">{fmtPct(h.winRatePct)}</td>
+                  <td>
                     {(() => {
                       const regime = classifyEntropyRegime(h.entropyScore);
                       if (!regime || h.entropyScore === null) return "N/A";
@@ -115,19 +109,15 @@ export function StrategyLedgerTab() {
                       );
                     })()}
                   </td>
-                  <td className="py-2 px-2">{h.sampleSize}</td>
-                  <td className="py-2 px-2">
+                  <td className="jv-num">{h.sampleSize}</td>
+                  <td>
                     {h.status === "validated" ? (
-                      <span className="text-xs px-2 py-0.5" style={{ border: "1px solid var(--signal)", color: "var(--signal)" }}>
-                        Validated
-                      </span>
+                      <span className="jv-badge c-signal">Validated</span>
                     ) : (
                       <div>
-                        <span className="text-xs px-2 py-0.5" style={{ border: "1px solid var(--danger)", color: "var(--danger)" }}>
-                          Rejected
-                        </span>
+                        <span className="jv-badge c-danger">Rejected</span>
                         {h.rejectionReason && (
-                          <div className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
+                          <div className="text-xs mt-1" style={{ color: "var(--text-2)", whiteSpace: "normal" }}>
                             {h.rejectionReason}
                           </div>
                         )}

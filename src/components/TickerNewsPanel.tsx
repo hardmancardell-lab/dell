@@ -39,100 +39,104 @@ export function TickerNewsPanel({ symbol, assetClass }: { symbol: string; assetC
   if (!symbol) return null;
 
   return (
-    <div className="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
-      <div className="text-sm font-semibold mb-3">News — {symbol}</div>
+    <div className="jarvis mt-4">
+      <div className="jv-card">
+        <div className="jv-br-b" />
+        <div className="text-sm font-semibold mb-3" style={{ color: "var(--text-0)" }}>News — {symbol}</div>
 
-      {loading && <p className="text-sm text-zinc-500">Loading news…</p>}
+        {loading && <p className="text-sm" style={{ color: "var(--text-2)" }}>Loading news…</p>}
 
-      {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-3 text-red-700 dark:text-red-400 text-sm">
-          {error}
-        </div>
-      )}
+        {error && (
+          <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+            <div className="text-sm">{error}</div>
+          </div>
+        )}
 
-      {result && (
-        <div className="space-y-3">
-          {result.companyNews !== null && (
-            <details open className="rounded-lg border border-zinc-100 dark:border-zinc-900 p-3">
-              <summary className="text-sm font-medium cursor-pointer">Company News ({result.companyNews.length})</summary>
-              {result.companyNews.length === 0 ? (
-                <p className="text-sm text-zinc-500 mt-2">No recent company news found.</p>
-              ) : (
-                <ul className="mt-2 space-y-2">
-                  {result.companyNews.map((a) => (
-                    <li key={a.url || a.title} className="text-sm">
-                      <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                        {a.title}
-                      </a>
-                      <span className="text-xs text-zinc-500 ml-2">
-                        {a.source} &middot; {fmtDate(a.publishedDate)} &middot; {a.kind === "press-release" ? "Press Release" : "News"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </details>
-          )}
+        {result && (
+          <div className="flex flex-col gap-3">
+            {result.companyNews !== null && (
+              <details open className="jv-card">
+                <summary className="text-sm font-medium cursor-pointer" style={{ color: "var(--text-0)" }}>
+                  Company News ({result.companyNews.length})
+                </summary>
+                {result.companyNews.length === 0 ? (
+                  <p className="text-sm mt-2" style={{ color: "var(--text-2)" }}>No recent company news found.</p>
+                ) : (
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {result.companyNews.map((a) => (
+                      <li key={a.url || a.title} className="text-sm">
+                        <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: "var(--text-0)" }}>
+                          {a.title}
+                        </a>
+                        <span className="text-xs ml-2" style={{ color: "var(--text-2)" }}>
+                          {a.source} &middot; {fmtDate(a.publishedDate)} &middot; {a.kind === "press-release" ? "Press Release" : "News"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </details>
+            )}
 
-          {result.secFilings !== null && (
-            <details className="rounded-lg border border-zinc-100 dark:border-zinc-900 p-3">
-              <summary className="text-sm font-medium cursor-pointer">SEC Filings ({result.secFilings.length})</summary>
-              {result.secFilings.length === 0 ? (
-                <p className="text-sm text-zinc-500 mt-2">No recent 10-K/10-Q/8-K filings found.</p>
-              ) : (
-                <ul className="mt-2 space-y-2">
-                  {result.secFilings.map((f) => (
-                    <li key={f.url} className="text-sm">
-                      <a href={f.url} target="_blank" rel="noopener noreferrer" className="hover:underline font-medium">
-                        {f.form}
-                      </a>
-                      <span className="text-xs text-zinc-500 ml-2">{fmtDate(f.filingDate)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </details>
-          )}
+            {result.secFilings !== null && (
+              <details className="jv-card">
+                <summary className="text-sm font-medium cursor-pointer" style={{ color: "var(--text-0)" }}>
+                  SEC Filings ({result.secFilings.length})
+                </summary>
+                {result.secFilings.length === 0 ? (
+                  <p className="text-sm mt-2" style={{ color: "var(--text-2)" }}>No recent 10-K/10-Q/8-K filings found.</p>
+                ) : (
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {result.secFilings.map((f) => (
+                      <li key={f.url} className="text-sm">
+                        <a href={f.url} target="_blank" rel="noopener noreferrer" className="hover:underline font-medium" style={{ color: "var(--text-0)" }}>
+                          {f.form}
+                        </a>
+                        <span className="text-xs ml-2" style={{ color: "var(--text-2)" }}>{fmtDate(f.filingDate)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </details>
+            )}
 
-          {result.macroNews && (
-            <details className="rounded-lg border border-zinc-100 dark:border-zinc-900 p-3">
-              <summary className="text-sm font-medium cursor-pointer">
-                Macro / Sector News {result.macroNews.pairLabel ? `(${result.macroNews.pairLabel})` : ""}
-              </summary>
-              {result.macroNews.mechanismNote && <p className="text-xs text-zinc-500 mt-2">{result.macroNews.mechanismNote}</p>}
-              {result.macroNews.articles.length === 0 ? (
-                <p className="text-sm text-zinc-500 mt-2">No recent articles found.</p>
-              ) : (
-                <ul className="mt-2 space-y-2">
-                  {result.macroNews.articles.map((a) => (
-                    <li key={a.url} className="text-sm">
-                      <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                        {a.title}
-                      </a>
-                      <span className="text-xs text-zinc-500 ml-2">
-                        {a.domain} &middot; {fmtDate(a.date)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </details>
-          )}
+            {result.macroNews && (
+              <details className="jv-card">
+                <summary className="text-sm font-medium cursor-pointer" style={{ color: "var(--text-0)" }}>
+                  Macro / Sector News {result.macroNews.pairLabel ? `(${result.macroNews.pairLabel})` : ""}
+                </summary>
+                {result.macroNews.mechanismNote && <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>{result.macroNews.mechanismNote}</p>}
+                {result.macroNews.articles.length === 0 ? (
+                  <p className="text-sm mt-2" style={{ color: "var(--text-2)" }}>No recent articles found.</p>
+                ) : (
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {result.macroNews.articles.map((a) => (
+                      <li key={a.url} className="text-sm">
+                        <a href={a.url} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: "var(--text-0)" }}>
+                          {a.title}
+                        </a>
+                        <span className="text-xs ml-2" style={{ color: "var(--text-2)" }}>
+                          {a.domain} &middot; {fmtDate(a.date)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </details>
+            )}
 
-          {result.dataLimitations.length > 0 && (
-            <div className="space-y-2">
-              {result.dataLimitations.map((d) => (
-                <div
-                  key={d.slice(0, 30)}
-                  className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-                >
-                  {d}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+            {result.dataLimitations.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {result.dataLimitations.map((d) => (
+                  <div key={d.slice(0, 30)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
+                    {d}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

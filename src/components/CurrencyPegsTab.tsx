@@ -39,55 +39,50 @@ function DirectionResultPanel({
   result: PegReversionDirectionResult;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4">
-      <h3 className="text-sm font-semibold mb-1">{title}</h3>
-      <p className="text-xs text-zinc-500 mb-3">
+    <div className="jv-card">
+      <div className="jv-br-b" />
+      <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--text-0)" }}>{title}</h3>
+      <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
         {thesis} — {result.signalOccurrences} historical occurrence(s) found.
       </p>
 
       {result.signalOccurrences === 0 ? (
-        <p className="text-sm text-zinc-500">No occurrences of this signal in the selected lookback window.</p>
+        <p className="text-sm" style={{ color: "var(--text-2)" }}>No occurrences of this signal in the selected lookback window.</p>
       ) : (
         <>
           <div className="overflow-x-auto mb-3">
-            <table className="w-full text-sm">
+            <table className="jv-table">
               <thead>
-                <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                  <th className="py-2 pr-4">Horizon</th>
-                  <th className="py-2 pr-4">N</th>
-                  <th className="py-2 pr-4">Mean Return</th>
-                  <th className="py-2 pr-4"><GlossaryTerm term="fdrAdjustedP">FDR-adjusted p</GlossaryTerm></th>
-                  <th className="py-2 pr-4"><GlossaryTerm term="bootstrapCi">Bootstrap 95% CI</GlossaryTerm></th>
-                  <th className="py-2 pr-4"><GlossaryTerm term="passesAllThreeBars">Passes All 3 Bars</GlossaryTerm></th>
-                  <th className="py-2 pr-4"><GlossaryTerm term="winRate">Win Rate</GlossaryTerm></th>
-                  <th className="py-2 pr-4"><GlossaryTerm term="profitFactor">Profit Factor</GlossaryTerm></th>
+                <tr>
+                  <th>Horizon</th>
+                  <th>N</th>
+                  <th>Mean Return</th>
+                  <th><GlossaryTerm term="fdrAdjustedP">FDR-adjusted p</GlossaryTerm></th>
+                  <th><GlossaryTerm term="bootstrapCi">Bootstrap 95% CI</GlossaryTerm></th>
+                  <th><GlossaryTerm term="passesAllThreeBars">Passes All 3 Bars</GlossaryTerm></th>
+                  <th><GlossaryTerm term="winRate">Win Rate</GlossaryTerm></th>
+                  <th><GlossaryTerm term="profitFactor">Profit Factor</GlossaryTerm></th>
                 </tr>
               </thead>
               <tbody>
                 {result.horizons.map((h) => (
-                  <tr key={h.horizonDays} className="border-b border-zinc-100 dark:border-zinc-900">
-                    <td className="py-2 pr-4 font-medium">{h.horizonDays}d</td>
-                    <td className="py-2 pr-4 text-zinc-500">{h.sampleSize}</td>
-                    <td className="py-2 pr-4">{fmtPct(h.meanForwardReturnPct)}</td>
-                    <td className="py-2 pr-4 text-zinc-500">{fmtP(h.pValueFdrAdjusted)}</td>
-                    <td className="py-2 pr-4 text-zinc-500">
+                  <tr key={h.horizonDays}>
+                    <td className="font-medium">{h.horizonDays}d</td>
+                    <td className="jv-num">{h.sampleSize}</td>
+                    <td className="jv-num">{fmtPct(h.meanForwardReturnPct)}</td>
+                    <td className="jv-num">{fmtP(h.pValueFdrAdjusted)}</td>
+                    <td className="jv-num">
                       {h.bootstrapCiLower !== null && h.bootstrapCiUpper !== null
                         ? `[${h.bootstrapCiLower.toFixed(2)}, ${h.bootstrapCiUpper.toFixed(2)}]`
                         : "N/A"}
                     </td>
-                    <td className="py-2 pr-4">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          h.passesAllThreeBars
-                            ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-                            : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                        }`}
-                      >
+                    <td>
+                      <span className={`jv-badge ${h.passesAllThreeBars ? "c-signal" : "c-neutral"}`}>
                         {h.passesAllThreeBars ? "yes" : "no"}
                       </span>
                     </td>
-                    <td className="py-2 pr-4 text-zinc-500">{h.winRate !== null ? `${h.winRate.toFixed(1)}%` : "N/A"}</td>
-                    <td className="py-2 pr-4 text-zinc-500">{fmtRatio(h.profitFactor)}</td>
+                    <td className="jv-num">{h.winRate !== null ? `${h.winRate.toFixed(1)}%` : "N/A"}</td>
+                    <td className="jv-num">{fmtRatio(h.profitFactor)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -95,7 +90,7 @@ function DirectionResultPanel({
           </div>
 
           {result.reversionStats && (
-            <div className="mb-3 text-xs text-zinc-500">
+            <div className="mb-3 text-xs" style={{ color: "var(--text-2)" }}>
               Of {result.reversionStats.occurrencesTracked} occurrence(s), {result.reversionStats.occurrencesReverted}{" "}
               reverted back to the peg target within {result.reversionStats.maxTrackingDays} trading days (mean{" "}
               {fmtDays(
@@ -105,53 +100,48 @@ function DirectionResultPanel({
             </div>
           )}
 
-          <details className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-2">
-            <summary className="text-xs font-medium cursor-pointer">
+          <details className="jv-card">
+            <div className="jv-br-b" />
+            <summary className="text-xs font-medium cursor-pointer" style={{ color: "var(--text-0)" }}>
               Trade Log ({result.tradeLog.length} occurrences)
             </summary>
             <div className="overflow-x-auto mt-2">
-              <table className="w-full text-xs">
+              <table className="jv-table">
                 <thead>
-                  <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                    <th className="py-1.5 pr-3">Date</th>
-                    <th className="py-1.5 pr-3">Entry</th>
-                    <th className="py-1.5 pr-3">Deviation</th>
-                    <th className="py-1.5 pr-3">Returns by Horizon</th>
-                    <th className="py-1.5 pr-3">Win/Loss</th>
-                    <th className="py-1.5 pr-3">Days to Revert</th>
+                  <tr>
+                    <th>Date</th>
+                    <th>Entry</th>
+                    <th>Deviation</th>
+                    <th>Returns by Horizon</th>
+                    <th>Win/Loss</th>
+                    <th>Days to Revert</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.tradeLog.slice(-TRADE_LOG_DISPLAY_LIMIT).map((row) => (
-                    <tr key={row.dateKey} className="border-b border-zinc-100 dark:border-zinc-900">
-                      <td className="py-1.5 pr-3 font-medium">{row.dateKey}</td>
-                      <td className="py-1.5 pr-3 text-zinc-500">{row.entryClose.toFixed(4)}</td>
-                      <td className="py-1.5 pr-3 text-zinc-500">{fmtPct(row.deviationPctAtEntry)}</td>
-                      <td className="py-1.5 pr-3 text-zinc-500">
+                    <tr key={row.dateKey}>
+                      <td className="font-medium">{row.dateKey}</td>
+                      <td className="jv-num">{row.entryClose.toFixed(4)}</td>
+                      <td className="jv-num">{fmtPct(row.deviationPctAtEntry)}</td>
+                      <td className="jv-num">
                         {row.returnsByHorizon.map((r) => `${r.horizonDays}d: ${fmtPct(r.returnPct)}`).join(" · ")}
                       </td>
-                      <td className="py-1.5 pr-3">
+                      <td>
                         {row.isWin === null ? (
                           "N/A"
                         ) : (
-                          <span
-                            className={`rounded-full px-2 py-0.5 font-medium ${
-                              row.isWin
-                                ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-                                : "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400"
-                            }`}
-                          >
+                          <span className={`jv-badge ${row.isWin ? "c-signal" : "c-danger"}`}>
                             {row.isWin ? "win" : "loss"}
                           </span>
                         )}
                       </td>
-                      <td className="py-1.5 pr-3 text-zinc-500">{fmtDays(row.daysToRevert)}</td>
+                      <td className="jv-num">{fmtDays(row.daysToRevert)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               {result.tradeLog.length > TRADE_LOG_DISPLAY_LIMIT && (
-                <p className="text-xs text-zinc-400 mt-2">
+                <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>
                   Showing the most recent {TRADE_LOG_DISPLAY_LIMIT} of {result.tradeLog.length} occurrences.
                 </p>
               )}
@@ -223,8 +213,8 @@ export function CurrencyPegsTab() {
   }
 
   return (
-    <div>
-      <p className="text-zinc-500 mb-6">
+    <div className="jarvis">
+      <p className="jv-lede">
         Every currency this app has confirmed is pegged to another, with its real target rate (and
         official band, where one exists). Below that: its own strategy — deviation from the peg
         target measured through the same statistical rigor (BH-FDR, bootstrap CI, out-of-sample
@@ -233,57 +223,51 @@ export function CurrencyPegsTab() {
       </p>
 
       {registryError && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm mb-4">
-          {registryError}
+        <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <div className="text-sm">{registryError}</div>
         </div>
       )}
 
       {pegs && (
         <div className="overflow-x-auto mb-8">
-          <table className="w-full text-sm">
+          <table className="jv-table">
             <thead>
-              <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                <th className="py-2 pr-4">Pair</th>
-                <th className="py-2 pr-4">Target Rate</th>
-                <th className="py-2 pr-4">Official Band</th>
-                <th className="py-2 pr-4">Regime</th>
-                <th className="py-2 pr-4">Authority</th>
-                <th className="py-2 pr-4">Live Rate</th>
-                <th className="py-2 pr-4">Deviation</th>
+              <tr>
+                <th>Pair</th>
+                <th>Target Rate</th>
+                <th>Official Band</th>
+                <th>Regime</th>
+                <th>Authority</th>
+                <th>Live Rate</th>
+                <th>Deviation</th>
               </tr>
             </thead>
             <tbody>
               {pegs.map((p) => {
                 const snap = snapshots.find((s) => s.pair === p.pair);
                 return (
-                  <tr key={p.pair} className="border-b border-zinc-100 dark:border-zinc-900">
-                    <td className="py-2 pr-4 font-medium">{p.pair}</td>
-                    <td className="py-2 pr-4 text-zinc-500">{p.targetRate}</td>
-                    <td className="py-2 pr-4 text-zinc-500">
+                  <tr key={p.pair}>
+                    <td className="font-medium">{p.pair}</td>
+                    <td className="jv-num">{p.targetRate}</td>
+                    <td className="jv-num">
                       {p.bandLowerBound !== null && p.bandUpperBound !== null
                         ? `${p.bandLowerBound}–${p.bandUpperBound}`
                         : "None (hard fixed)"}
                     </td>
-                    <td className="py-2 pr-4 text-zinc-500 text-xs">{p.regimeName}</td>
-                    <td className="py-2 pr-4 text-zinc-500 text-xs">{p.authority}</td>
-                    <td className="py-2 pr-4 text-zinc-500">
+                    <td className="text-xs" style={{ color: "var(--text-2)" }}>{p.regimeName}</td>
+                    <td className="text-xs" style={{ color: "var(--text-2)" }}>{p.authority}</td>
+                    <td className="jv-num">
                       {!p.liveDataAvailable ? (
-                        <span className="text-xs text-zinc-400">No live feed</span>
+                        <span className="text-xs" style={{ color: "var(--text-2)" }}>No live feed</span>
                       ) : snap ? (
                         snap.currentRate.toFixed(4)
                       ) : (
                         "…"
                       )}
                     </td>
-                    <td className="py-2 pr-4">
+                    <td className="jv-num">
                       {snap ? (
-                        <span
-                          className={
-                            snap.outsideBand
-                              ? "text-red-600 dark:text-red-400 font-medium"
-                              : "text-zinc-500"
-                          }
-                        >
+                        <span style={{ color: snap.outsideBand ? "var(--danger)" : "var(--text-1)", fontWeight: snap.outsideBand ? 500 : 400 }}>
                           {fmtPct(snap.deviationPct)}
                           {snap.outsideBand ? " (outside band)" : ""}
                         </span>
@@ -296,7 +280,7 @@ export function CurrencyPegsTab() {
               })}
             </tbody>
           </table>
-          <p className="text-xs text-zinc-400 mt-2">
+          <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>
             &quot;No live feed&quot; pegs are real, currently-in-force pegs — this app just has no live
             spot-price source for them (confirmed by direct testing against OANDA, this app&apos;s only
             forex data provider).
@@ -304,15 +288,16 @@ export function CurrencyPegsTab() {
         </div>
       )}
 
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 mb-4">
-        <h2 className="text-sm font-semibold mb-3">Peg-Deviation Mean Reversion — Backtest</h2>
+      <div className="jv-card mb-4">
+        <div className="jv-br-b" />
+        <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-0)" }}>Peg-Deviation Mean Reversion — Backtest</h2>
         <div className="flex flex-wrap gap-3 items-end">
           <div>
-            <label className="block text-xs font-medium text-zinc-500 mb-1">Pair</label>
+            <label className="jv-label block mb-1">Pair</label>
             <select
               value={selectedPair}
               onChange={(e) => setSelectedPair(e.target.value)}
-              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+              className="jv-select"
             >
               {liveDataPegs.map((p) => (
                 <option key={p.pair} value={p.pair}>
@@ -322,11 +307,11 @@ export function CurrencyPegsTab() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-zinc-500 mb-1">Lookback</label>
+            <label className="jv-label block mb-1">Lookback</label>
             <select
               value={lookbackYears}
               onChange={(e) => setLookbackYears(Number(e.target.value))}
-              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+              className="jv-select"
             >
               {LOOKBACK_YEAR_OPTIONS.map((y) => (
                 <option key={y} value={y}>
@@ -338,12 +323,12 @@ export function CurrencyPegsTab() {
           <button
             onClick={runBacktest}
             disabled={loading || liveDataPegs.length === 0}
-            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
+            className="jv-btn"
           >
             {loading ? "Running…" : "Run Backtest"}
           </button>
         </div>
-        <p className="text-xs text-zinc-400 mt-2">
+        <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>
           Only pairs with a confirmed live price-history feed are selectable here (currently USD/HKD and
           EUR/DKK) — the rest of the registry above is real reference data, not a runnable strategy in
           this app.
@@ -351,22 +336,19 @@ export function CurrencyPegsTab() {
       </div>
 
       {backtestError && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm mb-4">
-          {backtestError}
+        <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <div className="text-sm">{backtestError}</div>
         </div>
       )}
 
       {result && (
-        <div className="space-y-6">
-          <div className="text-sm text-zinc-500">
+        <div className="flex flex-col gap-6">
+          <div className="text-sm" style={{ color: "var(--text-2)" }}>
             {result.pair} — {result.tradingDaysScanned} trading days scanned over {result.lookbackYears} year(s).
           </div>
 
           {result.dataLimitations.map((d) => (
-            <div
-              key={d.slice(0, 30)}
-              className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-400"
-            >
+            <div key={d.slice(0, 30)} className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
               {d}
             </div>
           ))}

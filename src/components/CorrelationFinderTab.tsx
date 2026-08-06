@@ -8,12 +8,12 @@ function fmtCorrelation(v: number | null): string {
   return v !== null ? v.toFixed(3) : "N/A";
 }
 
-function correlationTone(v: number | null): string {
-  if (v === null) return "text-zinc-400";
-  if (v <= -0.3) return "text-red-600 dark:text-red-400 font-semibold";
-  if (v < 0) return "text-red-600 dark:text-red-400";
-  if (v >= 0.3) return "text-green-600 dark:text-green-400";
-  return "text-zinc-500";
+function correlationStyle(v: number | null): { color: string; fontWeight?: number } {
+  if (v === null) return { color: "var(--text-2)" };
+  if (v <= -0.3) return { color: "var(--danger)", fontWeight: 600 };
+  if (v < 0) return { color: "var(--danger)" };
+  if (v >= 0.3) return { color: "var(--signal)" };
+  return { color: "var(--text-1)" };
 }
 
 export function CorrelationFinderTab() {
@@ -51,8 +51,8 @@ export function CorrelationFinderTab() {
   }
 
   return (
-    <div>
-      <p className="text-zinc-500 mb-6">
+    <div className="jarvis">
+      <p className="jv-lede">
         Find what actually moves opposite (or alongside) a ticker, computed from real daily returns —
         not a guess. Leave the candidate list blank to check a default cross-asset set (gold, Treasuries,
         utilities, staples, energy, financials, tech, volatility, oil, the dollar) so the first run says
@@ -64,59 +64,56 @@ export function CorrelationFinderTab() {
           value={base}
           onChange={(e) => setBase(e.target.value)}
           placeholder="Base ticker, e.g. GOOGL"
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm w-40"
+          className="jv-input w-40"
         />
         <input
           value={candidates}
           onChange={(e) => setCandidates(e.target.value)}
           placeholder="Candidates, comma-separated (optional)"
-          className="flex-1 min-w-[240px] rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="jv-input flex-1 min-w-[240px]"
         />
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
+          className="jv-btn"
         >
           {loading ? "Computing…" : "Find Correlations"}
         </button>
       </form>
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm mb-4">
+        <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {result && (
-        <div className="space-y-6">
-          <div className="text-sm text-zinc-500">
+        <div className="flex flex-col gap-6">
+          <div className="text-sm" style={{ color: "var(--text-2)" }}>
             {result.baseSymbol} vs. {result.results.length} candidate(s), ~{Math.round(result.lookbackDays / 30.44)} month(s) of daily returns. Sorted most negative first.
           </div>
           {result.dataLimitations.map((d) => (
-            <div
-              key={d.slice(0, 30)}
-              className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-400"
-            >
-              {d}
+            <div key={d.slice(0, 30)} className="jv-card" style={{ borderColor: "var(--verdict-dim)" }}>
+              <div className="text-xs" style={{ color: "var(--verdict)" }}>{d}</div>
             </div>
           ))}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="jv-table">
               <thead>
-                <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                  <th className="py-2 pr-4">Symbol</th>
-                  <th className="py-2 pr-4">Correlation to {result.baseSymbol}</th>
-                  <th className="py-2 pr-4">Sample Size</th>
-                  <th className="py-2 pr-4">Notes</th>
+                <tr>
+                  <th className="text-left">Symbol</th>
+                  <th className="text-right">Correlation to {result.baseSymbol}</th>
+                  <th className="text-right">Sample Size</th>
+                  <th className="text-left">Notes</th>
                 </tr>
               </thead>
               <tbody>
                 {result.results.map((r) => (
-                  <tr key={r.symbol} className="border-b border-zinc-100 dark:border-zinc-900">
-                    <td className="py-2 pr-4 font-medium">{r.symbol}</td>
-                    <td className={`py-2 pr-4 ${correlationTone(r.correlation)}`}>{fmtCorrelation(r.correlation)}</td>
-                    <td className="py-2 pr-4 text-zinc-500">{r.sampleSize}</td>
-                    <td className="py-2 pr-4 text-zinc-500 text-xs">{r.error ?? ""}</td>
+                  <tr key={r.symbol}>
+                    <td className="font-medium">{r.symbol}</td>
+                    <td className="jv-num" style={correlationStyle(r.correlation)}>{fmtCorrelation(r.correlation)}</td>
+                    <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.sampleSize}</td>
+                    <td className="text-xs" style={{ color: "var(--text-2)" }}>{r.error ?? ""}</td>
                   </tr>
                 ))}
               </tbody>

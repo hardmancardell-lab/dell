@@ -1,6 +1,18 @@
 export function PrivacyFooter() {
   return (
-    <footer className="border-t border-zinc-200 dark:border-zinc-800 py-4 px-6 text-center text-[11px] text-zinc-400 dark:text-zinc-600">
+    <footer
+      className="jarvis"
+      style={{
+        background: "rgba(8, 11, 16, 0.55)",
+        backgroundImage: "none",
+        borderTop: "1px solid var(--line)",
+        borderRadius: 0,
+        padding: "16px 24px",
+        textAlign: "center",
+        fontSize: 11,
+        color: "var(--text-2)",
+      }}
+    >
       This app collects anonymous usage data — which features are used, which tickers/pairs you run backtests,
       scans, or calculators on, whether a statistical result cleared this app&apos;s significance bar, quiz
       question correctness and module opens in Financial Literacy, and that a message was sent to the

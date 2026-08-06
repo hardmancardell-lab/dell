@@ -26,6 +26,25 @@ body {
 }
 
 /*
+ * App-wide background image (the Dellegate mark — a robot watching the
+ * market climb) — set once here, fixed, so it reads as one consistent scene
+ * behind the whole app rather than repeating inside every individual
+ * .jarvis-scoped section. A dark scrim sits over it so dense financial UI
+ * (tables, forms, charts) stays legible; .jarvis sections are intentionally
+ * semi-transparent so this shows through in the negative space around
+ * cards, while .jv-card itself stays fully opaque.
+ */
+body.jv-app-bg {
+  background-image:
+    linear-gradient(180deg, rgba(4, 6, 9, 0.94), rgba(4, 6, 9, 0.88) 40%, rgba(4, 6, 9, 0.94)),
+    url("/backgrounds/app-bg.jpg");
+  background-size: cover;
+  background-position: center 20%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/*
  * JARVIS visual identity — the app's redesign direction, approved against
  * the Macro/Research Agent mockup. Scoped under .jarvis (not :root/body) so
  * it can be rolled out agent-by-agent/tab-by-tab without flipping the whole
@@ -53,12 +72,15 @@ body {
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 
   position: relative;
-  background: var(--ink-950);
+  /* Semi-transparent, not the old opaque var(--ink-950) fill — lets the
+     body-level background image (set via .jv-app-bg) show through in the
+     gaps around cards. .jv-card stays fully opaque for legibility. */
+  background: rgba(8, 11, 16, 0.62);
   color: var(--text-0);
   font-family: var(--font-ui);
   background-image:
-    linear-gradient(var(--ink-900) 1px, transparent 1px),
-    linear-gradient(90deg, var(--ink-900) 1px, transparent 1px);
+    linear-gradient(rgba(14, 19, 27, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 19, 27, 0.5) 1px, transparent 1px);
   background-size: 28px 28px;
   background-position: -1px -1px;
   padding: 24px 28px 48px;

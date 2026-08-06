@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
+import { StatCard } from "./StatCard";
 import type { AssetClass, PortfolioShockScanResult, PortfolioSummary } from "@/lib/agents/trading-agent/types";
 
 const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
@@ -15,35 +16,19 @@ function fmtPct(v: number | null): string {
   return v !== null ? `${v >= 0 ? "+" : ""}${v.toFixed(2)}%` : "N/A";
 }
 
-function StatCard({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "bad" }) {
-  return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-      <div className="text-xs uppercase tracking-wide text-zinc-500">{label}</div>
-      <div
-        className={`text-2xl font-semibold mt-1 ${
-          tone === "good" ? "text-green-600 dark:text-green-400" : tone === "bad" ? "text-red-600 dark:text-red-400" : ""
-        }`}
-      >
-        {value}
-      </div>
-      {sub && <div className="text-sm text-zinc-500 mt-1">{sub}</div>}
-    </div>
-  );
-}
-
 function AllocationBars({ title, slices }: { title: string; slices: { label: string; value: number; percent: number }[] }) {
   return (
     <div>
-      <h3 className="text-sm font-semibold mb-3">{title}</h3>
-      <div className="space-y-2">
+      <h3 className="jv-strip-title">{title}</h3>
+      <div className="flex flex-col gap-2">
         {slices.map((s) => (
           <div key={s.label}>
-            <div className="flex justify-between text-xs text-zinc-500 mb-1">
+            <div className="flex justify-between text-xs mb-1" style={{ color: "var(--text-1)" }}>
               <span>{s.label}</span>
               <span>{s.percent.toFixed(1)}%</span>
             </div>
-            <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-              <div className="h-full bg-zinc-900 dark:bg-zinc-100" style={{ width: `${Math.min(s.percent, 100)}%` }} />
+            <div className="h-2 overflow-hidden" style={{ background: "var(--ink-800)", border: "1px solid var(--line)" }}>
+              <div className="h-full" style={{ width: `${Math.min(s.percent, 100)}%`, background: "var(--signal)" }} />
             </div>
           </div>
         ))}
@@ -149,11 +134,11 @@ export function PortfolioDashboardTab() {
   }, [hydrated, autoValued, holdings.length]);
 
   return (
-    <div className="space-y-8">
-      <p className="text-zinc-500">
+    <div className="jarvis flex flex-col gap-8">
+      <p className="jv-lede" style={{ marginBottom: 0 }}>
         Manually track real holdings — shares, cost basis, and acquisition date — valued against live market data
         (same real providers as the rest of this app: Alpaca for equities, OANDA for forex). No brokerage account
-        linking; this is a read-only tracker, consistent with the rest of this app's data-and-analysis-only scope.
+        linking; this is a read-only tracker, consistent with the rest of this app&apos;s data-and-analysis-only scope.
       </p>
 
       <form onSubmit={handleAdd} className="flex flex-wrap gap-3">
@@ -161,12 +146,12 @@ export function PortfolioDashboardTab() {
           value={symbolInput}
           onChange={(e) => setSymbolInput(e.target.value)}
           placeholder="Symbol, e.g. AAPL"
-          className="w-32 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="jv-input w-32"
         />
         <select
           value={assetClass}
           onChange={(e) => setAssetClass(e.target.value as AssetClass)}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="jv-select"
         >
           {ASSET_CLASSES.map((ac) => (
             <option key={ac} value={ac}>
@@ -179,7 +164,7 @@ export function PortfolioDashboardTab() {
             <select
               value={optionRight}
               onChange={(e) => setOptionRight(e.target.value as "call" | "put")}
-              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+              className="jv-select"
             >
               <option value="call">Call</option>
               <option value="put">Put</option>
@@ -190,19 +175,19 @@ export function PortfolioDashboardTab() {
               placeholder="Strike"
               type="number"
               step="any"
-              className="w-24 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+              className="jv-input w-24"
             />
             <input
               value={expirationDate}
               onChange={(e) => setExpirationDate(e.target.value)}
               type="date"
-              className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+              className="jv-input"
             />
             <input
               value={underlyingSymbol}
               onChange={(e) => setUnderlyingSymbol(e.target.value)}
               placeholder="Underlying, e.g. AAPL"
-              className="w-36 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+              className="jv-input w-36"
             />
           </>
         )}
@@ -213,7 +198,7 @@ export function PortfolioDashboardTab() {
             placeholder="Contract multiplier"
             type="number"
             step="any"
-            className="w-36 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+            className="jv-input w-36"
           />
         )}
         <input
@@ -222,7 +207,7 @@ export function PortfolioDashboardTab() {
           placeholder={assetClass === "option" ? "Contracts" : "Shares"}
           type="number"
           step="any"
-          className="w-28 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="jv-input w-28"
         />
         <input
           value={costBasis}
@@ -230,61 +215,69 @@ export function PortfolioDashboardTab() {
           placeholder="Cost basis / share"
           type="number"
           step="any"
-          className="w-40 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="jv-input w-40"
         />
         <input
           value={acquiredDate}
           onChange={(e) => setAcquiredDate(e.target.value)}
           type="date"
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="jv-input"
         />
-        <button type="submit" className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium">
+        <button type="submit" className="jv-btn">
           Add Holding
         </button>
       </form>
 
       {hydrated && holdings.length === 0 && (
-        <p className="text-sm text-zinc-500">Portfolio is empty — add a holding above to get started.</p>
+        <p className="text-sm" style={{ color: "var(--text-2)" }}>Portfolio is empty — add a holding above to get started.</p>
       )}
 
       {holdings.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="jv-table">
             <thead>
-              <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                <th className="py-2 pr-4">Symbol</th>
-                <th className="py-2 pr-4">Class</th>
-                <th className="py-2 pr-4">Shares</th>
-                <th className="py-2 pr-4">Cost/Share</th>
-                <th className="py-2 pr-4">Price</th>
-                <th className="py-2 pr-4">Value</th>
-                <th className="py-2 pr-4">P&amp;L (HPR)</th>
-                <th className="py-2 pr-4">Annualized</th>
-                <th className="py-2 pr-4"></th>
+              <tr>
+                <th className="text-left">Symbol</th>
+                <th className="text-left">Class</th>
+                <th className="text-right">Shares</th>
+                <th className="text-right">Cost/Share</th>
+                <th className="text-right">Price</th>
+                <th className="text-right">Value</th>
+                <th className="text-right">P&amp;L (HPR)</th>
+                <th className="text-right">Annualized</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {holdings.map((h) => {
                 const v = summary?.valuations.find((val) => val.holding.id === h.id);
+                const pnl = v?.unrealizedPL ?? null;
+                const pnlClass = pnl === null ? "" : pnl > 0 ? "jv-pnl-up" : pnl < 0 ? "jv-pnl-down" : "jv-pnl-flat";
                 return (
-                  <tr key={h.id} className="border-b border-zinc-100 dark:border-zinc-900">
-                    <td className="py-2 pr-4 font-medium">{h.symbol}</td>
-                    <td className="py-2 pr-4 text-zinc-500">{assetClassLabel(h.assetClass)}</td>
-                    <td className="py-2 pr-4">{h.shares}</td>
-                    <td className="py-2 pr-4">{fmtUsd(h.costBasisPerShare)}</td>
-                    <td className="py-2 pr-4">{v?.error ? <span className="text-red-500 text-xs">{v.error}</span> : fmtUsd(v?.currentPrice ?? null)}</td>
-                    <td className="py-2 pr-4">{fmtUsd(v?.currentValue ?? null)}</td>
-                    <td className={`py-2 pr-4 ${v?.unrealizedPL !== null && v?.unrealizedPL !== undefined ? (v.unrealizedPL >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400") : ""}`}>
-                      {fmtUsd(v?.unrealizedPL ?? null)} ({fmtPct(v?.unrealizedPLPercent ?? null)})
+                  <tr key={h.id}>
+                    <td className="font-medium">{h.symbol}</td>
+                    <td style={{ color: "var(--text-2)" }}>{assetClassLabel(h.assetClass)}</td>
+                    <td className="jv-num">{h.shares}</td>
+                    <td className="jv-num">{fmtUsd(h.costBasisPerShare)}</td>
+                    <td className="jv-num">{v?.error ? <span className="text-xs" style={{ color: "var(--danger)" }}>{v.error}</span> : fmtUsd(v?.currentPrice ?? null)}</td>
+                    <td className="jv-num">{fmtUsd(v?.currentValue ?? null)}</td>
+                    <td className={`jv-num ${pnlClass}`}>
+                      {fmtUsd(pnl)} ({fmtPct(v?.unrealizedPLPercent ?? null)})
                     </td>
-                    <td className="py-2 pr-4 text-zinc-500">
+                    <td className="jv-num" style={{ color: "var(--text-2)" }}>
                       {fmtPct(v?.annualizedReturnPercent ?? null)}
                       {v && v.holdingPeriodDays < 365 && v.annualizedReturnPercent !== null && (
-                        <span className="text-[10px] block text-zinc-400">{v.holdingPeriodDays}d held</span>
+                        <span className="block text-[10px]" style={{ color: "var(--text-2)" }}>{v.holdingPeriodDays}d held</span>
                       )}
                     </td>
-                    <td className="py-2 pr-4">
-                      <button onClick={() => removeHolding(h.id)} className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400" aria-label={`Remove ${h.symbol}`}>
+                    <td>
+                      <button
+                        onClick={() => removeHolding(h.id)}
+                        aria-label={`Remove ${h.symbol}`}
+                        style={{ color: "var(--text-2)" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-2)")}
+                      >
                         &times;
                       </button>
                     </td>
@@ -299,19 +292,20 @@ export function PortfolioDashboardTab() {
       <button
         onClick={runValuation}
         disabled={loading || holdings.length === 0}
-        className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
+        className="jv-btn"
+        style={{ width: "fit-content" }}
       >
         {loading ? "Valuing…" : "Refresh Valuation"}
       </button>
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+        <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {summary && (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <StatCard label="Total Value" value={fmtUsd(summary.totalValue)} />
             <StatCard label="Cost Basis" value={fmtUsd(summary.totalCostBasis)} />
@@ -319,7 +313,7 @@ export function PortfolioDashboardTab() {
               label="Unrealized P&L"
               value={fmtUsd(summary.totalUnrealizedPL)}
               sub={fmtPct(summary.totalUnrealizedPLPercent)}
-              tone={summary.totalUnrealizedPL >= 0 ? "good" : "bad"}
+              tone={summary.totalUnrealizedPL >= 0 ? "up" : "down"}
             />
             <StatCard label="Holdings" value={String(holdings.length)} />
           </div>
@@ -330,21 +324,18 @@ export function PortfolioDashboardTab() {
           </div>
 
           {summary.dataLimitations.length > 0 && (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               {summary.dataLimitations.map((d) => (
-                <div
-                  key={d.slice(0, 30)}
-                  className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-                >
-                  {d}
+                <div key={d.slice(0, 30)} className="jv-card" style={{ borderColor: "var(--verdict-dim)" }}>
+                  <div className="text-xs" style={{ color: "var(--verdict)" }}>{d}</div>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="border-t border-zinc-200 dark:border-zinc-800 pt-6">
-            <h3 className="text-sm font-semibold mb-2">Macro Supply/Demand Shock Scan</h3>
-            <p className="text-sm text-zinc-500 mb-3">
+          <div className="pt-6" style={{ borderTop: "1px solid var(--line)" }}>
+            <h3 className="jv-strip-title">Macro Supply/Demand Shock Scan</h3>
+            <p className="text-sm mb-3" style={{ color: "var(--text-1)" }}>
               Maps your real holdings to real news-coverage-spike checks (GDELT), and — where a spike is real and
               confirmed — a PhD-economist-persona read classifying it as a supply-side or demand-side shock. Takes
               real time (GDELT rate-limits to ~1 request/5s); a few seconds per distinct sector/pair/commodity your
@@ -353,46 +344,43 @@ export function PortfolioDashboardTab() {
             <button
               onClick={runShockScan}
               disabled={shockScanLoading}
-              className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-50"
+              className="jv-btn"
             >
               {shockScanLoading ? "Scanning…" : "Run Shock Scan"}
             </button>
 
             {shockScanError && (
-              <div className="mt-3 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+              <div className="jv-card mt-3" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
                 {shockScanError}
               </div>
             )}
 
             {shockScan && (
-              <div className="mt-4 space-y-4">
+              <div className="mt-4 flex flex-col gap-4">
                 {shockScan.entries.length === 0 && shockScan.dataLimitations.length === 0 && (
-                  <p className="text-sm text-zinc-500">No holdings mapped to a real news query (e.g. bond-only portfolios) — nothing to scan.</p>
+                  <p className="text-sm" style={{ color: "var(--text-2)" }}>No holdings mapped to a real news query (e.g. bond-only portfolios) — nothing to scan.</p>
                 )}
                 {shockScan.entries.length === 0 && shockScan.dataLimitations.length > 0 && (
-                  <p className="text-sm text-zinc-500">Real holdings mapped to a query, but the scan couldn&apos;t complete — see the reason below.</p>
+                  <p className="text-sm" style={{ color: "var(--text-2)" }}>Real holdings mapped to a query, but the scan couldn&apos;t complete — see the reason below.</p>
                 )}
                 {shockScan.entries.map((e) => (
                   <div
                     key={e.query}
-                    className={`rounded-lg border p-4 ${
-                      e.triggered
-                        ? "border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20"
-                        : "border-zinc-200 dark:border-zinc-800"
-                    }`}
+                    className="jv-card"
+                    style={e.triggered ? { borderColor: "var(--verdict-dim)" } : undefined}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <div className="text-sm font-semibold">{e.symbols.join(", ")}</div>
+                      <div className="text-sm font-semibold" style={{ color: "var(--text-0)" }}>{e.symbols.join(", ")}</div>
                       {e.triggered && (
-                        <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                        <span className="jv-badge" style={{ color: "var(--verdict)", borderColor: "var(--verdict-dim)", background: "rgba(240, 168, 104, 0.08)" }}>
                           Coverage spike: {e.coverageMultiple?.toFixed(1)}x average
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-zinc-500 mb-2">{e.mechanismNote}</p>
-                    {e.narrative && <p className="text-sm mb-2 whitespace-pre-wrap">{e.narrative}</p>}
+                    <p className="text-xs mb-2" style={{ color: "var(--text-2)" }}>{e.mechanismNote}</p>
+                    {e.narrative && <p className="text-sm mb-2 whitespace-pre-wrap" style={{ color: "var(--text-1)" }}>{e.narrative}</p>}
                     {e.headlines.length > 0 && (
-                      <ul className="text-xs text-zinc-500 list-disc pl-4 space-y-1">
+                      <ul className="text-xs list-disc pl-4 flex flex-col gap-1" style={{ color: "var(--text-2)" }}>
                         {e.headlines.slice(0, 3).map((h) => (
                           <li key={h.url}>
                             <a href={h.url} target="_blank" rel="noopener noreferrer" className="underline">
@@ -405,13 +393,10 @@ export function PortfolioDashboardTab() {
                   </div>
                 ))}
                 {shockScan.dataLimitations.length > 0 && (
-                  <div className="space-y-2">
+                  <div className="flex flex-col gap-2">
                     {shockScan.dataLimitations.map((d) => (
-                      <div
-                        key={d.slice(0, 30)}
-                        className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-                      >
-                        {d}
+                      <div key={d.slice(0, 30)} className="jv-card" style={{ borderColor: "var(--verdict-dim)" }}>
+                        <div className="text-xs" style={{ color: "var(--verdict)" }}>{d}</div>
                       </div>
                     ))}
                   </div>

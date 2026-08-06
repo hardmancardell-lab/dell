@@ -8,10 +8,10 @@ import type { MarketScenarioLabel, ScenarioSimulationResult } from "@/lib/agents
 
 const HORIZON_OPTIONS = [1, 3, 5, 10, 20];
 
-const SCENARIO_META: Record<MarketScenarioLabel, { title: string; color: string; textClass: string }> = {
-  good: { title: "Good Market", color: "#22c55e", textClass: "text-green-700 dark:text-green-500" },
-  average: { title: "Average Market", color: "#3b82f6", textClass: "text-blue-700 dark:text-blue-500" },
-  bad: { title: "Bad Market", color: "#ef4444", textClass: "text-red-700 dark:text-red-500" },
+const SCENARIO_META: Record<MarketScenarioLabel, { title: string; color: string }> = {
+  good: { title: "Good Market", color: "var(--signal)" },
+  average: { title: "Average Market", color: "var(--verdict)" },
+  bad: { title: "Bad Market", color: "var(--danger)" },
 };
 
 function fmtUsd(v: number): string {
@@ -83,9 +83,9 @@ export function ScenarioSimulationTab() {
     : [];
 
   return (
-    <div className="space-y-8">
+    <div className="jarvis flex flex-col gap-8">
       <div className="flex items-start justify-between gap-4">
-        <p className="text-zinc-500 flex-1">
+        <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           Projects your current portfolio value forward under three real historical market regimes — not portfolio
           weight combinations (that&apos;s the Modern Portfolio Theory tab&apos;s efficient frontier), but your actual
           holdings compounding through time. &quot;Good&quot;, &quot;average&quot;, and &quot;bad&quot; are the mean of
@@ -96,16 +96,16 @@ export function ScenarioSimulationTab() {
         <button
           onClick={() => runSimulation(horizonYears)}
           disabled={loading || holdings.length === 0}
-          className="shrink-0 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-4 py-1.5 text-xs font-medium disabled:opacity-50"
+          className="jv-btn-outline shrink-0"
         >
           {loading ? "Simulating…" : "Run Simulation"}
         </button>
       </div>
 
-      {holdings.length === 0 && <p className="text-sm text-zinc-500">Add holdings on the Dashboard tab first.</p>}
+      {holdings.length === 0 && <p className="text-sm" style={{ color: "var(--text-2)" }}>Add holdings on the Dashboard tab first.</p>}
 
       <div className="flex items-center gap-2">
-        <span className="text-xs uppercase tracking-wide text-zinc-500">Horizon</span>
+        <span className="jv-label" style={{ marginBottom: 0 }}>Horizon</span>
         {HORIZON_OPTIONS.map((y) => (
           <button
             key={y}
@@ -113,11 +113,8 @@ export function ScenarioSimulationTab() {
               setHorizonYears(y);
               if (holdings.length > 0) runSimulation(y);
             }}
-            className={`rounded-lg px-3 py-1 text-xs font-medium ${
-              y === horizonYears
-                ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-            }`}
+            className={y === horizonYears ? "jv-btn" : "jv-btn-outline"}
+            style={{ padding: "4px 12px" }}
           >
             {y}yr
           </button>
@@ -125,36 +122,47 @@ export function ScenarioSimulationTab() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-4 text-red-700 dark:text-red-400 text-sm">
+        <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
 
       {result && (
-        <div className="space-y-8">
+        <div className="flex flex-col gap-8">
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
-              <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Current Value</div>
-              <div className="font-medium">{fmtUsd(result.currentPortfolioValue)}</div>
+              <div className="jv-label">Current Value</div>
+              <div style={{ color: "var(--text-0)" }}>{fmtUsd(result.currentPortfolioValue)}</div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Portfolio Beta (vs SPY)</div>
-              <div className="font-medium">{result.portfolioBeta !== null ? result.portfolioBeta.toFixed(2) : "N/A"}</div>
+              <div className="jv-label">Portfolio Beta (vs SPY)</div>
+              <div style={{ color: "var(--text-0)" }}>{result.portfolioBeta !== null ? result.portfolioBeta.toFixed(2) : "N/A"}</div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-zinc-500 mb-1">Portfolio Alpha (ann.)</div>
-              <div className="font-medium">{result.portfolioAlpha !== null ? fmtPct(result.portfolioAlpha * 100) : "N/A"}</div>
+              <div className="jv-label">Portfolio Alpha (ann.)</div>
+              <div style={{ color: "var(--text-0)" }}>{result.portfolioAlpha !== null ? fmtPct(result.portfolioAlpha * 100) : "N/A"}</div>
             </div>
           </div>
 
           <section>
-            <h3 className="text-sm font-semibold mb-3">Projected Value ({horizonYears}yr, p10-p90 range)</h3>
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-2">
+            <h3 className="jv-strip-title">Projected Value ({horizonYears}yr, p10-p90 range)</h3>
+            <div className="jv-card">
+              <div className="jv-br-b" />
               <ComposedChart width={700} height={360} data={chartData} margin={{ top: 10, right: 20, bottom: 20, left: 30 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
-                <XAxis dataKey="year" tick={{ fontSize: 11 }} label={{ value: "Years", position: "insideBottom", offset: -10, fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => fmtUsd(Number(v))} width={90} />
-                <Tooltip formatter={(v) => fmtUsd(Number(v))} labelFormatter={(y) => `Year ${y}`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+                <XAxis
+                  dataKey="year"
+                  tick={{ fontSize: 11, fill: "var(--text-2)" }}
+                  stroke="var(--line)"
+                  label={{ value: "Years", position: "insideBottom", offset: -10, fontSize: 11, fill: "var(--text-2)" }}
+                />
+                <YAxis tick={{ fontSize: 11, fill: "var(--text-2)" }} stroke="var(--line)" tickFormatter={(v) => fmtUsd(Number(v))} width={90} />
+                <Tooltip
+                  formatter={(v) => fmtUsd(Number(v))}
+                  labelFormatter={(y) => `Year ${y}`}
+                  contentStyle={{ background: "var(--ink-800)", border: "1px solid var(--line-bright)", color: "var(--text-0)", fontSize: 12 }}
+                  labelStyle={{ color: "var(--text-1)" }}
+                />
                 {(["good", "average", "bad"] as MarketScenarioLabel[]).map((label) => (
                   <Area
                     key={`${label}-p10`}
@@ -195,30 +203,30 @@ export function ScenarioSimulationTab() {
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold mb-3">Scenario Summary</h3>
+            <h3 className="jv-strip-title">Scenario Summary</h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="jv-table">
                 <thead>
-                  <tr className="text-left text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
-                    <th className="py-2 pr-4">Scenario</th>
-                    <th className="py-2 pr-4">Assumed Annual Return</th>
-                    <th className="py-2 pr-4">Basis</th>
-                    <th className="py-2 pr-4">Ending Value (p10 / p50 / p90)</th>
-                    <th className="py-2 pr-4">Total Return (p50)</th>
+                  <tr>
+                    <th className="text-left">Scenario</th>
+                    <th className="text-right">Assumed Annual Return</th>
+                    <th className="text-left">Basis</th>
+                    <th className="text-right">Ending Value (p10 / p50 / p90)</th>
+                    <th className="text-right">Total Return (p50)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.scenarios.map((s) => (
-                    <tr key={s.label} className="border-b border-zinc-100 dark:border-zinc-900">
-                      <td className={`py-2 pr-4 font-medium ${SCENARIO_META[s.label].textClass}`}>{SCENARIO_META[s.label].title}</td>
-                      <td className="py-2 pr-4">{fmtPct(s.assumption.annualReturn * 100)}</td>
-                      <td className="py-2 pr-4 text-zinc-500 text-xs">
+                    <tr key={s.label}>
+                      <td className="font-medium" style={{ color: SCENARIO_META[s.label].color }}>{SCENARIO_META[s.label].title}</td>
+                      <td className="jv-num">{fmtPct(s.assumption.annualReturn * 100)}</td>
+                      <td className="text-xs" style={{ color: "var(--text-2)" }}>
                         {s.assumption.sampleYears.toFixed(1)}yr history, {s.assumption.sampleSize} samples
                       </td>
-                      <td className="py-2 pr-4 text-xs">
+                      <td className="jv-num text-xs">
                         {fmtUsd(s.endingValue.p10)} / {fmtUsd(s.endingValue.p50)} / {fmtUsd(s.endingValue.p90)}
                       </td>
-                      <td className="py-2 pr-4">{fmtPct(s.totalReturnPercent.p50)}</td>
+                      <td className="jv-num">{fmtPct(s.totalReturnPercent.p50)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -227,13 +235,10 @@ export function ScenarioSimulationTab() {
           </section>
 
           {result.dataLimitations.length > 0 && (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               {result.dataLimitations.map((d) => (
-                <div
-                  key={d.slice(0, 30)}
-                  className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400"
-                >
-                  {d}
+                <div key={d.slice(0, 30)} className="jv-card" style={{ borderColor: "var(--verdict-dim)" }}>
+                  <div className="text-xs" style={{ color: "var(--verdict)" }}>{d}</div>
                 </div>
               ))}
             </div>

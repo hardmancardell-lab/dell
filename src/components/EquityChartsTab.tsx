@@ -36,8 +36,8 @@ export function EquityChartsTab() {
   }
 
   return (
-    <div>
-      <p className="text-zinc-500 mb-4">
+    <div className="jarvis">
+      <p className="jv-lede">
         Multi-timeframe candlestick chart with real historical data. Quick-select
         from your Equities watchlist, or look up any ticker.
       </p>
@@ -49,12 +49,9 @@ export function EquityChartsTab() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ticker, e.g. AAPL"
-          className="flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-4 py-2 text-sm"
+          className="jv-input flex-1"
         />
-        <button
-          type="submit"
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium"
-        >
+        <button type="submit" className="jv-btn">
           Load Chart
         </button>
       </form>
@@ -65,11 +62,8 @@ export function EquityChartsTab() {
             <button
               key={e.symbol}
               onClick={() => setSymbol(e.symbol)}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                symbol === e.symbol
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-black"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-              }`}
+              className={symbol === e.symbol ? "jv-btn" : "jv-btn-outline"}
+              style={{ padding: "4px 12px", fontSize: 12 }}
             >
               {e.symbol}
             </button>
@@ -83,7 +77,7 @@ export function EquityChartsTab() {
           <TickerNewsPanel symbol={symbol} assetClass="equity" />
         </>
       ) : (
-        <p className="text-sm text-zinc-500">Enter a ticker above to load a chart.</p>
+        <p className="text-sm" style={{ color: "var(--text-2)" }}>Enter a ticker above to load a chart.</p>
       )}
 
       <WatchlistNewsPanel kind="company" entries={entries} />

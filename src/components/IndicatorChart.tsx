@@ -47,7 +47,7 @@ export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
 
   if (loading) {
     return (
-      <div className="jv-card h-[320px] flex items-center justify-center text-sm" style={{ color: "var(--text-2)" }}>
+      <div className="jarvis jv-card h-[320px] flex items-center justify-center text-sm" style={{ color: "var(--text-2)" }}>
         <div className="jv-br-b" />
         Loading…
       </div>
@@ -56,7 +56,7 @@ export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
 
   if (error) {
     return (
-      <div className="jv-card text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+      <div className="jarvis jv-card text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
         {error}
       </div>
     );
@@ -65,7 +65,7 @@ export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
   if (!data) return null;
 
   return (
-    <div className="jv-card">
+    <div className="jarvis jv-card">
       <div className="jv-br-b" />
       <div className="flex items-start justify-between gap-3 mb-1">
         <h3 className="font-semibold text-sm" style={{ color: "var(--text-0)" }}>{data.meta.label}</h3>

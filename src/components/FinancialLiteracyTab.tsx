@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { isTierUnlocked, deriveBadges, useLiteracyProgress } from "@/lib/agents/financial-literacy/literacy-storage";
 import { scaffoldedWrongAnswerFeedback, placementExplanation } from "@/lib/agents/financial-literacy/teaching-persona";
@@ -57,13 +58,13 @@ const LOWER_TIER_BAR = 4; // out of 6
 // out of any server-rendered pass of this "use client" file.
 const SaveSpendEarnGame = dynamic(
   () => import("@/components/literacy/SaveSpendEarnGame").then((m) => m.SaveSpendEarnGame),
-  { ssr: false, loading: () => <div className="text-sm text-zinc-400 py-6">Loading game…</div> }
+  { ssr: false, loading: () => <div className="text-sm py-6" style={{ color: "var(--text-2)" }}>Loading game…</div> }
 );
 const SAVE_SPEND_EARN_MODULE_ID = "beginner-game-save-spend-earn";
 
 const DeltaDefenderGame = dynamic(
   () => import("@/components/literacy/DeltaDefenderGame").then((m) => m.DeltaDefenderGame),
-  { ssr: false, loading: () => <div className="text-sm text-zinc-400 py-6">Loading game…</div> }
+  { ssr: false, loading: () => <div className="text-sm py-6" style={{ color: "var(--text-2)" }}>Loading game…</div> }
 );
 const DELTA_DEFENDER_MODULE_ID = "expert-game-delta-defender";
 
@@ -106,20 +107,20 @@ function PlacementFlow({
 
   return (
     <div>
-      <p className="text-zinc-500 mb-6">
+      <p className="jv-lede">
         Two quick things before your curriculum: {PLACEMENT_QUESTIONS.length} questions to find
         where you're already fluent (not a test to pass or fail — just placement, though placing
         into a tier now requires real grounding in everything below it too, not just a good guess
         on the tier itself), and what you actually want out of this. Both can be retaken any time.
       </p>
 
-      <div className="space-y-6 mb-8">
+      <div className="flex flex-col gap-4 mb-8">
         {PLACEMENT_QUESTIONS.map((q, i) => (
-          <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-            <div className="text-sm font-medium mb-3">{q.prompt}</div>
-            <div className="space-y-2">
+          <div key={i} className="jv-card">
+            <div className="text-sm font-medium mb-3" style={{ color: "var(--text-0)" }}>{q.prompt}</div>
+            <div className="flex flex-col gap-2">
               {q.options.map((opt, oi) => (
-                <label key={oi} className="flex items-center gap-2 text-sm cursor-pointer">
+                <label key={oi} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: "var(--text-1)" }}>
                   <input
                     type="radio"
                     name={`placement-${i}`}
@@ -134,36 +135,33 @@ function PlacementFlow({
         ))}
       </div>
 
-      <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 mb-6">
-        <div className="text-sm font-medium mb-3">What brings you here?</div>
+      <div className="jv-card mb-6">
+        <div className="text-sm font-medium mb-3" style={{ color: "var(--text-0)" }}>What brings you here?</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {GOAL_OPTIONS.map((g) => (
             <label
               key={g.id}
-              className={`rounded-lg border p-3 cursor-pointer text-sm ${
-                goal === g.id
-                  ? "border-zinc-900 dark:border-zinc-100"
-                  : "border-zinc-200 dark:border-zinc-800"
-              }`}
+              className="rounded-none border p-3 cursor-pointer text-sm"
+              style={{
+                borderColor: goal === g.id ? "var(--signal)" : "var(--line)",
+                background: goal === g.id ? "rgba(79, 232, 208, 0.06)" : "transparent",
+              }}
             >
               <input type="radio" name="goal" className="mr-2" checked={goal === g.id} onChange={() => setGoal(g.id)} />
-              <span className="font-medium">{g.label}</span>
-              <p className="text-xs text-zinc-500 mt-1 ml-5">{g.description}</p>
+              <span className="font-medium" style={{ color: "var(--text-0)" }}>{g.label}</span>
+              <p className="text-xs mt-1 ml-5" style={{ color: "var(--text-2)" }}>{g.description}</p>
             </label>
           ))}
         </div>
       </div>
 
       {showValidation && (!allAnswered || !goal) && (
-        <p className="text-sm text-red-600 dark:text-red-400 mb-4">
+        <p className="text-sm mb-4" style={{ color: "var(--danger)" }}>
           Answer all 9 questions and pick a goal to continue.
         </p>
       )}
 
-      <button
-        onClick={submit}
-        className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium"
-      >
+      <button onClick={submit} className="jv-btn">
         See My Curriculum
       </button>
     </div>
@@ -306,43 +304,44 @@ function ModuleCard({
   const lockoutPct = (lockoutSecondsLeft / WRONG_ANSWER_LOCKOUT_SECONDS) * 100;
 
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+    <div style={{ border: "1px solid var(--line)", overflow: "hidden" }}>
       <button onClick={toggleOpen} className="w-full flex items-center justify-between px-4 py-3 text-left">
         <div className="flex items-center gap-3">
           <span
-            className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-medium shrink-0 ${
+            className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-medium shrink-0"
+            style={
               completed
-                ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-                : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
-            }`}
+                ? { background: "rgba(79, 232, 208, 0.12)", color: "var(--signal)" }
+                : { background: "var(--ink-800)", color: "var(--text-2)" }
+            }
           >
             {completed ? "✓" : mod.order}
           </span>
-          <span className="text-sm font-medium">{mod.title}</span>
+          <span className="text-sm font-medium" style={{ color: "var(--text-0)" }}>{mod.title}</span>
         </div>
-        <span className="text-zinc-400 text-xs">{open ? "Hide" : "Open"}</span>
+        <span className="text-xs" style={{ color: "var(--text-2)" }}>{open ? "Hide" : "Open"}</span>
       </button>
       {open && (
-        <div className="px-4 pb-4 border-t border-zinc-100 dark:border-zinc-900 pt-4">
+        <div className="px-4 pb-4 pt-4" style={{ borderTop: "1px solid var(--line)" }}>
           {mod.body.split("\n\n").map((para, i) => (
-            <p key={i} className="text-sm text-zinc-600 dark:text-zinc-400 mb-3">
+            <p key={i} className="text-sm mb-3" style={{ color: "var(--text-1)" }}>
               {para}
             </p>
           ))}
           {mod.tryIt && (
-            <div className="inline-block mb-4 text-xs font-mono text-zinc-500 border border-zinc-200 dark:border-zinc-800 rounded px-2 py-1">
+            <div className="inline-block mb-4 text-xs font-mono rounded px-2 py-1" style={{ color: "var(--text-2)", border: "1px solid var(--line)" }}>
               → Try it: {mod.tryIt.label}
             </div>
           )}
 
           {completed ? (
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               {mod.checks.map((q, qi) => (
-                <div key={qi} className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4">
+                <div key={qi} className="p-4" style={{ background: "var(--ink-800)" }}>
                   {mod.checks.length > 1 && (
-                    <div className="text-xs text-zinc-400 mb-1">Question {qi + 1} of {mod.checks.length}</div>
+                    <div className="text-xs mb-1" style={{ color: "var(--text-2)" }}>Question {qi + 1} of {mod.checks.length}</div>
                   )}
-                  <div className="text-sm font-medium mb-3">{q.prompt}</div>
+                  <div className="text-sm font-medium mb-3" style={{ color: "var(--text-0)" }}>{q.prompt}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                     {q.options.map((opt, oi) => {
                       const style = ANSWER_STYLES[oi];
@@ -351,8 +350,9 @@ function ModuleCard({
                         <div
                           key={oi}
                           className={`flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium text-white ${style.bg} ${
-                            showCorrect ? "ring-4 ring-zinc-900 dark:ring-white" : "opacity-40"
+                            showCorrect ? "ring-4" : "opacity-40"
                           }`}
+                          style={showCorrect ? ({ "--tw-ring-color": "var(--signal)" } as CSSProperties) : undefined}
                         >
                           <span className="text-base leading-none shrink-0">{style.shape}</span>
                           <span className="flex-1">{opt}</span>
@@ -361,7 +361,7 @@ function ModuleCard({
                       );
                     })}
                   </div>
-                  <div className="text-sm rounded-lg p-3 bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400">
+                  <div className="text-sm rounded-lg p-3" style={{ background: "rgba(79, 232, 208, 0.1)", color: "var(--signal)" }}>
                     <div className="font-medium mb-1">Completed</div>
                     <div>{q.explanation}</div>
                   </div>
@@ -369,29 +369,27 @@ function ModuleCard({
               ))}
             </div>
           ) : (
-            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4">
+            <div className="p-4" style={{ background: "var(--ink-800)" }}>
               {mod.checks.length > 1 && (
-                <div className="text-xs text-zinc-400 mb-1">Question {questionIndex + 1} of {mod.checks.length}</div>
+                <div className="text-xs mb-1" style={{ color: "var(--text-2)" }}>Question {questionIndex + 1} of {mod.checks.length}</div>
               )}
               <div className="mb-3">
-                <div className="text-sm font-medium mb-2">{question.prompt}</div>
+                <div className="text-sm font-medium mb-2" style={{ color: "var(--text-0)" }}>{question.prompt}</div>
                 {roundActive && lockoutSecondsLeft > 0 && (
-                  <div className="text-xs text-amber-700 dark:text-amber-400 mb-1">
+                  <div className="text-xs mb-1" style={{ color: "var(--verdict)" }}>
                     Take a beat — {lockoutSecondsLeft}s before you can try again
                   </div>
                 )}
                 {roundActive && lockoutSecondsLeft <= 0 && thinkSecondsElapsed < MIN_THINK_SECONDS && (
-                  <div className="text-xs text-zinc-500 mb-1">
+                  <div className="text-xs mb-1" style={{ color: "var(--text-2)" }}>
                     Think it through — {MIN_THINK_SECONDS - thinkSecondsElapsed}s before you can answer
                   </div>
                 )}
                 {roundActive && (
-                  <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                  <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "var(--ink-700)" }}>
                     <div
-                      className={`h-full rounded-full transition-all duration-1000 ease-linear ${
-                        lockoutSecondsLeft > 0 ? "bg-amber-500" : "bg-zinc-900 dark:bg-zinc-100"
-                      }`}
-                      style={{ width: `${lockoutSecondsLeft > 0 ? lockoutPct : thinkPct}%` }}
+                      className="h-full rounded-full transition-all duration-1000 ease-linear"
+                      style={{ width: `${lockoutSecondsLeft > 0 ? lockoutPct : thinkPct}%`, background: lockoutSecondsLeft > 0 ? "var(--verdict)" : "var(--signal)" }}
                     />
                   </div>
                 )}
@@ -411,9 +409,10 @@ function ModuleCard({
                       disabled={revealed || !open || !canAnswer}
                       className={`flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium text-white text-left transition-opacity ${style.bg} ${
                         dimmed ? "opacity-40" : ""
-                      } ${showCorrect ? "ring-4 ring-zinc-900 dark:ring-white" : ""} disabled:cursor-default ${
+                      } ${showCorrect ? "ring-4" : ""} disabled:cursor-default ${
                         roundActive && !canAnswer ? "opacity-50" : ""
                       }`}
+                      style={showCorrect ? ({ "--tw-ring-color": "var(--signal)" } as CSSProperties) : undefined}
                     >
                       <span className="text-base leading-none shrink-0">{style.shape}</span>
                       <span className="flex-1">{opt}</span>
@@ -426,11 +425,12 @@ function ModuleCard({
 
               {submitted && (
                 <div
-                  className={`text-sm rounded-lg p-3 ${
+                  className="text-sm rounded-lg p-3"
+                  style={
                     isCorrect
-                      ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-                      : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
-                  }`}
+                      ? { background: "rgba(79, 232, 208, 0.1)", color: "var(--signal)" }
+                      : { background: "rgba(240, 168, 104, 0.1)", color: "var(--verdict)" }
+                  }
                 >
                   <div className="font-medium mb-1">{isCorrect ? `Correct! +${XP_PER_CORRECT_ANSWER} XP` : "Not quite"}</div>
                   {isCorrect ? (
@@ -449,7 +449,7 @@ function ModuleCard({
                     <>
                       <div>{scaffoldedWrongAnswerFeedback(mod.tier)}</div>
                       {lockoutSecondsLeft > 0 ? (
-                        <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                        <div className="mt-1 text-xs" style={{ color: "var(--verdict)" }}>
                           Try again in {lockoutSecondsLeft}s
                         </div>
                       ) : (
@@ -616,25 +616,22 @@ function QuizMode({
 
   if (stage === "setup") {
     return (
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
-        <h3 className="text-lg font-semibold mb-1">Quiz Mode</h3>
-        <p className="text-sm text-zinc-500 mb-4">
+      <div className="jv-card">
+        <h3 className="text-lg font-semibold mb-1" style={{ color: "var(--text-0)" }}>Quiz Mode</h3>
+        <p className="text-sm mb-4" style={{ color: "var(--text-1)" }}>
           A timed {QUIZ_ROUND_LENGTH}-question round pulled from every check question in scope —
           including modules you've already finished, since this is review/practice, not a gate.
           Same speed-scored points as the learn flow; no retries mid-round.
         </p>
         <div className="mb-4">
-          <div className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Question scope</div>
+          <div className="jv-label" style={{ marginBottom: 8 }}>Question scope</div>
           <div className="flex flex-wrap gap-2">
             {availableScopes.map((s) => (
               <button
                 key={s}
                 onClick={() => setScope(s)}
-                className={`rounded-full border px-3 py-1.5 text-sm ${
-                  scope === s
-                    ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black"
-                    : "border-zinc-200 dark:border-zinc-800"
-                }`}
+                className={scope === s ? "jv-btn" : "jv-btn-outline"}
+                style={{ borderRadius: 9999, padding: "6px 14px" }}
               >
                 {QUIZ_SCOPE_LABEL[s]}
               </button>
@@ -643,23 +640,19 @@ function QuizMode({
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-5">
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Questions Available</div>
-            <div className="text-xl font-semibold">{poolPreview.length}</div>
+            <div className="jv-label">Questions Available</div>
+            <div className="text-xl font-semibold" style={{ color: "var(--text-0)" }}>{poolPreview.length}</div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Rounds Played</div>
-            <div className="text-xl font-semibold">{progress.roundsPlayed}</div>
+            <div className="jv-label">Rounds Played</div>
+            <div className="text-xl font-semibold" style={{ color: "var(--text-0)" }}>{progress.roundsPlayed}</div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Best Round Score</div>
-            <div className="text-xl font-semibold">{progress.bestRoundScore}</div>
+            <div className="jv-label">Best Round Score</div>
+            <div className="text-xl font-semibold" style={{ color: "var(--text-0)" }}>{progress.bestRoundScore}</div>
           </div>
         </div>
-        <button
-          onClick={startRound}
-          disabled={poolPreview.length === 0}
-          className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium disabled:opacity-40"
-        >
+        <button onClick={startRound} disabled={poolPreview.length === 0} className="jv-btn">
           Start Round
         </button>
       </div>
@@ -670,44 +663,38 @@ function QuizMode({
     const total = questions.length;
     const accuracy = total > 0 ? Math.round((correctCount / total) * 100) : 0;
     return (
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
-        <h3 className="text-lg font-semibold mb-1">Round Complete</h3>
+      <div className="jv-card">
+        <h3 className="text-lg font-semibold mb-1" style={{ color: "var(--text-0)" }}>Round Complete</h3>
         {isNewBest && (
-          <div className="inline-block mb-3 text-xs font-mono rounded-full px-3 py-1 bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+          <div className="jv-badge c-signal" style={{ borderRadius: 9999, marginBottom: 12 }}>
             New personal best!
           </div>
         )}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Score</div>
-            <div className="text-2xl font-semibold">{roundScore}</div>
+            <div className="jv-label">Score</div>
+            <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>{roundScore}</div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Correct</div>
-            <div className="text-2xl font-semibold">
+            <div className="jv-label">Correct</div>
+            <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>
               {correctCount}/{total}
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Accuracy</div>
-            <div className="text-2xl font-semibold">{accuracy}%</div>
+            <div className="jv-label">Accuracy</div>
+            <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>{accuracy}%</div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Best Streak</div>
-            <div className="text-2xl font-semibold">{bestRoundStreak}</div>
+            <div className="jv-label">Best Streak</div>
+            <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>{bestRoundStreak}</div>
           </div>
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={startRound}
-            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium"
-          >
+          <button onClick={startRound} className="jv-btn">
             Play Again
           </button>
-          <button
-            onClick={() => setStage("setup")}
-            className="rounded-lg border border-zinc-200 dark:border-zinc-800 px-5 py-2 text-sm font-medium"
-          >
+          <button onClick={() => setStage("setup")} className="jv-btn-outline">
             Change Scope
           </button>
         </div>
@@ -720,41 +707,39 @@ function QuizMode({
   const isCorrect = revealed && !timedOut && selected === current.question.correctIndex;
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
+    <div className="jv-card">
       <div className="flex items-center justify-between mb-4">
-        <div className="text-sm font-medium text-zinc-500">
+        <div className="text-sm font-medium" style={{ color: "var(--text-1)" }}>
           Question {qIndex + 1} of {questions.length}
         </div>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-4 text-sm" style={{ color: "var(--text-1)" }}>
           <span>
-            Score <span className="font-mono font-semibold">{roundScore}</span>
+            Score <span className="font-mono font-semibold" style={{ color: "var(--text-0)" }}>{roundScore}</span>
           </span>
           <span>
-            Streak <span className="font-mono font-semibold">{roundStreak}</span>
+            Streak <span className="font-mono font-semibold" style={{ color: "var(--text-0)" }}>{roundStreak}</span>
           </span>
         </div>
       </div>
 
-      <div className="text-xs font-mono text-zinc-400 mb-2">{current.moduleTitle}</div>
+      <div className="text-xs font-mono mb-2" style={{ color: "var(--text-2)" }}>{current.moduleTitle}</div>
 
-      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4">
+      <div className="p-4" style={{ background: "var(--ink-800)" }}>
         <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="text-sm font-medium">{current.question.prompt}</div>
+          <div className="text-sm font-medium" style={{ color: "var(--text-0)" }}>{current.question.prompt}</div>
           {roundActive && (
             <div className="shrink-0 text-right">
-              <div className={`text-lg font-mono font-bold leading-none ${timeLeft <= 5 ? "text-red-600 dark:text-red-400" : ""}`}>
+              <div className="text-lg font-mono font-bold leading-none" style={{ color: timeLeft <= 5 ? "var(--danger)" : "var(--text-0)" }}>
                 {timeLeft}s
               </div>
             </div>
           )}
         </div>
         {roundActive && (
-          <div className="h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden mb-3">
+          <div className="h-1.5 w-full rounded-full overflow-hidden mb-3" style={{ background: "var(--ink-700)" }}>
             <div
-              className={`h-full rounded-full transition-all duration-1000 ease-linear ${
-                timeLeft <= 5 ? "bg-red-500" : "bg-zinc-900 dark:bg-zinc-100"
-              }`}
-              style={{ width: `${timerPct}%` }}
+              className="h-full rounded-full transition-all duration-1000 ease-linear"
+              style={{ width: `${timerPct}%`, background: timeLeft <= 5 ? "var(--danger)" : "var(--signal)" }}
             />
           </div>
         )}
@@ -773,7 +758,8 @@ function QuizMode({
                 disabled={revealed}
                 className={`flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium text-white text-left transition-opacity ${style.bg} ${
                   dimmed ? "opacity-40" : ""
-                } ${showCorrect ? "ring-4 ring-zinc-900 dark:ring-white" : ""} disabled:cursor-default`}
+                } ${showCorrect ? "ring-4" : ""} disabled:cursor-default`}
+                style={showCorrect ? ({ "--tw-ring-color": "var(--signal)" } as CSSProperties) : undefined}
               >
                 <span className="text-base leading-none shrink-0">{style.shape}</span>
                 <span className="flex-1">{opt}</span>
@@ -786,11 +772,12 @@ function QuizMode({
 
         {submitted && (
           <div
-            className={`text-sm rounded-lg p-3 mb-3 ${
+            className="text-sm rounded-lg p-3 mb-3"
+            style={
               isCorrect
-                ? "bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-400"
-                : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
-            }`}
+                ? { background: "rgba(79, 232, 208, 0.1)", color: "var(--signal)" }
+                : { background: "rgba(240, 168, 104, 0.1)", color: "var(--verdict)" }
+            }
           >
             <div className="font-medium mb-1">
               {isCorrect ? "Correct!" : timedOut ? "Time's up!" : "Not quite"}
@@ -800,10 +787,7 @@ function QuizMode({
         )}
 
         {submitted && (
-          <button
-            onClick={nextQuestion}
-            className="rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black px-5 py-2 text-sm font-medium"
-          >
+          <button onClick={nextQuestion} className="jv-btn">
             {qIndex + 1 >= questions.length ? "See Results" : "Next Question"}
           </button>
         )}
@@ -840,55 +824,52 @@ function CurriculumView({
 
   return (
     <div>
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 mb-8">
+      <div className="jv-card mb-8">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-4">
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">XP</div>
-            <div className="text-2xl font-semibold">{progress.xp}</div>
+            <div className="jv-label">XP</div>
+            <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>{progress.xp}</div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Streak</div>
-            <div className="text-2xl font-semibold">{progress.streakDays}d</div>
+            <div className="jv-label">Streak</div>
+            <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>{progress.streakDays}d</div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Answer Streak</div>
-            <div className="text-2xl font-semibold">
+            <div className="jv-label">Answer Streak</div>
+            <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>
               {progress.answerStreak}
               {progress.longestAnswerStreak > progress.answerStreak && (
-                <span className="text-xs text-zinc-400 font-normal ml-1">best {progress.longestAnswerStreak}</span>
+                <span className="text-xs font-normal ml-1" style={{ color: "var(--text-2)" }}>best {progress.longestAnswerStreak}</span>
               )}
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Modules Done</div>
-            <div className="text-2xl font-semibold">
+            <div className="jv-label">Modules Done</div>
+            <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>
               {progress.completedModuleIds.length}/{LITERACY_MODULES.length}
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Placed At</div>
-            <div className="text-2xl font-semibold">{TIER_LABEL[placementTier]}</div>
+            <div className="jv-label">Placed At</div>
+            <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>{TIER_LABEL[placementTier]}</div>
           </div>
         </div>
         {badges.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {badges.map((b) => (
-              <span
-                key={b}
-                className="text-xs font-mono border border-zinc-200 dark:border-zinc-800 rounded-full px-3 py-1 text-zinc-600 dark:text-zinc-400"
-              >
+              <span key={b} className="jv-badge c-neutral" style={{ borderRadius: 9999 }}>
                 {BADGE_LABEL[b]}
               </span>
             ))}
           </div>
         )}
         {placementBreakdown && (
-          <p className="text-xs text-zinc-500 mb-3 max-w-2xl">
-            <span className="font-medium text-zinc-600 dark:text-zinc-400">Why here? </span>
+          <p className="text-xs mb-3 max-w-2xl" style={{ color: "var(--text-2)" }}>
+            <span className="font-medium" style={{ color: "var(--text-1)" }}>Why here? </span>
             {placementExplanation(placementBreakdown, 6, placementTier)}
           </p>
         )}
-        <button onClick={resetPlacement} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+        <button onClick={resetPlacement} className="text-xs" style={{ color: "var(--text-2)" }}>
           Retake placement
         </button>
       </div>
@@ -899,24 +880,24 @@ function CurriculumView({
         return (
           <section key={tier} className="mb-8">
             <div className="flex items-center gap-3 mb-1">
-              <h2 className="text-lg font-semibold">{TIER_LABEL[tier]}</h2>
+              <h2 className="text-lg font-semibold" style={{ color: "var(--text-0)" }}>{TIER_LABEL[tier]}</h2>
               {!unlocked && (
-                <span className="text-xs font-mono text-zinc-400 border border-zinc-200 dark:border-zinc-800 rounded-full px-2 py-0.5">
+                <span className="jv-badge c-neutral" style={{ borderRadius: 9999 }}>
                   locked — finish {TIER_LABEL[LITERACY_TIER_ORDER[tierIndex - 1]]} first
                 </span>
               )}
             </div>
-            <p className="text-sm text-zinc-500 mb-4">{TIER_PREMISE[tier]}</p>
+            <p className="text-sm mb-4" style={{ color: "var(--text-1)" }}>{TIER_PREMISE[tier]}</p>
             {unlocked ? (
-              <div className="space-y-2">
+              <div className="flex flex-col gap-2">
                 {tier === "beginner" && (
-                  <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 mb-2">
-                    <div className="text-sm font-medium mb-1">
+                  <div className="jv-card mb-2">
+                    <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
                       Piggy Bank Quest {progress.completedModuleIds.includes(SAVE_SPEND_EARN_MODULE_ID) && (
-                        <span className="text-xs font-mono text-zinc-400 ml-2">completed</span>
+                        <span className="text-xs font-mono ml-2" style={{ color: "var(--text-2)" }}>completed</span>
                       )}
                     </div>
-                    <p className="text-xs text-zinc-500 mb-3">
+                    <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
                       A save/spend/earn simulation, not another quiz — make 6 weekly choices and see whether they add up to the goal.
                     </p>
                     <SaveSpendEarnGame
@@ -925,13 +906,13 @@ function CurriculumView({
                   </div>
                 )}
                 {tier === "expert" && (
-                  <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 mb-2">
-                    <div className="text-sm font-medium mb-1">
+                  <div className="jv-card mb-2">
+                    <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
                       Market Vector: Delta Defender {progress.completedModuleIds.includes(DELTA_DEFENDER_MODULE_ID) && (
-                        <span className="text-xs font-mono text-zinc-400 ml-2">completed</span>
+                        <span className="text-xs font-mono ml-2" style={{ color: "var(--text-2)" }}>completed</span>
                       )}
                     </div>
-                    <p className="text-xs text-zinc-500 mb-3">
+                    <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
                       A real-data arcade defense — targets are real live SPY option contracts (strike, delta, IV, bid), and each shot spends real paper-trading capital priced at the contract&apos;s own bid.
                     </p>
                     <DeltaDefenderGame
@@ -950,7 +931,7 @@ function CurriculumView({
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 p-4 text-sm text-zinc-400">
+              <div className="p-4 text-sm" style={{ border: "1px dashed var(--line)", color: "var(--text-2)" }}>
                 {modules.length} module(s) — unlocks once the prior tier is complete.
               </div>
             )}
@@ -978,8 +959,8 @@ export function FinancialLiteracyTab() {
   if (!hydrated) return null;
 
   return (
-    <div>
-      <p className="text-zinc-500 mb-6">
+    <div className="jarvis">
+      <p className="jv-lede">
         A three-tier financial literacy curriculum — every module points at the real tool
         elsewhere in this app that demonstrates the concept. Placement is a starting point,
         not a gate; every tier stays visible, just locked until the one before it is done.
@@ -991,21 +972,13 @@ export function FinancialLiteracyTab() {
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => setView("learn")}
-              className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                view === "learn"
-                  ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black"
-                  : "border border-zinc-200 dark:border-zinc-800"
-              }`}
+              className={view === "learn" ? "jv-btn" : "jv-btn-outline"}
             >
               Learn
             </button>
             <button
               onClick={() => setView("quiz")}
-              className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                view === "quiz"
-                  ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black"
-                  : "border border-zinc-200 dark:border-zinc-800"
-              }`}
+              className={view === "quiz" ? "jv-btn" : "jv-btn-outline"}
             >
               Quiz Mode
             </button>

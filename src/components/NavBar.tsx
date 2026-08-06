@@ -2,11 +2,25 @@ import Link from "next/link";
 
 export function NavBar() {
   return (
-    <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+    <header
+      className="jarvis"
+      style={{
+        background: "rgba(8, 11, 16, 0.55)",
+        backgroundImage: "none",
+        backdropFilter: "blur(6px)",
+        borderBottom: "1px solid var(--line)",
+        borderRadius: 0,
+        padding: 0,
+      }}
+    >
       <div className="mx-auto max-w-4xl px-6 py-4">
         <Link href="/" className="flex items-baseline gap-2">
-          <span className="font-semibold tracking-tight">Dellegate</span>
-          <span className="hidden sm:inline text-xs text-zinc-500">Delegate the research. Own the decision.</span>
+          <span className="font-semibold tracking-tight" style={{ color: "var(--text-0)" }}>
+            Dellegate
+          </span>
+          <span className="hidden sm:inline text-xs" style={{ color: "var(--text-2)" }}>
+            Delegate the research. Own the decision.
+          </span>
         </Link>
       </div>
     </header>

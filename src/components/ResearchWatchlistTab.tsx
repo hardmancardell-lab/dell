@@ -41,7 +41,7 @@ export function ResearchWatchlistTab() {
   }, [hydrated, checked, watchlistedSymbols.length]);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="jarvis flex flex-col gap-8">
       <div className="flex items-center justify-between gap-4">
         <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           Tickers saved from Analyze Ticker or the Screener, with a fresh Value Checklist run the moment this

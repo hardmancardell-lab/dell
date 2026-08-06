@@ -13,22 +13,22 @@ function fmtDate(d: string | null): string {
 function OutletSection({ item }: { item: GlobalNewsSourceResult }) {
   const { source, headlines, error } = item;
   return (
-    <div className="border-t border-zinc-100 dark:border-zinc-900 pt-3 first:border-t-0 first:pt-0">
-      <a href={source.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold hover:underline">
+    <div className="pt-3 first:pt-0" style={{ borderTop: "1px solid var(--line)" }}>
+      <a href={source.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold hover:underline" style={{ color: "var(--text-0)" }}>
         {source.outletName} ↗
       </a>
       {headlines.length === 0 ? (
-        <p className="text-xs text-zinc-500 mt-1">
+        <p className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
           {source.rssUrl === null ? "No working public RSS feed found — visit the site directly." : `Unavailable right now: ${error}`}
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5 mt-1.5">
           {headlines.map((h) => (
             <li key={h.url} className="text-sm">
-              <a href={h.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+              <a href={h.url} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: "var(--text-1)" }}>
                 {h.title}
               </a>
-              {h.publishedAt && <span className="text-[11px] text-zinc-400"> — {fmtDate(h.publishedAt)}</span>}
+              {h.publishedAt && <span className="text-[11px]" style={{ color: "var(--text-2)" }}> — {fmtDate(h.publishedAt)}</span>}
             </li>
           ))}
         </ul>
@@ -40,10 +40,11 @@ function OutletSection({ item }: { item: GlobalNewsSourceResult }) {
 function CountryCard({ country, items }: { country: string; items: GlobalNewsSourceResult[] }) {
   const liveCount = items.filter((i) => i.headlines.length > 0).length;
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 flex flex-col gap-3">
+    <div className="jv-card flex flex-col gap-3">
+      <div className="jv-br-b" />
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold">{country}</div>
-        <span className="text-[10px] uppercase tracking-wide text-zinc-400">
+        <div className="text-sm font-semibold" style={{ color: "var(--text-0)" }}>{country}</div>
+        <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-2)" }}>
           {liveCount}/{items.length} live
         </span>
       </div>
@@ -94,17 +95,17 @@ export function GlobalFinancialNewsTab() {
   }
 
   return (
-    <div>
-      <p className="text-zinc-500 mb-4">
+    <div className="jarvis">
+      <p className="jv-lede">
         One card per country — real outlets grounded, top 3 headlines from each. Not a viewership ranking (no API
         publishes TV/media audience data); these are each country&apos;s most internationally recognized financial-news
         outlets, hand-researched and live-verified.
       </p>
 
-      {loading && <p className="text-sm text-zinc-500">Loading global news sources…</p>}
+      {loading && <p className="text-sm" style={{ color: "var(--text-2)" }}>Loading global news sources…</p>}
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-3 text-red-700 dark:text-red-400 text-sm mb-4">
+        <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
           {error}
         </div>
       )}
@@ -112,7 +113,8 @@ export function GlobalFinancialNewsTab() {
       {result?.dataLimitations.map((d) => (
         <div
           key={d.slice(0, 40)}
-          className="rounded-lg border border-dashed border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-400 mb-2"
+          className="jv-card mb-2 text-xs"
+          style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}
         >
           {d}
         </div>
