@@ -1308,49 +1308,186 @@ export interface PaperOrderCheckResult {
 }
 
 // --- Trade Journal ---
-// A real, manually-entered log of the user's own discretionary trades (placed
-// at their real broker, outside this app) — distinct from Paper Trading
-// (this app's own simulated account/order engine) and the Strategy Ledger
-// (fully automated hypothesis sweeps). No order execution happens here; this
-// is a record-keeping tool: what was traded, why (thesis), and the real
-// realized P&L once closed.
+// A real, manually-entered log of the user's own trades — real broker fills
+// (source "live") or practice reps taken through this app's own Paper
+// Trading account (source "paper") — distinct from the Strategy Ledger
+// (fully automated hypothesis sweeps run against a fixed universe). No order
+// execution happens here; this is a discipline tool modeled on the real
+// professional-trading-journal genre (Edgewonk/TradeZella/Tradervue):
+// risk-defined entries (stop/target -> R-multiple), strategy/emotion/mistake
+// tagging, and analytics that surface what's actually working.
+//
+// Modeled as position + fills (not one row per trade) so averaging in/out
+// and partial exits are represented correctly instead of faked as separate
+// unrelated trades. Positions use average-cost accounting, same convention
+// as PaperPosition/paper-trading-engine.ts elsewhere in this app.
 
 export type JournalInstrumentType = "call" | "put" | "shares";
 export type JournalStatus = "open" | "closed";
+export type JournalFillSide = "buy" | "sell";
+export type JournalSource = "live" | "paper"; // real broker fill vs. this app's Paper Trading account
 
-export interface JournalEntry {
+export type JournalEmotionTag = "confident" | "disciplined" | "neutral" | "fomo" | "impulsive" | "fearful" | "hesitant" | "revenge";
+
+export const JOURNAL_EMOTION_TAGS: { value: JournalEmotionTag; label: string }[] = [
+  { value: "disciplined", label: "Disciplined — followed the plan" },
+  { value: "confident", label: "Confident" },
+  { value: "neutral", label: "Neutral" },
+  { value: "hesitant", label: "Hesitant" },
+  { value: "fomo", label: "FOMO" },
+  { value: "impulsive", label: "Impulsive" },
+  { value: "fearful", label: "Fearful" },
+  { value: "revenge", label: "Revenge trade" },
+];
+
+// Strategy vocabulary grounded in the user's own established playbook
+// (event-vol straddles, PM-volume momentum, weekly swing trades) plus the
+// generic categories every reviewed competitor journal tags by. "other"
+// carries a free-text label.
+export const JOURNAL_STRATEGY_TAGS: { value: string; label: string }[] = [
+  { value: "event_catalyst", label: "Event / Volatility Catalyst" },
+  { value: "pm_volume_momentum", label: "Premarket Volume Momentum" },
+  { value: "weekly_swing", label: "Weekly Swing" },
+  { value: "mean_reversion", label: "Mean Reversion" },
+  { value: "hedge", label: "Hedge / Risk Offset" },
+  { value: "other", label: "Other" },
+];
+
+export const JOURNAL_MISTAKE_TAGS = [
+  "No stop set",
+  "Sized too big",
+  "Chased entry",
+  "Ignored plan",
+  "Exited too early",
+  "Held too long",
+  "Revenge trade",
+  "FOMO entry",
+  "No clear catalyst",
+] as const;
+
+export interface JournalFill {
+  id: string;
+  positionId: string;
+  side: JournalFillSide;
+  quantity: number;
+  price: number;
+  filledAt: string;
+  note: string | null;
+}
+
+export interface JournalFillInput {
+  side: JournalFillSide;
+  quantity: number;
+  price: number;
+  filledAt?: string;
+  note?: string | null;
+}
+
+export interface JournalPosition {
   id: string;
   ticker: string;
   instrumentType: JournalInstrumentType;
   strikePrice: number | null;
   expirationDate: string | null; // YYYY-MM-DD, options only
-  quantity: number;
-  entryPrice: number;
-  entryDate: string; // ISO timestamp
+  source: JournalSource;
+  strategy: string; // one of JOURNAL_STRATEGY_TAGS's values
+  strategyOther: string | null; // free text when strategy === "other"
   thesis: string | null;
-  exitPrice: number | null;
-  exitDate: string | null;
+  stopLoss: number | null; // price level (same units as fill price) that invalidates the thesis — defines 1R
+  targetPrice: number | null; // planned take-profit price level
+  emotionTag: JournalEmotionTag | null;
+  followedPlan: boolean | null;
+  mistakeTags: string[];
   status: JournalStatus;
-  realizedPnl: number | null; // (exitPrice - entryPrice) * quantity * multiplier, set on close
+  openedAt: string;
+  closedAt: string | null;
   notes: string | null;
   createdAt: string;
+  fills: JournalFill[];
 }
 
-export interface JournalEntryInput {
+export interface JournalPositionInput {
   ticker: string;
   instrumentType: JournalInstrumentType;
   strikePrice?: number | null;
   expirationDate?: string | null;
+  source: JournalSource;
+  strategy: string;
+  strategyOther?: string | null;
+  thesis?: string | null;
+  stopLoss?: number | null;
+  targetPrice?: number | null;
+  emotionTag?: JournalEmotionTag | null;
   quantity: number;
   entryPrice: number;
   entryDate?: string;
-  thesis?: string | null;
 }
 
-export interface JournalCloseInput {
-  exitPrice: number;
-  exitDate?: string;
-  notes?: string | null;
+// Derived from a position's fills via average-cost accounting — never
+// stored, always recomputed on read so it can't drift from the real fills.
+export interface JournalPositionMetrics {
+  openQuantity: number;
+  avgEntryPrice: number | null;
+  avgExitPrice: number | null;
+  peakQuantity: number; // largest open size reached — used as the R-multiple's risk base when lots were added over time
+  costBasisOpen: number; // $ notional still open, at avg cost
+  realizedPnl: number;
+  realizedR: number | null; // realizedPnl / (|avgEntryPrice - stopLoss| * peakQuantity * multiplier); null if no stop set
+  plannedRiskAmount: number | null; // |avgEntryPrice - stopLoss| * peakQuantity * multiplier
+  unrealizedR: number | null;
+}
+
+export interface JournalStrategyBreakdown {
+  strategy: string;
+  count: number;
+  winRate: number | null;
+  expectancyR: number | null;
+  totalRealizedPnl: number;
+}
+
+export interface JournalDayOfWeekBreakdown {
+  dayOfWeek: string;
+  count: number;
+  winRate: number | null;
+  avgR: number | null;
+}
+
+export interface JournalEmotionBreakdown {
+  emotion: string;
+  count: number;
+  winRate: number | null;
+  avgR: number | null;
+}
+
+export interface JournalMistakeFrequency {
+  mistake: string;
+  count: number;
+  totalPnlImpact: number;
+}
+
+export interface JournalEquityCurvePoint {
+  date: string;
+  cumulativePnl: number;
+}
+
+export interface JournalAnalytics {
+  closedCount: number;
+  winRate: number | null;
+  expectancyR: number | null; // mean(realizedR) across closed positions with a stop set
+  profitFactorR: number | null; // sum(winning R) / abs(sum(losing R))
+  avgWinR: number | null;
+  avgLossR: number | null;
+  totalRealizedPnl: number;
+  currentStreak: { type: "win" | "loss" | null; count: number };
+  byStrategy: JournalStrategyBreakdown[];
+  byDayOfWeek: JournalDayOfWeekBreakdown[];
+  byEmotion: JournalEmotionBreakdown[];
+  mistakeFrequency: JournalMistakeFrequency[];
+  equityCurve: JournalEquityCurvePoint[];
+  maxDrawdownPct: number | null;
+  planAdherenceRate: number | null; // % of closed positions where followedPlan === true
+  noStopRate: number | null; // % of closed positions with no stopLoss set — a real risk-management red flag
+  dataLimitations: string[];
 }
 
 // --- Rolling Move Stats ---

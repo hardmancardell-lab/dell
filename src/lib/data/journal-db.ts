@@ -1,10 +1,18 @@
-import type { JournalEntry, JournalInstrumentType, JournalStatus } from "@/lib/agents/trading-agent/types";
+import type {
+  JournalEmotionTag,
+  JournalFill,
+  JournalFillSide,
+  JournalInstrumentType,
+  JournalPosition,
+  JournalSource,
+  JournalStatus,
+} from "@/lib/agents/trading-agent/types";
 
 /**
- * Plain-fetch Supabase REST CRUD for journal_entries — same header/Prefer
- * pattern as alerts-db.ts/paper-trading-db.ts. Real, manually-entered
- * discretionary trades (not simulated, not automated), kept in its own file
- * for the same reason as paper-trading-db.ts: real financial state.
+ * Plain-fetch Supabase REST CRUD for journal_positions/journal_fills — same
+ * header/Prefer pattern as alerts-db.ts/paper-trading-db.ts. Real,
+ * manually-entered trades (not simulated, not automated), kept in its own
+ * file for the same reason as paper-trading-db.ts: real financial state.
  */
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -46,55 +54,93 @@ async function supabaseRequest<T>(
   return undefined as T;
 }
 
-interface JournalRow {
+interface FillRow {
+  id: string;
+  position_id: string;
+  side: JournalFillSide;
+  quantity: number;
+  price: number;
+  filled_at: string;
+  note: string | null;
+}
+
+function toFill(row: FillRow): JournalFill {
+  return {
+    id: row.id,
+    positionId: row.position_id,
+    side: row.side,
+    quantity: row.quantity,
+    price: row.price,
+    filledAt: row.filled_at,
+    note: row.note,
+  };
+}
+
+interface PositionRow {
   id: string;
   ticker: string;
   instrument_type: JournalInstrumentType;
   strike_price: number | null;
   expiration_date: string | null;
-  quantity: number;
-  entry_price: number;
-  entry_date: string;
+  source: JournalSource;
+  strategy: string;
+  strategy_other: string | null;
   thesis: string | null;
-  exit_price: number | null;
-  exit_date: string | null;
+  stop_loss: number | null;
+  target_price: number | null;
+  emotion_tag: JournalEmotionTag | null;
+  followed_plan: boolean | null;
+  mistake_tags: string[] | null;
   status: JournalStatus;
-  realized_pnl: number | null;
+  opened_at: string;
+  closed_at: string | null;
   notes: string | null;
   created_at: string;
+  fills?: FillRow[];
 }
 
-function toEntry(row: JournalRow): JournalEntry {
+function toPosition(row: PositionRow): JournalPosition {
   return {
     id: row.id,
     ticker: row.ticker,
     instrumentType: row.instrument_type,
     strikePrice: row.strike_price,
     expirationDate: row.expiration_date,
-    quantity: row.quantity,
-    entryPrice: row.entry_price,
-    entryDate: row.entry_date,
+    source: row.source,
+    strategy: row.strategy,
+    strategyOther: row.strategy_other,
     thesis: row.thesis,
-    exitPrice: row.exit_price,
-    exitDate: row.exit_date,
+    stopLoss: row.stop_loss,
+    targetPrice: row.target_price,
+    emotionTag: row.emotion_tag,
+    followedPlan: row.followed_plan,
+    mistakeTags: row.mistake_tags ?? [],
     status: row.status,
-    realizedPnl: row.realized_pnl,
+    openedAt: row.opened_at,
+    closedAt: row.closed_at,
     notes: row.notes,
     createdAt: row.created_at,
+    fills: (row.fills ?? []).map(toFill),
   };
 }
 
-export async function createJournalEntry(input: {
+const POSITION_SELECT = "*,fills:journal_fills(*)";
+
+export async function createJournalPosition(input: {
   ticker: string;
   instrumentType: JournalInstrumentType;
   strikePrice: number | null;
   expirationDate: string | null;
-  quantity: number;
-  entryPrice: number;
-  entryDate: string;
+  source: JournalSource;
+  strategy: string;
+  strategyOther: string | null;
   thesis: string | null;
-}): Promise<JournalEntry> {
-  const rows = await supabaseRequest<JournalRow[]>("journal_entries", {
+  stopLoss: number | null;
+  targetPrice: number | null;
+  emotionTag: JournalEmotionTag | null;
+  openedAt: string;
+}): Promise<JournalPosition> {
+  const rows = await supabaseRequest<PositionRow[]>("journal_positions", {
     method: "POST",
     prefer: "return=representation",
     body: {
@@ -102,65 +148,86 @@ export async function createJournalEntry(input: {
       instrument_type: input.instrumentType,
       strike_price: input.strikePrice,
       expiration_date: input.expirationDate,
-      quantity: input.quantity,
-      entry_price: input.entryPrice,
-      entry_date: input.entryDate,
+      source: input.source,
+      strategy: input.strategy,
+      strategy_other: input.strategyOther,
       thesis: input.thesis,
+      stop_loss: input.stopLoss,
+      target_price: input.targetPrice,
+      emotion_tag: input.emotionTag,
       status: "open",
+      opened_at: input.openedAt,
     },
   });
-  return toEntry(rows[0]);
+  return toPosition({ ...rows[0], fills: [] });
 }
 
-export async function getJournalEntries(): Promise<JournalEntry[]> {
-  const rows = await supabaseRequest<JournalRow[]>("journal_entries?order=entry_date.desc", {
+export async function getJournalPositions(): Promise<JournalPosition[]> {
+  const rows = await supabaseRequest<PositionRow[]>(`journal_positions?select=${encodeURIComponent(POSITION_SELECT)}&order=opened_at.desc`, {
     method: "GET",
     prefer: "return=representation",
   });
-  return rows.map(toEntry);
+  return rows.map(toPosition);
 }
 
-export async function getJournalEntryById(id: string): Promise<JournalEntry | null> {
-  const rows = await supabaseRequest<JournalRow[]>(`journal_entries?id=eq.${encodeURIComponent(id)}`, {
-    method: "GET",
-    prefer: "return=representation",
-  });
-  return rows[0] ? toEntry(rows[0]) : null;
+export async function getJournalPositionById(id: string): Promise<JournalPosition | null> {
+  const rows = await supabaseRequest<PositionRow[]>(
+    `journal_positions?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(POSITION_SELECT)}`,
+    { method: "GET", prefer: "return=representation" }
+  );
+  return rows[0] ? toPosition(rows[0]) : null;
 }
 
-export async function closeJournalEntry(
+export async function updateJournalPosition(
   id: string,
-  fields: { exitPrice: number; exitDate: string; realizedPnl: number; notes: string | null }
-): Promise<JournalEntry> {
-  const rows = await supabaseRequest<JournalRow[]>(`journal_entries?id=eq.${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    prefer: "return=representation",
-    body: {
-      exit_price: fields.exitPrice,
-      exit_date: fields.exitDate,
-      realized_pnl: fields.realizedPnl,
-      notes: fields.notes,
-      status: "closed",
-    },
-  });
-  return toEntry(rows[0]);
-}
-
-export async function updateJournalEntry(
-  id: string,
-  fields: Partial<{ thesis: string | null; notes: string | null }>
-): Promise<JournalEntry> {
+  fields: Partial<{
+    thesis: string | null;
+    notes: string | null;
+    stopLoss: number | null;
+    targetPrice: number | null;
+    emotionTag: JournalEmotionTag | null;
+    followedPlan: boolean | null;
+    mistakeTags: string[];
+    status: JournalStatus;
+    closedAt: string | null;
+  }>
+): Promise<JournalPosition> {
   const body: Record<string, unknown> = {};
   if ("thesis" in fields) body.thesis = fields.thesis;
   if ("notes" in fields) body.notes = fields.notes;
-  const rows = await supabaseRequest<JournalRow[]>(`journal_entries?id=eq.${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    prefer: "return=representation",
-    body,
-  });
-  return toEntry(rows[0]);
+  if ("stopLoss" in fields) body.stop_loss = fields.stopLoss;
+  if ("targetPrice" in fields) body.target_price = fields.targetPrice;
+  if ("emotionTag" in fields) body.emotion_tag = fields.emotionTag;
+  if ("followedPlan" in fields) body.followed_plan = fields.followedPlan;
+  if ("mistakeTags" in fields) body.mistake_tags = fields.mistakeTags;
+  if ("status" in fields) body.status = fields.status;
+  if ("closedAt" in fields) body.closed_at = fields.closedAt;
+
+  await supabaseRequest(`journal_positions?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body });
+  const updated = await getJournalPositionById(id);
+  if (!updated) throw new Error("Position not found after update.");
+  return updated;
 }
 
-export async function deleteJournalEntry(id: string): Promise<void> {
-  await supabaseRequest(`journal_entries?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+export async function deleteJournalPosition(id: string): Promise<void> {
+  await supabaseRequest(`journal_positions?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function insertJournalFill(
+  positionId: string,
+  fill: { side: JournalFillSide; quantity: number; price: number; filledAt: string; note: string | null }
+): Promise<JournalFill> {
+  const rows = await supabaseRequest<FillRow[]>("journal_fills", {
+    method: "POST",
+    prefer: "return=representation",
+    body: {
+      position_id: positionId,
+      side: fill.side,
+      quantity: fill.quantity,
+      price: fill.price,
+      filled_at: fill.filledAt,
+      note: fill.note,
+    },
+  });
+  return toFill(rows[0]);
 }

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { createJournalEntry, getJournalEntries, isJournalDbConfigured } from "@/lib/data/journal-db";
-import type { JournalEntryInput } from "@/lib/agents/trading-agent/types";
+import { createJournalPosition, getJournalPositions, insertJournalFill, isJournalDbConfigured } from "@/lib/data/journal-db";
+import type { JournalPositionInput } from "@/lib/agents/trading-agent/types";
 
 export async function GET() {
   if (!isJournalDbConfigured()) {
     return NextResponse.json({ error: "Trade Journal is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." }, { status: 503 });
   }
   try {
-    const entries = await getJournalEntries();
-    return NextResponse.json({ entries });
+    const positions = await getJournalPositions();
+    return NextResponse.json({ positions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -20,30 +20,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Trade Journal is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." }, { status: 503 });
   }
   try {
-    const body = (await request.json()) as JournalEntryInput;
-    if (!body.ticker || !body.instrumentType || !body.quantity || !body.entryPrice) {
+    const body = (await request.json()) as JournalPositionInput;
+    if (!body.ticker || !body.instrumentType || !body.strategy || !body.source || !body.quantity || !body.entryPrice) {
       return NextResponse.json(
-        { error: "Request body must include 'ticker', 'instrumentType', 'quantity', and 'entryPrice'." },
+        { error: "Request body must include 'ticker', 'instrumentType', 'source', 'strategy', 'quantity', and 'entryPrice'." },
         { status: 400 }
       );
     }
     if (body.instrumentType !== "shares" && (body.strikePrice == null || !body.expirationDate)) {
-      return NextResponse.json(
-        { error: "Options entries require 'strikePrice' and 'expirationDate'." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Options positions require 'strikePrice' and 'expirationDate'." }, { status: 400 });
     }
-    const entry = await createJournalEntry({
+    const openedAt = body.entryDate ?? new Date().toISOString();
+    const position = await createJournalPosition({
       ticker: body.ticker.trim().toUpperCase(),
       instrumentType: body.instrumentType,
       strikePrice: body.strikePrice ?? null,
       expirationDate: body.expirationDate ?? null,
-      quantity: body.quantity,
-      entryPrice: body.entryPrice,
-      entryDate: body.entryDate ?? new Date().toISOString(),
+      source: body.source,
+      strategy: body.strategy,
+      strategyOther: body.strategy === "other" ? body.strategyOther ?? null : null,
       thesis: body.thesis ?? null,
+      stopLoss: body.stopLoss ?? null,
+      targetPrice: body.targetPrice ?? null,
+      emotionTag: body.emotionTag ?? null,
+      openedAt,
     });
-    return NextResponse.json({ entry });
+    const fill = await insertJournalFill(position.id, {
+      side: "buy",
+      quantity: body.quantity,
+      price: body.entryPrice,
+      filledAt: openedAt,
+      note: null,
+    });
+    return NextResponse.json({ position: { ...position, fills: [fill] } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
