@@ -80,14 +80,15 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
   const volumeFlagged = summary?.results.filter((r) => r.volumeDisplacement?.triggered) ?? [];
   const momentumFlagged = summary?.results.filter((r) => r.momentum?.triggered) ?? [];
   const meanReversionFlagged = summary?.results.filter((r) => r.meanReversion?.triggered) ?? [];
+  const pmVolumeFlagged = summary?.results.filter((r) => r.pmVolume?.isAnomaly) ?? [];
   const failed = summary?.results.filter((r) => r.error !== null) ?? [];
 
   return (
     <div className="jarvis">
       <p className="jv-lede">
         {filterAssetClass
-          ? `Add ${assetClassLabel(filterAssetClass).toLowerCase()} symbols, then scan for three signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), and Mean Reversion (price deviation from its rolling mean). This dashboard scans automatically when it loads.`
-          : "Add symbols across any asset class, then scan the watchlist for three signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), and Mean Reversion (price deviation from its rolling mean)."}
+          ? `Add ${assetClassLabel(filterAssetClass).toLowerCase()} symbols, then scan for four signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), Mean Reversion (price deviation from its rolling mean), and PM-Volume Anomaly (today's real premarket volume vs. a rolling average). This dashboard scans automatically when it loads.`
+          : "Add symbols across any asset class, then scan the watchlist for four signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), Mean Reversion (price deviation from its rolling mean), and PM-Volume Anomaly (today's real premarket volume vs. a rolling average)."}
       </p>
 
       <WatchlistSelector />
@@ -257,6 +258,43 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
                         label="Rolling Std Dev"
                         value={r.meanReversion!.rollingStdDev !== null ? `$${r.meanReversion!.rollingStdDev.toFixed(2)}` : "N/A"}
                         sub={`${r.meanReversion!.lookbackDays}-day`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <div className="jv-strip-title">PM-Volume Anomaly ({pmVolumeFlagged.length} flagged)</div>
+            <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+              Today&apos;s real premarket (4am&ndash;9:30am ET) volume vs. a rolling average of prior days &mdash;
+              flags a spike as an early signal something is drawing attention before the open.
+            </p>
+            {pmVolumeFlagged.length === 0 ? (
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                No tickers crossed the premarket-volume threshold.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {pmVolumeFlagged.map((r) => (
+                  <div key={r.symbol} className="jv-card">
+                    <div className="jv-br-b" />
+                    <div className="text-sm font-mono font-medium mb-2" style={{ color: "var(--text-0)" }}>
+                      {r.symbol} <span style={{ color: "var(--text-2)" }}>({assetClassLabel(r.assetClass)})</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <StatCard label="Today's PM Volume" value={r.pmVolume!.todayPremarketVolume.toLocaleString()} />
+                      <StatCard
+                        label="Rolling Average"
+                        value={r.pmVolume!.rollingAverageVolume !== null ? Math.round(r.pmVolume!.rollingAverageVolume).toLocaleString() : "N/A"}
+                        sub={`${r.pmVolume!.lookbackDays}-day`}
+                      />
+                      <StatCard
+                        label="Multiple"
+                        value={r.pmVolume!.multiple !== null ? `${r.pmVolume!.multiple.toFixed(1)}x` : "N/A"}
+                        sub={`Threshold: ${r.pmVolume!.anomalyThreshold}x`}
                       />
                     </div>
                   </div>

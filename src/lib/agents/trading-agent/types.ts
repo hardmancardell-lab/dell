@@ -235,6 +235,8 @@ export interface ScanResult {
   volumeDisplacement: VolumeDisplacementSignal | null;
   momentum: MomentumSignal | null;
   meanReversion: MeanReversionSignal | null;
+  pmVolume: PmVolumeSnapshot | null;
+  pmVolumeError: string | null;
 }
 
 export interface WatchlistScanSummary {

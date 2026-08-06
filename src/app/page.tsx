@@ -16,12 +16,10 @@ import { SecurityAnalystTab } from "@/components/SecurityAnalystTab";
 import { ScreenerTab } from "@/components/ScreenerTab";
 import { ResearchWatchlistTab } from "@/components/ResearchWatchlistTab";
 import { OptionsCalculatorTab } from "@/components/OptionsCalculatorTab";
-import { PmVolumeTab } from "@/components/PmVolumeTab";
 import { EquityChartsTab } from "@/components/EquityChartsTab";
 import { HistoricalBacktestTab } from "@/components/HistoricalBacktestTab";
 import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
-import { OrbDetailTab } from "@/components/OrbDetailTab";
-import { OrbWatchlistTab } from "@/components/OrbWatchlistTab";
+import { OrbStrategyTab } from "@/components/OrbStrategyTab";
 import { TradingDashboardTab } from "@/components/TradingDashboardTab";
 import { GlossaryTab } from "@/components/GlossaryTab";
 import { AlertsSubscribeTab } from "@/components/AlertsSubscribeTab";
@@ -542,9 +540,7 @@ export default async function Home() {
                                 label: "Calendar Effects",
                                 content: <CalendarEffectsTab key="equities-calendar-effects" defaultTicker="AAPL" assetClass="equity" />,
                               },
-                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab assetClass="equity" /> },
-                              { id: "orb-watchlist", label: "ORB Watchlist", content: <OrbWatchlistTab /> },
-                              { id: "orb-detail", label: "ORB Ticker Detail", content: <OrbDetailTab /> },
+                              { id: "orb", label: "ORB Strategy", content: <OrbStrategyTab /> },
                             ]}
                           />
                         </div>
@@ -633,13 +629,11 @@ export default async function Home() {
                                 label: "Calendar Effects",
                                 content: <CalendarEffectsTab key="currency-calendar-effects" defaultTicker="EUR/USD" assetClass="forex" />,
                               },
-                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab assetClass="forex" /> },
                               {
-                                id: "orb-watchlist",
-                                label: "ORB Watchlist",
-                                content: <OrbWatchlistTab filterAssetClass="forex" />,
+                                id: "orb",
+                                label: "ORB Strategy",
+                                content: <OrbStrategyTab filterAssetClass="forex" defaultTicker="EUR/USD" />,
                               },
-                              { id: "orb-detail", label: "ORB Ticker Detail", content: <OrbDetailTab defaultTicker="EUR/USD" /> },
                               { id: "news", label: "News Search", content: <InternationalEconomicsTab /> },
                               {
                                 id: "rolling-move-stats",
@@ -683,13 +677,11 @@ export default async function Home() {
                                 label: "Calendar Effects",
                                 content: <CalendarEffectsTab key="futures-calendar-effects" defaultTicker="SPY" assetClass="future" />,
                               },
-                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab assetClass="future" /> },
                               {
-                                id: "orb-watchlist",
-                                label: "ORB Watchlist",
-                                content: <OrbWatchlistTab filterAssetClass="future" />,
+                                id: "orb",
+                                label: "ORB Strategy",
+                                content: <OrbStrategyTab filterAssetClass="future" defaultTicker="SPY" />,
                               },
-                              { id: "orb-detail", label: "ORB Ticker Detail", content: <OrbDetailTab defaultTicker="SPY" /> },
                               {
                                 id: "rolling-move-stats",
                                 label: "Rolling Move Stats",
@@ -737,13 +729,11 @@ export default async function Home() {
                                 label: "Calendar Effects",
                                 content: <CalendarEffectsTab key="commodities-calendar-effects" defaultTicker="GLD" assetClass="commodity" />,
                               },
-                              { id: "pm-volume", label: "PM-Volume Tracker", content: <PmVolumeTab assetClass="commodity" /> },
                               {
-                                id: "orb-watchlist",
-                                label: "ORB Watchlist",
-                                content: <OrbWatchlistTab filterAssetClass="commodity" />,
+                                id: "orb",
+                                label: "ORB Strategy",
+                                content: <OrbStrategyTab filterAssetClass="commodity" defaultTicker="GLD" />,
                               },
-                              { id: "orb-detail", label: "ORB Ticker Detail", content: <OrbDetailTab defaultTicker="GLD" /> },
                               {
                                 id: "rolling-move-stats",
                                 label: "Rolling Move Stats",
