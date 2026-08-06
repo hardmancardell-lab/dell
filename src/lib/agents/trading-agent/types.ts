@@ -1307,6 +1307,52 @@ export interface PaperOrderCheckResult {
   errors: { orderId: string; error: string }[];
 }
 
+// --- Trade Journal ---
+// A real, manually-entered log of the user's own discretionary trades (placed
+// at their real broker, outside this app) — distinct from Paper Trading
+// (this app's own simulated account/order engine) and the Strategy Ledger
+// (fully automated hypothesis sweeps). No order execution happens here; this
+// is a record-keeping tool: what was traded, why (thesis), and the real
+// realized P&L once closed.
+
+export type JournalInstrumentType = "call" | "put" | "shares";
+export type JournalStatus = "open" | "closed";
+
+export interface JournalEntry {
+  id: string;
+  ticker: string;
+  instrumentType: JournalInstrumentType;
+  strikePrice: number | null;
+  expirationDate: string | null; // YYYY-MM-DD, options only
+  quantity: number;
+  entryPrice: number;
+  entryDate: string; // ISO timestamp
+  thesis: string | null;
+  exitPrice: number | null;
+  exitDate: string | null;
+  status: JournalStatus;
+  realizedPnl: number | null; // (exitPrice - entryPrice) * quantity * multiplier, set on close
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface JournalEntryInput {
+  ticker: string;
+  instrumentType: JournalInstrumentType;
+  strikePrice?: number | null;
+  expirationDate?: string | null;
+  quantity: number;
+  entryPrice: number;
+  entryDate?: string;
+  thesis?: string | null;
+}
+
+export interface JournalCloseInput {
+  exitPrice: number;
+  exitDate?: string;
+  notes?: string | null;
+}
+
 // --- Rolling Move Stats ---
 // Real up-day/down-day/absolute average move, computed directly from actual
 // daily bars — deliberately NOT the symmetric folded-normal shortcut

@@ -25,6 +25,7 @@ import { GlossaryTab } from "@/components/GlossaryTab";
 import { AlertsSubscribeTab } from "@/components/AlertsSubscribeTab";
 import { PaperTradingTab } from "@/components/PaperTradingTab";
 import { StrategyLedgerTab } from "@/components/StrategyLedgerTab";
+import { TradeJournalTab } from "@/components/TradeJournalTab";
 import { InternationalEconomicsTab } from "@/components/InternationalEconomicsTab";
 import { BondDashboardTab } from "@/components/BondDashboardTab";
 import { YieldCurveTab } from "@/components/YieldCurveTab";
@@ -790,6 +791,19 @@ export default async function Home() {
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Strategy Ledger</h1>
                           <StrategyLedgerTab />
+                        </div>
+                      ),
+                    },
+                    {
+                      id: "trade-journal",
+                      label: "Trade Journal",
+                      content: (
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">
+                            Trading Agent &middot; Trade Journal
+                          </div>
+                          <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Trade Journal</h1>
+                          <TradeJournalTab />
                         </div>
                       ),
                     },
