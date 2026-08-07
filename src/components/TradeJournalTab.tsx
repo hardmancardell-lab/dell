@@ -183,12 +183,138 @@ export function TradeJournalTab() {
   }
 
   const open = positions?.filter((p) => p.status === "open") ?? [];
-  const closed = positions?.filter((p) => p.status === "closed") ?? [];
 
   const equityCurveData = useMemo(
     () => analytics?.equityCurve.map((pt, i) => ({ trade: i + 1, cumulativePnl: pt.cumulativePnl, date: pt.date })) ?? [],
     [analytics]
   );
+
+  const strategyLeaderboard = useMemo(() => (analytics ? [...analytics.byStrategy].sort((a, b) => (b.winRate ?? -1) - (a.winRate ?? -1)) : []), [analytics]);
+
+  type GridRow = {
+    id: string;
+    ticker: string;
+    instrument: string;
+    strike: number | null;
+    expiration: string | null;
+    source: JournalSource;
+    strategy: string;
+    status: string;
+    qtyOpen: number;
+    avgEntry: number | null;
+    stopLoss: number | null;
+    targetPrice: number | null;
+    realizedPnl: number;
+    realizedR: number | null;
+    result: string;
+    followedPlan: boolean | null;
+    emotion: string;
+    opened: string;
+    closed: string | null;
+  };
+
+  const gridRows = useMemo<GridRow[]>(() => {
+    if (!positions) return [];
+    return positions.map((p) => {
+      const m = computeJournalPositionMetrics(p.fills, p.instrumentType, p.stopLoss);
+      return {
+        id: p.id,
+        ticker: p.ticker,
+        instrument: p.instrumentType,
+        strike: p.strikePrice,
+        expiration: p.expirationDate,
+        source: p.source,
+        strategy: strategyLabel(p),
+        status: p.status,
+        qtyOpen: m.openQuantity,
+        avgEntry: m.avgEntryPrice,
+        stopLoss: p.stopLoss,
+        targetPrice: p.targetPrice,
+        realizedPnl: m.realizedPnl,
+        realizedR: m.realizedR,
+        result: p.status === "open" ? "Open" : m.realizedPnl > 0 ? "Win" : m.realizedPnl < 0 ? "Loss" : "Flat",
+        followedPlan: p.followedPlan,
+        emotion: p.emotionTag ?? "—",
+        opened: p.openedAt,
+        closed: p.closedAt,
+      };
+    });
+  }, [positions]);
+
+  const GRID_COLUMNS: { key: keyof GridRow; label: string }[] = [
+    { key: "ticker", label: "Ticker" },
+    { key: "instrument", label: "Type" },
+    { key: "strike", label: "Strike" },
+    { key: "expiration", label: "Exp" },
+    { key: "source", label: "Source" },
+    { key: "strategy", label: "Strategy" },
+    { key: "status", label: "Status" },
+    { key: "qtyOpen", label: "Qty Open" },
+    { key: "avgEntry", label: "Avg Entry" },
+    { key: "stopLoss", label: "Stop" },
+    { key: "targetPrice", label: "Target" },
+    { key: "realizedPnl", label: "Realized P&L" },
+    { key: "realizedR", label: "R" },
+    { key: "result", label: "Result" },
+    { key: "followedPlan", label: "Followed Plan" },
+    { key: "emotion", label: "Emotion" },
+    { key: "opened", label: "Opened" },
+    { key: "closed", label: "Closed" },
+  ];
+
+  const [sortKey, setSortKey] = useState<keyof GridRow>("opened");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [filterStrategy, setFilterStrategy] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterSource, setFilterSource] = useState("all");
+
+  function toggleSort(key: keyof GridRow) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  const strategyOptions = useMemo(() => Array.from(new Set(gridRows.map((r) => r.strategy))).sort(), [gridRows]);
+
+  const visibleRows = useMemo(() => {
+    let rows = gridRows;
+    if (filterStrategy !== "all") rows = rows.filter((r) => r.strategy === filterStrategy);
+    if (filterStatus !== "all") rows = rows.filter((r) => r.status === filterStatus);
+    if (filterSource !== "all") rows = rows.filter((r) => r.source === filterSource);
+    const sorted = [...rows].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (av === null || av === undefined) return 1;
+      if (bv === null || bv === undefined) return -1;
+      if (typeof av === "number" && typeof bv === "number") return av - bv;
+      if (typeof av === "boolean" && typeof bv === "boolean") return av === bv ? 0 : av ? -1 : 1;
+      return String(av).localeCompare(String(bv));
+    });
+    return sortDir === "asc" ? sorted : sorted.reverse();
+  }, [gridRows, filterStrategy, filterStatus, filterSource, sortKey, sortDir]);
+
+  function downloadCsv() {
+    const headers = GRID_COLUMNS.map((c) => c.label);
+    const lines = [headers.join(",")];
+    for (const row of visibleRows) {
+      const cells = GRID_COLUMNS.map((c) => {
+        const v = row[c.key];
+        const s = v === null || v === undefined ? "" : String(v);
+        return s.includes(",") ? `"${s.replace(/"/g, '""')}"` : s;
+      });
+      lines.push(cells.join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `trade-journal-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="jarvis flex flex-col gap-8">
@@ -256,6 +382,39 @@ export function TradeJournalTab() {
             </div>
           </div>
 
+          {strategyLeaderboard.length > 0 && (
+            <div className="overflow-x-auto mb-4">
+              <div className="jv-label mb-2">Strategy Win Rates (ranked)</div>
+              <table className="jv-table">
+                <thead>
+                  <tr>
+                    {["Rank", "Strategy", "Trades", "Win %", "Expectancy", "Total P&L"].map((h) => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {strategyLeaderboard.map((s, i) => (
+                    <tr key={s.strategy}>
+                      <td className="jv-num">{i + 1}</td>
+                      <td className="font-medium">{s.strategy}</td>
+                      <td className="jv-num">{s.count}</td>
+                      <td className="jv-num" style={{ color: s.winRate !== null && s.winRate >= 50 ? "var(--signal)" : "var(--danger)" }}>
+                        {fmtPct(s.winRate)}
+                      </td>
+                      <td className="jv-num" style={{ color: pnlColor(s.expectancyR) }}>
+                        {fmtR(s.expectancyR)}
+                      </td>
+                      <td className="jv-num" style={{ color: pnlColor(s.totalRealizedPnl) }}>
+                        {fmtMoney(s.totalRealizedPnl)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {equityCurveData.length > 1 && (
             <div className="jv-card mb-4" style={{ height: 220 }}>
               <div className="jv-label mb-2">Equity Curve (cumulative realized P&amp;L)</div>
@@ -275,34 +434,7 @@ export function TradeJournalTab() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-            <div className="overflow-x-auto">
-              <div className="jv-label mb-2">By Strategy</div>
-              <table className="jv-table">
-                <thead>
-                  <tr>
-                    {["Strategy", "N", "Win %", "Expectancy", "P&L"].map((h) => (
-                      <th key={h}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {analytics.byStrategy.map((s) => (
-                    <tr key={s.strategy}>
-                      <td>{s.strategy}</td>
-                      <td className="jv-num">{s.count}</td>
-                      <td className="jv-num">{fmtPct(s.winRate)}</td>
-                      <td className="jv-num" style={{ color: pnlColor(s.expectancyR) }}>
-                        {fmtR(s.expectancyR)}
-                      </td>
-                      <td className="jv-num" style={{ color: pnlColor(s.totalRealizedPnl) }}>
-                        {fmtMoney(s.totalRealizedPnl)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
             <div className="overflow-x-auto">
               <div className="jv-label mb-2">By Day of Week</div>
               <table className="jv-table">
@@ -507,44 +639,83 @@ export function TradeJournalTab() {
         </div>
       )}
 
-      {closed.length > 0 && (
+      {gridRows.length > 0 && (
         <div>
-          <div className="jv-label mb-3">Closed Trades</div>
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
+            <div className="jv-label">All Positions ({visibleRows.length}/{gridRows.length})</div>
+            <div className="flex flex-wrap gap-2 items-center">
+              <select value={filterStrategy} onChange={(e) => setFilterStrategy(e.target.value)} className="px-2 py-1 text-xs" style={selectStyle}>
+                <option value="all">All strategies</option>
+                {strategyOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-2 py-1 text-xs" style={selectStyle}>
+                <option value="all">Open + Closed</option>
+                <option value="open">Open only</option>
+                <option value="closed">Closed only</option>
+              </select>
+              <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="px-2 py-1 text-xs" style={selectStyle}>
+                <option value="all">Live + Paper</option>
+                <option value="live">Live only</option>
+                <option value="paper">Paper only</option>
+              </select>
+              <button onClick={downloadCsv} className="jv-btn-outline text-xs px-3 py-1">
+                Export CSV
+              </button>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="jv-table">
               <thead>
                 <tr>
-                  {["Position", "Strategy", "Source", "Realized P&L", "R", "Followed Plan", "Mistakes", "Closed"].map((h) => (
-                    <th key={h}>{h}</th>
+                  {GRID_COLUMNS.map((c) => (
+                    <th key={c.key} onClick={() => toggleSort(c.key)} style={{ cursor: "pointer", whiteSpace: "nowrap" }}>
+                      {c.label}
+                      {sortKey === c.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {closed.map((p) => {
-                  const m = computeJournalPositionMetrics(p.fills, p.instrumentType, p.stopLoss);
-                  return (
-                    <tr key={p.id}>
-                      <td className="font-medium">{positionLabel(p)}</td>
-                      <td className="text-xs">{strategyLabel(p)}</td>
-                      <td>
-                        <span className={`jv-badge ${p.source === "live" ? "c-signal" : "c-neutral"}`}>{p.source === "live" ? "Live" : "Paper"}</span>
-                      </td>
-                      <td className="jv-num" style={{ color: pnlColor(m.realizedPnl) }}>
-                        {fmtMoney(m.realizedPnl)}
-                      </td>
-                      <td className="jv-num" style={{ color: pnlColor(m.realizedR) }}>
-                        {fmtR(m.realizedR)}
-                      </td>
-                      <td>{p.followedPlan === null ? "—" : p.followedPlan ? "Yes" : "No"}</td>
-                      <td className="text-xs" style={{ color: "var(--text-2)" }}>
-                        {p.mistakeTags.join(", ") || "—"}
-                      </td>
-                      <td className="text-xs" style={{ color: "var(--text-2)" }}>
-                        {p.closedAt ? new Date(p.closedAt).toLocaleDateString() : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {visibleRows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="font-medium">{r.ticker}</td>
+                    <td className="capitalize text-xs">{r.instrument}</td>
+                    <td className="jv-num">{r.strike ?? "—"}</td>
+                    <td className="text-xs" style={{ color: "var(--text-2)" }}>
+                      {r.expiration ?? "—"}
+                    </td>
+                    <td>
+                      <span className={`jv-badge ${r.source === "live" ? "c-signal" : "c-neutral"}`}>{r.source === "live" ? "Live" : "Paper"}</span>
+                    </td>
+                    <td className="text-xs">{r.strategy}</td>
+                    <td className="text-xs capitalize">{r.status}</td>
+                    <td className="jv-num">{r.qtyOpen}</td>
+                    <td className="jv-num">{r.avgEntry !== null ? r.avgEntry.toFixed(2) : "—"}</td>
+                    <td className="jv-num">{r.stopLoss ?? "—"}</td>
+                    <td className="jv-num">{r.targetPrice ?? "—"}</td>
+                    <td className="jv-num" style={{ color: pnlColor(r.realizedPnl) }}>
+                      {fmtMoney(r.realizedPnl)}
+                    </td>
+                    <td className="jv-num" style={{ color: pnlColor(r.realizedR) }}>
+                      {fmtR(r.realizedR)}
+                    </td>
+                    <td>
+                      <span className={`jv-badge ${r.result === "Win" ? "c-signal" : r.result === "Loss" ? "c-danger" : "c-neutral"}`}>{r.result}</span>
+                    </td>
+                    <td className="text-xs">{r.followedPlan === null ? "—" : r.followedPlan ? "Yes" : "No"}</td>
+                    <td className="text-xs capitalize">{r.emotion}</td>
+                    <td className="text-xs" style={{ color: "var(--text-2)", whiteSpace: "nowrap" }}>
+                      {new Date(r.opened).toLocaleDateString()}
+                    </td>
+                    <td className="text-xs" style={{ color: "var(--text-2)", whiteSpace: "nowrap" }}>
+                      {r.closed ? new Date(r.closed).toLocaleDateString() : "—"}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
