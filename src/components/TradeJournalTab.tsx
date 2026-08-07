@@ -86,6 +86,60 @@ const STRATEGY_PLAYBOOK: { value: string; label: string; definition: string; whe
     definition: "Taken to offset risk in another position (e.g. a call bought against event risk on a name you're structurally bearish, or vice versa) — sized by the risk being offset, not by directional conviction alone.",
     whereToBacktest: "Options → Strategy Guide (collar/protective-put patterns) and this app's payoff calculator.",
   },
+  {
+    value: "volumeDisplacement",
+    label: "Volume Displacement",
+    definition: "Today's volume comes in meaningfully above its rolling average — a real, mechanically-detected signal, not a discretionary read.",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Backtest tab (Volume Displacement signal) — real BH-FDR/bootstrap/out-of-sample results.",
+  },
+  {
+    value: "momentum",
+    label: "Momentum",
+    definition: "Three consecutive green closes with rising volume — the app's mechanical momentum trigger.",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Backtest tab (Momentum signal).",
+  },
+  {
+    value: "meanReversionOversold",
+    label: "Mean Reversion — Oversold",
+    definition: "Price's rolling z-score vs. its own mean has crossed below the oversold threshold — the app's precise, backtested mean-reversion signal.",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Backtest tab (Mean Reversion Oversold signal).",
+  },
+  {
+    value: "meanReversionOverbought",
+    label: "Mean Reversion — Overbought",
+    definition: "Price's rolling z-score has crossed above the overbought threshold.",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Backtest tab (Mean Reversion Overbought signal).",
+  },
+  {
+    value: "orbBreakout_long",
+    label: "Opening Range Breakout — Long",
+    definition: "Price closes above the opening range high — a long breakout entry.",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → ORB Strategy tab (Watchlist + Ticker Detail).",
+  },
+  {
+    value: "orbBreakout_short",
+    label: "Opening Range Breakout — Short",
+    definition: "Price closes below the opening range low — a short breakout entry.",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → ORB Strategy tab (Watchlist + Ticker Detail).",
+  },
+  {
+    value: "dayOfWeekEffect",
+    label: "Day-of-Week Effect",
+    definition: "A specific weekday has a real, statistically-tested tendency to move differently than others for this ticker.",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Calendar Effects tab (Day-of-Week mode).",
+  },
+  {
+    value: "timeOfDayEffect",
+    label: "Time-of-Day Effect",
+    definition: "A specific intraday window (first 15 min, power hour, etc.) has a real tested tendency for this ticker.",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Calendar Effects tab (Time-of-Day mode).",
+  },
+  {
+    value: "pegReversion",
+    label: "Currency Peg Reversion",
+    definition: "A pegged/managed currency pair has drifted from its target band and is expected to revert.",
+    whereToBacktest: "Currency → Currency Pegs tab.",
+  },
 ];
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -206,6 +260,7 @@ export function TradeJournalTab() {
     targetPrice: number | null;
     realizedPnl: number;
     realizedR: number | null;
+    returnPct: number | null;
     result: string;
     followedPlan: boolean | null;
     emotion: string;
@@ -217,6 +272,7 @@ export function TradeJournalTab() {
     if (!positions) return [];
     return positions.map((p) => {
       const m = computeJournalPositionMetrics(p.fills, p.instrumentType, p.stopLoss);
+      const entryCostBasis = m.avgEntryPrice !== null ? m.avgEntryPrice * m.peakQuantity * journalMultiplier(p.instrumentType) : 0;
       return {
         id: p.id,
         ticker: p.ticker,
@@ -232,6 +288,7 @@ export function TradeJournalTab() {
         targetPrice: p.targetPrice,
         realizedPnl: m.realizedPnl,
         realizedR: m.realizedR,
+        returnPct: p.status === "closed" && entryCostBasis > 0 ? (m.realizedPnl / entryCostBasis) * 100 : null,
         result: p.status === "open" ? "Open" : m.realizedPnl > 0 ? "Win" : m.realizedPnl < 0 ? "Loss" : "Flat",
         followedPlan: p.followedPlan,
         emotion: p.emotionTag ?? "—",
@@ -254,6 +311,7 @@ export function TradeJournalTab() {
     { key: "stopLoss", label: "Stop" },
     { key: "targetPrice", label: "Target" },
     { key: "realizedPnl", label: "Realized P&L" },
+    { key: "returnPct", label: "Return %" },
     { key: "realizedR", label: "R" },
     { key: "result", label: "Result" },
     { key: "followedPlan", label: "Followed Plan" },
@@ -277,7 +335,11 @@ export function TradeJournalTab() {
     }
   }
 
-  const strategyOptions = useMemo(() => Array.from(new Set(gridRows.map((r) => r.strategy))).sort(), [gridRows]);
+  const strategyOptions = useMemo(() => {
+    const canonical = JOURNAL_STRATEGY_TAGS.filter((s) => s.value !== "other").map((s) => s.label);
+    const loggedCustom = gridRows.filter((r) => !canonical.includes(r.strategy)).map((r) => r.strategy);
+    return Array.from(new Set([...canonical, ...loggedCustom])).sort();
+  }, [gridRows]);
 
   const visibleRows = useMemo(() => {
     let rows = gridRows;
@@ -699,6 +761,9 @@ export function TradeJournalTab() {
                     <td className="jv-num">{r.targetPrice ?? "—"}</td>
                     <td className="jv-num" style={{ color: pnlColor(r.realizedPnl) }}>
                       {fmtMoney(r.realizedPnl)}
+                    </td>
+                    <td className="jv-num" style={{ color: pnlColor(r.returnPct) }}>
+                      {r.returnPct !== null ? `${r.returnPct >= 0 ? "+" : ""}${r.returnPct.toFixed(1)}%` : "—"}
                     </td>
                     <td className="jv-num" style={{ color: pnlColor(r.realizedR) }}>
                       {fmtR(r.realizedR)}

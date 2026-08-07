@@ -1344,12 +1344,28 @@ export const JOURNAL_EMOTION_TAGS: { value: JournalEmotionTag; label: string }[]
 // (event-vol straddles, PM-volume momentum, weekly swing trades) plus the
 // generic categories every reviewed competitor journal tags by. "other"
 // carries a free-text label.
+// Discretionary categories (the user's own established playbook) plus the
+// exact signal/strategy types this app's own backtest engines test for
+// (historical-backtest.ts's EquityBacktestSignalType, calendar-effects.ts's
+// day-of-week/time-of-day effects, opening-range-breakout.ts's long/short
+// horizons, and peg-reversion.ts's currency-peg mean reversion) — the same
+// strategyType strings hypothesis-sweep.ts logs into the Strategy Ledger,
+// reused here rather than inventing a parallel vocabulary.
 export const JOURNAL_STRATEGY_TAGS: { value: string; label: string }[] = [
   { value: "event_catalyst", label: "Event / Volatility Catalyst" },
   { value: "pm_volume_momentum", label: "Premarket Volume Momentum" },
   { value: "weekly_swing", label: "Weekly Swing" },
-  { value: "mean_reversion", label: "Mean Reversion" },
+  { value: "mean_reversion", label: "Mean Reversion (discretionary)" },
   { value: "hedge", label: "Hedge / Risk Offset" },
+  { value: "volumeDisplacement", label: "Volume Displacement" },
+  { value: "momentum", label: "Momentum" },
+  { value: "meanReversionOversold", label: "Mean Reversion — Oversold" },
+  { value: "meanReversionOverbought", label: "Mean Reversion — Overbought" },
+  { value: "orbBreakout_long", label: "Opening Range Breakout — Long" },
+  { value: "orbBreakout_short", label: "Opening Range Breakout — Short" },
+  { value: "dayOfWeekEffect", label: "Day-of-Week Effect" },
+  { value: "timeOfDayEffect", label: "Time-of-Day Effect" },
+  { value: "pegReversion", label: "Currency Peg Reversion" },
   { value: "other", label: "Other" },
 ];
 
