@@ -2,7 +2,9 @@ import type { CurrencyPeg } from "../types";
 
 // Pure, zero-dependency reference data — same client-safe convention as
 // top-traded-pairs.ts. Every rate here is a real, currently-in-force,
-// publicly-documented peg (verified live this session), not an estimate.
+// publicly-documented peg. Re-verified against live sources on 2026-08-07
+// (each entry's verifiedAsOf) — every regime/rate/band below was confirmed
+// still in force as of that date, not an estimate or a one-time snapshot.
 //
 // liveDataAvailable was confirmed by direct testing against this app's only
 // forex data source (OANDA's practice API, via /api/chart-bars): USD/HKD and
@@ -25,7 +27,8 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     regimeName: "Linked Exchange Rate System (LERS)",
     authority: "Hong Kong Monetary Authority",
     since: "1983 (current 7.75-7.85 band set 2005)",
-    note: "The HKMA is obligated to intervene (buying or selling HKD) whenever the rate reaches either edge of the band.",
+    note: "The HKMA is obligated to intervene (buying or selling HKD) whenever the rate reaches either edge of the band. Real, recent example: May-July 2025 saw the HKD swing from the strong-side limit (7.75) to the weak-side limit (7.85) as US dollar weakness drove record capital inflows, forcing the HKMA to purchase HKD 86.93 billion to defend the peg — the band itself never moved.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: true,
   },
   {
@@ -40,6 +43,7 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     authority: "Danmarks Nationalbank",
     since: "1999",
     note: "Official ERM II tolerance band is ±2.25%; in practice Danmarks Nationalbank has kept the krone within a much tighter ±0.5% of the central rate.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: true,
   },
   {
@@ -54,6 +58,7 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     authority: "Central Bank of the UAE",
     since: "1997",
     note: "No official trading band published; the rate is defended directly at the fixed level.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: false,
   },
   {
@@ -68,6 +73,7 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     authority: "Saudi Central Bank (SAMA)",
     since: "1986",
     note: "OANDA lists this instrument but returns no live candle data behind it — no real spot feed available through this app.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: false,
   },
   {
@@ -82,6 +88,7 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     authority: "Qatar Central Bank",
     since: "2001",
     note: "No official trading band published.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: false,
   },
   {
@@ -96,6 +103,7 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     authority: "Central Bank of Bahrain",
     since: "1980",
     note: "Conventionally quoted as 1 BHD = 2.6526 USD; the figure here is the inverse (BHD per 1 USD) to match this app's USD-base quoting convention.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: false,
   },
   {
@@ -110,6 +118,7 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     authority: "Central Bank of Oman",
     since: "1986",
     note: "Conventionally quoted as 1 OMR = 2.6008 USD; the figure here is the inverse (OMR per 1 USD) to match this app's USD-base quoting convention.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: false,
   },
   {
@@ -124,6 +133,7 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     authority: "Central Bank of Jordan",
     since: "1995",
     note: "No official trading band published.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: false,
   },
   {
@@ -138,6 +148,7 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     authority: "BCEAO, guaranteed by the French Treasury",
     since: "1999 (fixed rate unchanged since the 1994 CFA devaluation, re-expressed in EUR at euro launch)",
     note: "Held without devaluation since 1999.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: false,
   },
   {
@@ -152,6 +163,7 @@ export const CURRENCY_PEGS: CurrencyPeg[] = [
     authority: "BEAC, guaranteed by the French Treasury",
     since: "1999 (fixed rate unchanged since the 1994 CFA devaluation, re-expressed in EUR at euro launch)",
     note: "Held without devaluation since 1999. XOF and XAF share the same EUR rate but are separate, non-interchangeable currencies.",
+    verifiedAsOf: "2026-08-07",
     liveDataAvailable: false,
   },
 ];

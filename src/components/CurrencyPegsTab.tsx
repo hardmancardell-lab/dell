@@ -216,10 +216,11 @@ export function CurrencyPegsTab() {
     <div className="jarvis">
       <p className="jv-lede">
         Every currency this app has confirmed is pegged to another, with its real target rate (and
-        official band, where one exists). Below that: its own strategy — deviation from the peg
-        target measured through the same statistical rigor (BH-FDR, bootstrap CI, out-of-sample
-        split) every other backtest engine in this app uses, run against the target rate itself
-        rather than a rolling statistical mean.
+        official band, where one exists). Every entry was re-checked against live sources on
+        2026-08-07 (the &quot;Verified&quot; column below) — none have changed rate or regime. Below that:
+        its own strategy — deviation from the peg target measured through the same statistical rigor
+        (BH-FDR, bootstrap CI, out-of-sample split) every other backtest engine in this app uses, run
+        against the target rate itself rather than a rolling statistical mean.
       </p>
 
       {registryError && (
@@ -238,6 +239,7 @@ export function CurrencyPegsTab() {
                 <th>Official Band</th>
                 <th>Regime</th>
                 <th>Authority</th>
+                <th>Verified</th>
                 <th>Live Rate</th>
                 <th>Deviation</th>
               </tr>
@@ -256,6 +258,7 @@ export function CurrencyPegsTab() {
                     </td>
                     <td className="text-xs" style={{ color: "var(--text-2)" }}>{p.regimeName}</td>
                     <td className="text-xs" style={{ color: "var(--text-2)" }}>{p.authority}</td>
+                    <td className="text-xs" style={{ color: "var(--text-2)" }}>{p.verifiedAsOf}</td>
                     <td className="jv-num">
                       {!p.liveDataAvailable ? (
                         <span className="text-xs" style={{ color: "var(--text-2)" }}>No live feed</span>

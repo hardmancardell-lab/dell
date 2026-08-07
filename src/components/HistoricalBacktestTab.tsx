@@ -5,6 +5,7 @@ import { GlossaryTerm } from "./GlossaryTerm";
 import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { PriceChart } from "./PriceChart";
 import { useTrackEvent } from "@/lib/analytics/use-track";
+import { getCurrencyPeg } from "@/lib/agents/trading-agent/skills/currency-pegs";
 import type { AssetClass, EquityBacktestResult, EquityBacktestSignalType } from "@/lib/agents/trading-agent/types";
 
 const SIGNAL_OPTIONS: { value: EquityBacktestSignalType; label: string }[] = [
@@ -60,6 +61,9 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
   const [loading, setLoading] = useState(false);
   const [focusedDate, setFocusedDate] = useState<string | null>(null);
   const { track } = useTrackEvent();
+
+  const isMeanReversionSignal = signal === "meanReversionOversold" || signal === "meanReversionOverbought";
+  const registeredPeg = assetClass === "forex" ? getCurrencyPeg(ticker) : undefined;
 
   async function runBacktest(e: React.FormEvent) {
     e.preventDefault();
@@ -120,6 +124,18 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
           {loading ? "Running…" : "Run Backtest"}
         </button>
       </form>
+
+      {isMeanReversionSignal && registeredPeg && (
+        <div className="jv-card mb-4" style={{ borderColor: "var(--verdict)" }}>
+          <div className="text-sm" style={{ color: "var(--verdict)" }}>
+            {ticker.toUpperCase()} is a registered peg ({registeredPeg.regimeName}, target {registeredPeg.targetRate}
+            {registeredPeg.bandLowerBound !== null ? ` — band ${registeredPeg.bandLowerBound}–${registeredPeg.bandUpperBound}` : " — hard-fixed"}).
+            Any apparent mean reversion here is structurally driven by the peg — {registeredPeg.authority} defends that
+            level directly — not organic statistical reversion. See the Currency Pegs tab for the real peg-deviation
+            backtest, which measures reversion against the actual defended target instead of a rolling mean.
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="jv-card mb-4" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>

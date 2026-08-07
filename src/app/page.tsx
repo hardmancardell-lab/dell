@@ -17,6 +17,8 @@ import { ScreenerTab } from "@/components/ScreenerTab";
 import { ResearchWatchlistTab } from "@/components/ResearchWatchlistTab";
 import { OptionsCalculatorTab } from "@/components/OptionsCalculatorTab";
 import { EquityChartsTab } from "@/components/EquityChartsTab";
+import { AssetChartsTab } from "@/components/AssetChartsTab";
+import { BacktestSuiteTab } from "@/components/BacktestSuiteTab";
 import { HistoricalBacktestTab } from "@/components/HistoricalBacktestTab";
 import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
 import { OrbStrategyTab } from "@/components/OrbStrategyTab";
@@ -621,14 +623,14 @@ export default async function Home() {
                               { id: "central-banks", label: "Central Banks", content: <InternationalCentralBanksView /> },
                               { id: "pegs", label: "Currency Pegs", content: <CurrencyPegsTab /> },
                               {
-                                id: "backtest",
-                                label: "Backtest",
-                                content: <HistoricalBacktestTab key="currency-backtest" defaultTicker="EUR/USD" assetClass="forex" />,
+                                id: "charts",
+                                label: "Charts",
+                                content: <AssetChartsTab assetClass="forex" defaultTicker="EUR/USD" placeholder="Pair, e.g. EUR/USD" watchlistLabel="Currency" />,
                               },
                               {
-                                id: "calendar-effects",
-                                label: "Calendar Effects",
-                                content: <CalendarEffectsTab key="currency-calendar-effects" defaultTicker="EUR/USD" assetClass="forex" />,
+                                id: "backtest",
+                                label: "Backtest",
+                                content: <BacktestSuiteTab key="currency-backtest-suite" defaultTicker="EUR/USD" assetClass="forex" />,
                               },
                               {
                                 id: "orb",
@@ -636,11 +638,6 @@ export default async function Home() {
                                 content: <OrbStrategyTab filterAssetClass="forex" defaultTicker="EUR/USD" />,
                               },
                               { id: "news", label: "News Search", content: <InternationalEconomicsTab /> },
-                              {
-                                id: "rolling-move-stats",
-                                label: "Rolling Move Stats",
-                                content: <RollingMoveStatsTab defaultTicker="EUR/USD" defaultAssetClass="forex" />,
-                              },
                               {
                                 id: "session-analysis",
                                 label: "Session Analysis",
@@ -667,6 +664,11 @@ export default async function Home() {
                                 id: "dashboard",
                                 label: "Dashboard",
                                 content: <FuturesDashboardTab />,
+                              },
+                              {
+                                id: "charts",
+                                label: "Charts",
+                                content: <AssetChartsTab assetClass="future" defaultTicker="SPY" placeholder="Ticker, e.g. SPY" watchlistLabel="Futures" />,
                               },
                               {
                                 id: "backtest",
@@ -719,6 +721,11 @@ export default async function Home() {
                                 id: "dashboard",
                                 label: "Dashboard",
                                 content: <CommoditiesDashboardTab />,
+                              },
+                              {
+                                id: "charts",
+                                label: "Charts",
+                                content: <AssetChartsTab assetClass="commodity" defaultTicker="GLD" placeholder="Ticker, e.g. GLD" watchlistLabel="Commodities" />,
                               },
                               {
                                 id: "backtest",

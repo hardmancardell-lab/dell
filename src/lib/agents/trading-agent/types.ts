@@ -316,6 +316,7 @@ export interface CurrencyPeg {
   authority: string;
   since: string;
   note: string;
+  verifiedAsOf: string; // YYYY-MM-DD this peg's status/rate was last checked against a live source, not just when the entry was first written
   // Whether OANDA's practice API actually serves real spot/daily-bar data for
   // this pair — confirmed by direct live testing, not assumed. Most hard
   // pegs to USD in the Gulf and CFA-zone are real, current, well-documented
