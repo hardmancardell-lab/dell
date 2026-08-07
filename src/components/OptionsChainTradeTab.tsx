@@ -68,9 +68,9 @@ function findAtmStrike(rows: StrikeRow[], spot: number): number | null {
  * the same shared PaperOrderForm used everywhere else, locked to a market
  * order on that exact contract.
  */
-export function OptionsChainTradeTab() {
+export function OptionsChainTradeTab({ initialTicker }: { initialTicker?: string } = {}) {
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [ticker, setTicker] = useState("AAPL");
+  const [ticker, setTicker] = useState(initialTicker ?? "AAPL");
   const [expirations, setExpirations] = useState<string[]>([]);
   const [expiration, setExpiration] = useState<string>("");
   const [chain, setChain] = useState<ChainWithSpot | null>(null);
@@ -86,6 +86,15 @@ export function OptionsChainTradeTab() {
   useEffect(() => {
     setSessionId(getOrCreateSessionId());
   }, []);
+
+  // Auto-load when embedded with a prefilled ticker (e.g. the chart's
+  // floating "Options Chain" panel) so it shows real data immediately
+  // instead of requiring an extra click — the plain, unprefilled call site
+  // (the standalone "Trade Options" tab) is unaffected.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (initialTicker) loadExpirations(initialTicker.trim().toUpperCase());
+  }, [initialTicker]);
 
   async function placeAllLegs(legs: StrategyLegPrefill[], underlyingSymbol: string, expirationDate: string) {
     if (!sessionId) return;

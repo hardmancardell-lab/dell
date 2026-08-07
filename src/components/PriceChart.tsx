@@ -22,6 +22,7 @@ import { SESSIONS, toUtcParts } from "@/lib/agents/trading-agent/skills/time-win
 import type { ChartBarsResult } from "@/lib/agents/trading-agent/skills/chart-bars";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { PaperOrderForm } from "./PaperOrderForm";
+import { OptionsChainTradeTab } from "./OptionsChainTradeTab";
 import type { AssetClass, PaperAccountSummary } from "@/lib/agents/trading-agent/types";
 import {
   atr,
@@ -150,7 +151,8 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [tradeTicketOpen, setTradeTicketOpen] = useState(false);
+  const [floatingPanelOpen, setFloatingPanelOpen] = useState(false);
+  const [floatingTab, setFloatingTab] = useState<"trade" | "options">("trade");
   const [clickedPrice, setClickedPrice] = useState<number | undefined>(undefined);
   const [positionRefreshKey, setPositionRefreshKey] = useState(0);
 
@@ -227,7 +229,8 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
       const barData = candleSeriesRef.current ? param.seriesData.get(candleSeriesRef.current) : undefined;
       const price = barData && "close" in barData ? (barData as { close: number }).close : undefined;
       setClickedPrice(price);
-      setTradeTicketOpen(true);
+      setFloatingTab("trade");
+      setFloatingPanelOpen(true);
     });
 
     const resizeObserver = new ResizeObserver((entries) => {
@@ -666,32 +669,82 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
         </div>
       )}
 
-      {assetClass !== "option" ? (
-        <details className="mb-3" open={tradeTicketOpen} onToggle={(e) => setTradeTicketOpen(e.currentTarget.open)}>
-          <summary className="text-xs font-medium cursor-pointer select-none" style={{ color: "var(--text-1)" }}>
-            Place Paper Trade{clickedPrice !== undefined ? ` — clicked ${clickedPrice.toFixed(2)}` : ""}
-          </summary>
-          <div className="mt-2 jv-card">
-            {sessionId && (
-              <PaperOrderForm
-                sessionId={sessionId}
-                prefillSymbol={symbol}
-                prefillAssetClass={assetClass}
-                prefillPrice={clickedPrice}
-                compact
-                onFilled={() => setPositionRefreshKey((n) => n + 1)}
-              />
-            )}
-          </div>
-        </details>
-      ) : (
+      {assetClass === "option" && (
         <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
           Options are traded via the real options chain — see the Options tab&apos;s &quot;Trade Options&quot; sub-tab to pick a
           specific contract.
         </p>
       )}
 
-      <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)" }} />
+      <div style={{ position: "relative" }}>
+        <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)" }} />
+
+        {assetClass !== "option" && (
+          <div style={{ position: "absolute", top: 12, right: 12, zIndex: 5 }}>
+            <button
+              onClick={() => setFloatingPanelOpen((v) => !v)}
+              className="px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+              style={{
+                borderRadius: 999,
+                background: "var(--signal)",
+                color: "var(--ink-950)",
+                boxShadow: "0 2px 12px rgba(0,0,0,0.5)",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              {floatingPanelOpen ? "✕ Close" : `⚡ Trade ${symbol}`}
+            </button>
+
+            {floatingPanelOpen && (
+              <div
+                className="jv-card"
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 8px)",
+                  right: 0,
+                  width: "min(90vw, 620px)",
+                  maxHeight: "70vh",
+                  overflowY: "auto",
+                  zIndex: 10,
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+                }}
+              >
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setFloatingTab("trade")}
+                    className={floatingTab === "trade" ? "jv-btn text-xs px-3 py-1" : "jv-btn-outline text-xs px-3 py-1"}
+                  >
+                    Trade {symbol}
+                    {clickedPrice !== undefined ? ` @ ${clickedPrice.toFixed(2)}` : ""}
+                  </button>
+                  {assetClass === "equity" && (
+                    <button
+                      onClick={() => setFloatingTab("options")}
+                      className={floatingTab === "options" ? "jv-btn text-xs px-3 py-1" : "jv-btn-outline text-xs px-3 py-1"}
+                    >
+                      Options Chain
+                    </button>
+                  )}
+                </div>
+
+                {floatingTab === "trade" && sessionId && (
+                  <PaperOrderForm
+                    sessionId={sessionId}
+                    prefillSymbol={symbol}
+                    prefillAssetClass={assetClass}
+                    prefillPrice={clickedPrice}
+                    compact
+                    onFilled={() => setPositionRefreshKey((n) => n + 1)}
+                  />
+                )}
+
+                {floatingTab === "options" && assetClass === "equity" && <OptionsChainTradeTab initialTicker={symbol} />}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {volumeProfileSummary && volumeProfileSummary.poc !== null && (
         <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>
