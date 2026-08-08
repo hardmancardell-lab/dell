@@ -1424,6 +1424,7 @@ export interface JournalPosition {
 }
 
 export interface JournalPositionInput {
+  sessionId: string;
   ticker: string;
   instrumentType: JournalInstrumentType;
   strikePrice?: number | null;

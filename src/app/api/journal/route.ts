@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { createJournalPosition, getJournalPositions, insertJournalFill, isJournalDbConfigured } from "@/lib/data/journal-db";
 import type { JournalPositionInput } from "@/lib/agents/trading-agent/types";
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!isJournalDbConfigured()) {
     return NextResponse.json({ error: "Trade Journal is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." }, { status: 503 });
   }
+  const sessionId = new URL(request.url).searchParams.get("sessionId");
+  if (!sessionId) {
+    return NextResponse.json({ error: "Missing required 'sessionId' query param." }, { status: 400 });
+  }
   try {
-    const positions = await getJournalPositions();
+    const positions = await getJournalPositions(sessionId);
     return NextResponse.json({ positions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -21,9 +25,9 @@ export async function POST(request: Request) {
   }
   try {
     const body = (await request.json()) as JournalPositionInput;
-    if (!body.ticker || !body.instrumentType || !body.strategy || !body.source || !body.quantity || !body.entryPrice) {
+    if (!body.sessionId || !body.ticker || !body.instrumentType || !body.strategy || !body.source || !body.quantity || !body.entryPrice) {
       return NextResponse.json(
-        { error: "Request body must include 'ticker', 'instrumentType', 'source', 'strategy', 'quantity', and 'entryPrice'." },
+        { error: "Request body must include 'sessionId', 'ticker', 'instrumentType', 'source', 'strategy', 'quantity', and 'entryPrice'." },
         { status: 400 }
       );
     }
@@ -32,6 +36,7 @@ export async function POST(request: Request) {
     }
     const openedAt = body.entryDate ?? new Date().toISOString();
     const position = await createJournalPosition({
+      sessionId: body.sessionId,
       ticker: body.ticker.trim().toUpperCase(),
       instrumentType: body.instrumentType,
       strikePrice: body.strikePrice ?? null,

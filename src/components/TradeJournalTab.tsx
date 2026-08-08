@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { computeJournalPositionMetrics, journalMultiplier } from "@/lib/agents/trading-agent/skills/journal-log";
 import {
   JOURNAL_EMOTION_TAGS,
@@ -150,11 +151,16 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export function TradeJournalTab() {
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [positions, setPositions] = useState<JournalPosition[] | null>(null);
   const [analytics, setAnalytics] = useState<JournalAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPlaybook, setShowPlaybook] = useState(false);
+
+  useEffect(() => {
+    setSessionId(getOrCreateSessionId());
+  }, []);
 
   // Log-trade form state
   const [ticker, setTicker] = useState("");
@@ -175,10 +181,11 @@ export function TradeJournalTab() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   async function refresh() {
+    if (!sessionId) return;
     try {
       const [posData, analyticsData] = await Promise.all([
-        fetchJson<{ positions: JournalPosition[] }>("/api/journal"),
-        fetchJson<{ analytics: JournalAnalytics }>("/api/journal/analytics"),
+        fetchJson<{ positions: JournalPosition[] }>(`/api/journal?sessionId=${encodeURIComponent(sessionId)}`),
+        fetchJson<{ analytics: JournalAnalytics }>(`/api/journal/analytics?sessionId=${encodeURIComponent(sessionId)}`),
       ]);
       setPositions(posData.positions);
       setAnalytics(analyticsData.analytics);
@@ -190,11 +197,13 @@ export function TradeJournalTab() {
   }
 
   useEffect(() => {
-    refresh();
-  }, []);
+    if (sessionId) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!sessionId) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -202,6 +211,7 @@ export function TradeJournalTab() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          sessionId,
           ticker: ticker.trim().toUpperCase(),
           instrumentType,
           source,
@@ -695,7 +705,7 @@ export function TradeJournalTab() {
           <div className="jv-label mb-3">Open Positions</div>
           <div className="flex flex-col gap-4">
             {open.map((p) => (
-              <OpenPositionCard key={p.id} position={p} onChange={refresh} />
+              <OpenPositionCard key={p.id} position={p} sessionId={sessionId!} onChange={refresh} />
             ))}
           </div>
         </div>
@@ -792,7 +802,7 @@ export function TradeJournalTab() {
   );
 }
 
-function OpenPositionCard({ position, onChange }: { position: JournalPosition; onChange: () => void }) {
+function OpenPositionCard({ position, sessionId, onChange }: { position: JournalPosition; sessionId: string; onChange: () => void }) {
   const [fillSide, setFillSide] = useState<"buy" | "sell">("sell");
   const [fillQty, setFillQty] = useState("");
   const [fillPrice, setFillPrice] = useState("");
@@ -813,7 +823,7 @@ function OpenPositionCard({ position, onChange }: { position: JournalPosition; o
       await fetchJson(`/api/journal/${position.id}/fill`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ side: fillSide, quantity: Number(fillQty), price: Number(fillPrice) }),
+        body: JSON.stringify({ sessionId, side: fillSide, quantity: Number(fillQty), price: Number(fillPrice) }),
       });
       setFillQty("");
       setFillPrice("");
@@ -831,7 +841,7 @@ function OpenPositionCard({ position, onChange }: { position: JournalPosition; o
       await fetchJson(`/api/journal/${position.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ followedPlan, mistakeTags, notes: notes.trim() || null }),
+        body: JSON.stringify({ sessionId, followedPlan, mistakeTags, notes: notes.trim() || null }),
       });
       onChange();
     } catch {

@@ -3,6 +3,7 @@ import { deleteJournalPosition, isJournalDbConfigured, updateJournalPosition } f
 import type { JournalEmotionTag, JournalStatus } from "@/lib/agents/trading-agent/types";
 
 interface PatchBody {
+  sessionId?: string;
   thesis?: string | null;
   notes?: string | null;
   stopLoss?: number | null;
@@ -19,8 +20,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
   const { id } = await context.params;
   try {
-    const body = (await request.json()) as PatchBody;
-    const position = await updateJournalPosition(id, body);
+    const { sessionId, ...fields } = (await request.json()) as PatchBody;
+    if (!sessionId) {
+      return NextResponse.json({ error: "Missing required 'sessionId'." }, { status: 400 });
+    }
+    const position = await updateJournalPosition(id, sessionId, fields);
     return NextResponse.json({ position });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -28,13 +32,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 }
 
-export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   if (!isJournalDbConfigured()) {
     return NextResponse.json({ error: "Trade Journal is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." }, { status: 503 });
   }
   const { id } = await context.params;
+  const sessionId = new URL(request.url).searchParams.get("sessionId");
+  if (!sessionId) {
+    return NextResponse.json({ error: "Missing required 'sessionId' query param." }, { status: 400 });
+  }
   try {
-    await deleteJournalPosition(id);
+    await deleteJournalPosition(id, sessionId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

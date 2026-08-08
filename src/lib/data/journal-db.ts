@@ -78,6 +78,7 @@ function toFill(row: FillRow): JournalFill {
 
 interface PositionRow {
   id: string;
+  session_id: string | null;
   ticker: string;
   instrument_type: JournalInstrumentType;
   strike_price: number | null;
@@ -126,7 +127,20 @@ function toPosition(row: PositionRow): JournalPosition {
 
 const POSITION_SELECT = "*,fills:journal_fills(*)";
 
+// Every journal_positions row is scoped to the anonymous session_id that
+// created it — same pattern as paper_accounts/alert_subscriptions elsewhere
+// in this app (no login system anywhere; a browser-local session id is the
+// only identity concept this app has). Legacy rows created before this
+// column existed have session_id IS NULL and stay visible to everyone
+// (grandfathered — real-world impact is zero right now since there was
+// only ever one real beta user before this scoping landed), but every row
+// created from here on is strictly scoped to its owner.
+function ownershipFilter(sessionId: string): string {
+  return `or=(session_id.eq.${encodeURIComponent(sessionId)},session_id.is.null)`;
+}
+
 export async function createJournalPosition(input: {
+  sessionId: string;
   ticker: string;
   instrumentType: JournalInstrumentType;
   strikePrice: number | null;
@@ -144,6 +158,7 @@ export async function createJournalPosition(input: {
     method: "POST",
     prefer: "return=representation",
     body: {
+      session_id: input.sessionId,
       ticker: input.ticker,
       instrument_type: input.instrumentType,
       strike_price: input.strikePrice,
@@ -162,17 +177,17 @@ export async function createJournalPosition(input: {
   return toPosition({ ...rows[0], fills: [] });
 }
 
-export async function getJournalPositions(): Promise<JournalPosition[]> {
-  const rows = await supabaseRequest<PositionRow[]>(`journal_positions?select=${encodeURIComponent(POSITION_SELECT)}&order=opened_at.desc`, {
-    method: "GET",
-    prefer: "return=representation",
-  });
+export async function getJournalPositions(sessionId: string): Promise<JournalPosition[]> {
+  const rows = await supabaseRequest<PositionRow[]>(
+    `journal_positions?select=${encodeURIComponent(POSITION_SELECT)}&${ownershipFilter(sessionId)}&order=opened_at.desc`,
+    { method: "GET", prefer: "return=representation" }
+  );
   return rows.map(toPosition);
 }
 
-export async function getJournalPositionById(id: string): Promise<JournalPosition | null> {
+export async function getJournalPositionById(id: string, sessionId: string): Promise<JournalPosition | null> {
   const rows = await supabaseRequest<PositionRow[]>(
-    `journal_positions?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(POSITION_SELECT)}`,
+    `journal_positions?id=eq.${encodeURIComponent(id)}&${ownershipFilter(sessionId)}&select=${encodeURIComponent(POSITION_SELECT)}`,
     { method: "GET", prefer: "return=representation" }
   );
   return rows[0] ? toPosition(rows[0]) : null;
@@ -180,6 +195,7 @@ export async function getJournalPositionById(id: string): Promise<JournalPositio
 
 export async function updateJournalPosition(
   id: string,
+  sessionId: string,
   fields: Partial<{
     thesis: string | null;
     notes: string | null;
@@ -203,14 +219,14 @@ export async function updateJournalPosition(
   if ("status" in fields) body.status = fields.status;
   if ("closedAt" in fields) body.closed_at = fields.closedAt;
 
-  await supabaseRequest(`journal_positions?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body });
-  const updated = await getJournalPositionById(id);
+  await supabaseRequest(`journal_positions?id=eq.${encodeURIComponent(id)}&${ownershipFilter(sessionId)}`, { method: "PATCH", body });
+  const updated = await getJournalPositionById(id, sessionId);
   if (!updated) throw new Error("Position not found after update.");
   return updated;
 }
 
-export async function deleteJournalPosition(id: string): Promise<void> {
-  await supabaseRequest(`journal_positions?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+export async function deleteJournalPosition(id: string, sessionId: string): Promise<void> {
+  await supabaseRequest(`journal_positions?id=eq.${encodeURIComponent(id)}&${ownershipFilter(sessionId)}`, { method: "DELETE" });
 }
 
 export async function insertJournalFill(

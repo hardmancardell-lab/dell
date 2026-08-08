@@ -12,11 +12,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
   const { id } = await context.params;
   try {
-    const body = (await request.json()) as JournalFillInput;
-    if (!body.side || !body.quantity || body.price == null) {
-      return NextResponse.json({ error: "Request body must include 'side', 'quantity', and 'price'." }, { status: 400 });
+    const body = (await request.json()) as JournalFillInput & { sessionId?: string };
+    if (!body.sessionId || !body.side || !body.quantity || body.price == null) {
+      return NextResponse.json({ error: "Request body must include 'sessionId', 'side', 'quantity', and 'price'." }, { status: 400 });
     }
-    const existing = await getJournalPositionById(id);
+    const existing = await getJournalPositionById(id, body.sessionId);
     if (!existing) {
       return NextResponse.json({ error: "Journal position not found." }, { status: 404 });
     }
@@ -27,7 +27,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const metrics = computeJournalPositionMetrics(allFills, existing.instrumentType, existing.stopLoss);
     let position = { ...existing, fills: allFills };
     if (metrics.openQuantity <= 0 && existing.status === "open") {
-      position = await updateJournalPosition(id, { status: "closed", closedAt: filledAt });
+      position = await updateJournalPosition(id, body.sessionId, { status: "closed", closedAt: filledAt });
       position = { ...position, fills: allFills };
     }
     return NextResponse.json({ position, metrics });
