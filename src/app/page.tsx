@@ -22,6 +22,7 @@ import { BacktestSuiteTab } from "@/components/BacktestSuiteTab";
 import { HistoricalBacktestTab } from "@/components/HistoricalBacktestTab";
 import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
 import { PremarketGapHodLodTab } from "@/components/PremarketGapHodLodTab";
+import { GapCalendarStudyTab } from "@/components/GapCalendarStudyTab";
 import { OrbStrategyTab } from "@/components/OrbStrategyTab";
 import { TradingDashboardTab } from "@/components/TradingDashboardTab";
 import { GlossaryTab } from "@/components/GlossaryTab";
@@ -555,6 +556,11 @@ export default async function Home() {
                                 id: "premarket-gaps",
                                 label: "Premarket Gaps",
                                 content: <PremarketGapHodLodTab key="equities-premarket-gaps" defaultTicker="AAPL" />,
+                              },
+                              {
+                                id: "gap-calendar-study",
+                                label: "Gap & Calendar Study",
+                                content: <GapCalendarStudyTab key="equities-gap-calendar-study" defaultTicker="AAPL" />,
                               },
                               { id: "orb", label: "ORB Strategy", content: <OrbStrategyTab /> },
                             ]}
