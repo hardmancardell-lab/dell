@@ -54,6 +54,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // An admin actively "viewing as" a specific client — same admin_session
+  // secret gate as /admin/*, applied here to let the admin browse the real
+  // app (not just /admin/*) without a Supabase user session for this browser.
+  // Route handlers themselves re-check this pair via getAdminViewAsSlug()
+  // before serving any per-user data — this only unblocks the page load.
+  const adminSecret = process.env.ADMIN_ANALYTICS_SECRET;
+  const adminSession = request.cookies.get("admin_session")?.value;
+  const viewAsSlug = request.cookies.get("admin_view_as")?.value;
+  if (adminSecret && adminSession === adminSecret && viewAsSlug) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

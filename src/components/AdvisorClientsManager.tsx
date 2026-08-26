@@ -138,6 +138,26 @@ export function AdvisorClientsManager() {
     }
   }
 
+  const [viewAsLoadingSlug, setViewAsLoadingSlug] = useState<string | null>(null);
+
+  async function viewAsClient(slug: string) {
+    setViewAsLoadingSlug(slug);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/view-as/${slug}`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? "Unknown error");
+        return;
+      }
+      window.location.href = "/";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setViewAsLoadingSlug(null);
+    }
+  }
+
   async function removeClient(slug: string) {
     if (!confirm("Delete this client link and all its holdings? This can't be undone.")) return;
     await fetch(`/api/advisor/clients/${slug}`, { method: "DELETE" });
@@ -277,6 +297,14 @@ export function AdvisorClientsManager() {
                     </a>
                   </div>
                   <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => viewAsClient(c.slug)}
+                      disabled={viewAsLoadingSlug === c.slug}
+                      className="text-xs text-teal-400 hover:text-teal-300 underline disabled:opacity-50"
+                      title="Open the real app scoped to this client's data — read-only, for walking them through a problem live"
+                    >
+                      {viewAsLoadingSlug === c.slug ? "Opening…" : "View as"}
+                    </button>
                     <button
                       onClick={() => (selectedSlug === c.slug ? setSelectedSlug(null) : loadHoldings(c.slug))}
                       className="text-xs text-zinc-300 hover:text-zinc-100 underline"

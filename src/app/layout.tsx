@@ -5,6 +5,7 @@ import { PrivacyFooter } from "@/components/PrivacyFooter";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { EnsureAdvisorLink } from "@/components/EnsureAdvisorLink";
+import { AdminViewAsBanner } from "@/components/AdminViewAsBanner";
 import { WatchlistProvider } from "@/lib/agents/trading-agent/watchlist-storage";
 import "./globals.css";
 
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col jv-app-bg">
         <ServiceWorkerRegister />
         <EnsureAdvisorLink />
+        <AdminViewAsBanner />
         <NavBar />
         {/* Every route gets one shared watchlist — not just the main tabbed
             page.tsx SPA. A standalone route (e.g. /security) rendering a
