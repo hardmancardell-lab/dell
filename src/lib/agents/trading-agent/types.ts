@@ -627,6 +627,16 @@ export interface PortfolioHolding {
   contractMultiplier?: number | null; // futures only
 }
 
+/** A client-facing dashboard link — real server-side holdings, distinct from the anonymous/localStorage-only Portfolio Tracker. */
+export interface AdvisorClient {
+  id: string;
+  slug: string; // the /client/[slug] URL segment
+  name: string;
+  cashBalance: number; // uninvested cash reserved for this client, not tied to any holding
+  linkedEmail: string | null; // email that will auto-link this client to a real signup account
+  createdAt: string;
+}
+
 export interface PortfolioValuation {
   holding: PortfolioHolding;
   currentPrice: number | null;
@@ -637,6 +647,7 @@ export interface PortfolioValuation {
   holdingPeriodDays: number;
   annualizedReturnPercent: number | null; // HPR compounded to a 365-day basis (CAGR-style), null when holdingPeriodDays is 0
   sector: string | null;
+  marketCapUsd: number | null; // real-time-ish snapshot from FMP's /profile — null for non-equities or when FMP has no figure (e.g. some ETFs)
   error: string | null;
 }
 
@@ -1569,4 +1580,130 @@ export interface StrategyHypothesis {
   // transparency — not used to filter results. Null if there wasn't enough
   // real bar history to compute a meaningful histogram.
   entropyScore: number | null;
+}
+
+// --- Treasury Buyback / GLD Event-Study Regression ---
+
+/** One real Treasury buyback operation (U.S. Treasury Fiscal Data API — verified live endpoint, not guessed). */
+export interface BuybackOperation {
+  operationDate: string; // YYYY-MM-DD
+  operationType: string; // Treasury's own stated purpose, e.g. "Liquidity Support" — not "yield suppression"
+  maturityBucket: string; // e.g. "20Y to 30Y"
+  totalParAmtAccepted: number; // USD
+  totalParAmtOffered: number | null; // USD
+  nbrIssuesAccepted: number | null;
+}
+
+/**
+ * One matched buyback-operation + price-reaction row. Both a raw return
+ * (naive % move) and a market-model abnormal return (raw return minus the
+ * return a benchmark-implied market model would have predicted, per
+ * MacKinlay's standard event-study methodology) are kept side by side —
+ * the raw figure alone conflates the event's real effect with whatever the
+ * broader dollar/rates market was doing that same day.
+ */
+export interface BuybackEventRow {
+  operationDate: string;
+  amountAcceptedUsdBillions: number;
+  day0ReturnPct: number; // prior close -> operation-day close (raw)
+  day1ReturnPct: number; // operation-day close -> next trading day close (raw)
+  day0AbnormalReturnPct: number | null; // raw day0 return minus market-model-expected return
+  day1AbnormalReturnPct: number | null;
+}
+
+export interface BuybackRegressionResult {
+  slope: number; // % return per $1B accepted
+  intercept: number;
+  rSquared: number;
+  n: number;
+  bootstrapSlopeLower: number | null;
+  bootstrapSlopeUpper: number | null;
+  ciExcludesZero: boolean;
+}
+
+/** The market model itself (GLD ~ benchmark), fit once over the full non-event sample — the beta/alpha used to compute every event's abnormal return. */
+export interface MarketModelFit {
+  benchmarkTicker: string;
+  beta: number;
+  alpha: number;
+  rSquared: number;
+  n: number;
+}
+
+/**
+ * The real, standard single-pass event-study form (Karafiath 1988; Binder
+ * 1985/1998): R_t = α + β·R_m,t + γ·D_t + ε, fit once over ALL trading days
+ * at once (D_t = the buyback $ amount on an event day, 0 otherwise) rather
+ * than the two-step estimate-then-subtract approach `BuybackRegressionResult`
+ * above uses. γ should land close to the two-step slope (Binder's own
+ * finding) — reported alongside it as a real cross-check, not a replacement.
+ */
+export interface DummyVariableRegressionResult {
+  gamma: number; // % return per $1B accepted, jointly controlling for the market's move that day
+  gammaBootstrapLower: number | null;
+  gammaBootstrapUpper: number | null;
+  ciExcludesZero: boolean;
+  marketBeta: number; // the same fit's coefficient on the benchmark return
+  rSquared: number;
+  n: number;
+}
+
+/**
+ * Time-varying-beta / structural-break check (Chow 1960; Bai & Perron 1998
+ * for the general concept — implemented here via bootstrap rather than a
+ * parametric F-test, consistent with this app's existing bootstrap-first
+ * convention elsewhere): does the market model's beta differ between the
+ * first and second half of the sample?
+ */
+export interface BetaDriftResult {
+  splitDateKey: string;
+  earlyBeta: number;
+  earlyN: number;
+  lateBeta: number;
+  lateN: number;
+  betaDiff: number; // lateBeta - earlyBeta
+  diffBootstrapLower: number | null;
+  diffBootstrapUpper: number | null;
+  ciExcludesZero: boolean;
+}
+
+export interface BuybackAnomalyResult {
+  ticker: string;
+  maturityBucket: string;
+  events: BuybackEventRow[];
+  marketModel: MarketModelFit | null;
+  day0Regression: BuybackRegressionResult | null;
+  day1Regression: BuybackRegressionResult | null;
+  day0AbnormalRegression: BuybackRegressionResult | null;
+  day1AbnormalRegression: BuybackRegressionResult | null;
+  day0DummyRegression: DummyVariableRegressionResult | null;
+  day1DummyRegression: DummyVariableRegressionResult | null;
+  betaDrift: BetaDriftResult | null;
+  dataLimitations: string[];
+}
+
+// --- Guided Trade Signal Card ---
+
+/**
+ * A single beginner-facing card: real historical validation (from the
+ * Strategy Hypothesis Ledger's weekly sweep, already passing the "three
+ * bars" statistical gate) crossed with a real LIVE check that the same
+ * signal is triggering today. Only ever the intersection of both —
+ * never a live trigger alone (unvalidated) and never a validated
+ * historical result alone (not actionable today).
+ */
+export interface GuidedTradeSignal {
+  ticker: string;
+  assetClass: AssetClass;
+  strategyType: string;
+  headline: string; // plain-language, e.g. "Momentum Breakout"
+  currentPrice: number;
+  historicalWinRatePct: number;
+  sampleSize: number;
+  bootstrapCiLower: number | null;
+  bootstrapCiUpper: number | null;
+  horizonLabel: string;
+  exitType: HypothesisExitType;
+  exitRule: string;
+  entryRule: string;
 }

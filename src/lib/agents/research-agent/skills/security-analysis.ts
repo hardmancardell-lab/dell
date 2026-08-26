@@ -67,7 +67,7 @@ export async function getSecurityAnalysis(ticker: string): Promise<SecurityAnaly
   // --- NCAV (most recent balance sheet) ---
   const latestBalanceSheet = balanceSheets[0];
   const sharesOutstanding =
-    incomeStatements[0].weightedAverageShsOut || profile.mktCap / profile.price;
+    incomeStatements[0].weightedAverageShsOut || profile.marketCap / profile.price;
   const ncavValue =
     latestBalanceSheet.totalCurrentAssets -
     latestBalanceSheet.totalLiabilities -

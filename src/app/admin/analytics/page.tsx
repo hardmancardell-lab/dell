@@ -71,7 +71,8 @@ function Dashboard({ data }: { data: AdminAnalyticsSummary }) {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
     <div className="max-w-6xl mx-auto px-6 py-10">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-zinc-50">Usage Analytics</h1>
+        <a href="/admin/clients" className="text-xs text-teal-400 hover:underline">→ Client Dashboards</a>
+        <h1 className="text-2xl font-bold text-zinc-50 mt-1">Usage Analytics</h1>
         <p className="text-sm text-zinc-400 mt-1">
           Generated {fmtDate(data.generatedAt)}. Window: {fmtDate(data.overview.firstEvent)} → {fmtDate(data.overview.lastEvent)}.
         </p>

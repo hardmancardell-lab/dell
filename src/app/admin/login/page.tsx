@@ -18,7 +18,7 @@ export default function AdminLoginPage() {
         body: JSON.stringify({ secret }),
       });
       if (res.ok) {
-        window.location.href = "/admin/analytics";
+        window.location.href = "/";
       } else {
         const json = await res.json().catch(() => ({}));
         setError(json.error ?? "Incorrect password.");

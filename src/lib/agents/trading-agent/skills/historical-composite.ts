@@ -77,7 +77,7 @@ function zipTradeLog(
 
 export async function getHistoricalComposite(ticker: string): Promise<HistoricalComposite> {
   const dataLimitations: string[] = [
-    `Historical composite covers ${HISTORICAL_COMPOSITE_LOOKBACK_DAYS} calendar days of lookback — a conservative starting window since Schwab's actual minute-bar historical depth on this API tier hasn't been confirmed live yet.`,
+    `Historical composite covers ${HISTORICAL_COMPOSITE_LOOKBACK_DAYS} calendar days of lookback. Minute bars come from Alpaca's free-tier IEX feed (single-exchange, not the consolidated tape) — IEX carries a small share of total volume, thinnest premarket, so isolated prints can produce day-open/close values that look disconnected from the stock's real full-tape price on low-liquidity days. Treat outlier sessionOpen/sessionClose/overnightGapPct values in dayRecords with that in mind.`,
   ];
 
   const now = Date.now();
@@ -232,7 +232,7 @@ export async function getHistoricalComposite(ticker: string): Promise<Historical
 
   if (anomalyDays.length < 5) {
     dataLimitations.push(
-      `Only ${anomalyDays.length} prior anomaly day(s) found in the lookback window — small-sample stats are directional only. A longer lookback (once Schwab's real historical depth is confirmed) would improve this.`
+      `Only ${anomalyDays.length} prior anomaly day(s) found in the lookback window — small-sample stats are directional only. A longer lookback would improve this.`
     );
   }
 

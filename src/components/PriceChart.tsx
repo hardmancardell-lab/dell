@@ -124,7 +124,18 @@ const JARVIS = {
   verdict: "#f0a868", // --verdict — cost-basis line
 };
 
-export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbol: string; focusDate?: string; assetClass?: AssetClass }) {
+export function PriceChart({
+  symbol,
+  focusDate,
+  assetClass = "equity",
+  readOnly = false,
+}: {
+  symbol: string;
+  focusDate?: string;
+  assetClass?: AssetClass;
+  /** Hides the click-to-trade button/panel — for read-only contexts like the client-facing dashboard. */
+  readOnly?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -138,6 +149,8 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
   const sessionMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const assetClassRef = useRef<AssetClass>(assetClass);
   assetClassRef.current = assetClass;
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
 
   // 1mo (1-day candles, ~1 month lookback) gives useful before/after context
   // around a single occurrence date without pulling a whole year of noise.
@@ -225,7 +238,7 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
     // "Trade Options" chain tab instead), so this only arms for the asset
     // classes this chart actually charts a tradeable instrument for.
     chart.subscribeClick((param) => {
-      if (assetClassRef.current === "option" || !param.time) return;
+      if (assetClassRef.current === "option" || !param.time || readOnlyRef.current) return;
       const barData = candleSeriesRef.current ? param.seriesData.get(candleSeriesRef.current) : undefined;
       const price = barData && "close" in barData ? (barData as { close: number }).close : undefined;
       setClickedPrice(price);
@@ -679,7 +692,7 @@ export function PriceChart({ symbol, focusDate, assetClass = "equity" }: { symbo
       <div style={{ position: "relative" }}>
         <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)" }} />
 
-        {assetClass !== "option" && (
+        {assetClass !== "option" && !readOnly && (
           <div style={{ position: "absolute", top: 12, right: 12, zIndex: 5 }}>
             <button
               onClick={() => setFloatingPanelOpen((v) => !v)}

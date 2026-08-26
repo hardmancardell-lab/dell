@@ -95,7 +95,7 @@ function telecomMediaInfrastructure({ profile, income, balance }: Inputs): Secto
   const b0 = balance[0];
 
   const ebitda = i0?.ebitda ?? (i0 ? i0.operatingIncome : null);
-  const enterpriseValue = b0 ? profile.mktCap + b0.totalDebt - b0.cashAndCashEquivalents : null;
+  const enterpriseValue = b0 ? profile.marketCap + b0.totalDebt - b0.cashAndCashEquivalents : null;
   const evToEbitda = enterpriseValue !== null && ebitda !== null && ebitda > 0 ? enterpriseValue / ebitda : null;
 
   const netDebt = b0?.netDebt ?? (b0 ? b0.totalDebt - b0.cashAndCashEquivalents : null);
@@ -115,7 +115,7 @@ function consumerDiscretionary({ profile, income, balance, cashFlow }: Inputs): 
   const dio = i0 && b0 && i0.costOfRevenue > 0 ? (b0.inventory / i0.costOfRevenue) * 365 : null;
 
   const fcf = c0?.freeCashFlow ?? (c0 ? c0.operatingCashFlow - Math.abs(c0.capitalExpenditure) : null);
-  const fcfYield = fcf !== null && profile.mktCap > 0 ? (fcf / profile.mktCap) * 100 : null;
+  const fcfYield = fcf !== null && profile.marketCap > 0 ? (fcf / profile.marketCap) * 100 : null;
 
   return [
     available("Days Inventory Outstanding (DIO)", dio, " days", "Rising DIO = fading brand moat, margin-destroying markdowns ahead", null),
@@ -245,15 +245,15 @@ export function getSectorSpecificPanel(inputs: Inputs): SectorSpecificPanel | nu
     return { subSector: "Telecommunications, Media & Infrastructure", classificationNote: `Matched on industry/sector containing telecom/utility keywords.`, ratios: telecomMediaInfrastructure(inputs) };
   }
   if (combined.includes("software")) {
-    if (profile.mktCap > 200_000_000_000) {
+    if (profile.marketCap > 200_000_000_000) {
       return { subSector: "FAANG / Mega-Cap Big Tech", classificationNote: `Matched on software industry + market cap > $200B.`, ratios: faangBigTech(inputs) };
     }
     return { subSector: "Technology & SaaS", classificationNote: `Matched on industry containing "software".`, ratios: softwareSaas(inputs) };
   }
-  if (sector.includes("technology") && profile.mktCap > 200_000_000_000) {
+  if (sector.includes("technology") && profile.marketCap > 200_000_000_000) {
     return { subSector: "FAANG / Mega-Cap Big Tech", classificationNote: `Matched on Technology sector + market cap > $200B.`, ratios: faangBigTech(inputs) };
   }
-  if (sector.includes("communication services") && profile.mktCap > 200_000_000_000) {
+  if (sector.includes("communication services") && profile.marketCap > 200_000_000_000) {
     return { subSector: "FAANG / Mega-Cap Big Tech", classificationNote: `Matched on Communication Services sector + market cap > $200B.`, ratios: faangBigTech(inputs) };
   }
   if (combined.includes("stablecoin") || combined.includes("cryptocurrency")) {

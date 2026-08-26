@@ -89,7 +89,7 @@ async function fetchBroaderCoverage(
         ticker,
         companyName: profile?.companyName ?? ticker,
         industry: profile?.industry ?? null,
-        marketCap: profile?.mktCap ?? 0,
+        marketCap: profile?.marketCap ?? 0,
       };
       return company;
     })
@@ -149,7 +149,7 @@ export async function getSectorFundamentals(sector: string): Promise<SectorFunda
           ticker,
           companyName: profile?.companyName ?? ticker,
           industry: profile?.industry ?? null,
-          marketCap: profile?.mktCap ?? 0,
+          marketCap: profile?.marketCap ?? 0,
           debtToEquity,
           interestCoverage,
           capexToDepreciation,

@@ -21,6 +21,7 @@ import { AssetChartsTab } from "@/components/AssetChartsTab";
 import { BacktestSuiteTab } from "@/components/BacktestSuiteTab";
 import { HistoricalBacktestTab } from "@/components/HistoricalBacktestTab";
 import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
+import { PremarketGapHodLodTab } from "@/components/PremarketGapHodLodTab";
 import { OrbStrategyTab } from "@/components/OrbStrategyTab";
 import { TradingDashboardTab } from "@/components/TradingDashboardTab";
 import { GlossaryTab } from "@/components/GlossaryTab";
@@ -44,6 +45,8 @@ import { CurrencyPegsTab } from "@/components/CurrencyPegsTab";
 import { RollingMoveStatsTab } from "@/components/RollingMoveStatsTab";
 import { SessionAnalysisTab } from "@/components/SessionAnalysisTab";
 import { FuturesCommoditiesResearchSourcesTab } from "@/components/FuturesCommoditiesResearchSourcesTab";
+import { BuybackAnomalyTab } from "@/components/BuybackAnomalyTab";
+import { GuidedTradeSignalsTab } from "@/components/GuidedTradeSignalsTab";
 import { PortfolioDashboardTab } from "@/components/PortfolioDashboardTab";
 import { TraditionalPortfolioTab } from "@/components/TraditionalPortfolioTab";
 import { ModernPortfolioTab } from "@/components/ModernPortfolioTab";
@@ -516,6 +519,11 @@ export default async function Home() {
                   navParentId="trading"
                   tabs={[
                     {
+                      id: "guided-signals",
+                      label: "Guided Signals",
+                      content: <GuidedTradeSignalsTab />,
+                    },
+                    {
                       id: "equities",
                       label: "Equities",
                       content: (
@@ -542,6 +550,11 @@ export default async function Home() {
                                 id: "calendar-effects",
                                 label: "Calendar Effects",
                                 content: <CalendarEffectsTab key="equities-calendar-effects" defaultTicker="AAPL" assetClass="equity" />,
+                              },
+                              {
+                                id: "premarket-gaps",
+                                label: "Premarket Gaps",
+                                content: <PremarketGapHodLodTab key="equities-premarket-gaps" defaultTicker="AAPL" />,
                               },
                               { id: "orb", label: "ORB Strategy", content: <OrbStrategyTab /> },
                             ]}
@@ -746,6 +759,11 @@ export default async function Home() {
                                 id: "rolling-move-stats",
                                 label: "Rolling Move Stats",
                                 content: <RollingMoveStatsTab defaultTicker="GLD" defaultAssetClass="commodity" />,
+                              },
+                              {
+                                id: "buyback-anomaly",
+                                label: "Buyback Anomaly",
+                                content: <BuybackAnomalyTab />,
                               },
                               {
                                 id: "sources",

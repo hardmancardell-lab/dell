@@ -1,3 +1,82 @@
+/** Gaussian elimination with partial pivoting — solves Ax = b for a small square system (used by multipleLinearRegression's normal equations, where A is X'X, at most a handful of predictors). Returns null if A is singular. */
+function solveLinearSystem(A: number[][], b: number[]): number[] | null {
+  const n = A.length;
+  const M = A.map((row, i) => [...row, b[i]]);
+  for (let col = 0; col < n; col++) {
+    let pivotRow = col;
+    for (let r = col + 1; r < n; r++) {
+      if (Math.abs(M[r][col]) > Math.abs(M[pivotRow][col])) pivotRow = r;
+    }
+    if (Math.abs(M[pivotRow][col]) < 1e-12) return null;
+    [M[col], M[pivotRow]] = [M[pivotRow], M[col]];
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const factor = M[r][col] / M[col][col];
+      for (let c = col; c <= n; c++) M[r][c] -= factor * M[col][c];
+    }
+  }
+  return M.map((row, i) => row[n] / row[i]);
+}
+
+export interface MultipleRegressionResult {
+  intercept: number;
+  coefficients: number[]; // one per predictor, same order/length as the xs columns passed in
+  rSquared: number;
+  n: number;
+}
+
+/**
+ * General multiple OLS regression of y on any number of predictor columns,
+ * via the normal equations (X'X)β = X'y solved by Gaussian elimination —
+ * standard, numerically fine for the handful of predictors this app needs
+ * (e.g. a market-model return plus one event dummy/intensity regressor,
+ * the real "R_t = α + β·R_m,t + γ·D_t + ε" single-pass event-study form —
+ * Karafiath 1988, Binder 1985/1998). `linearRegression` above stays as the
+ * simple bivariate case; this generalizes it rather than replacing it.
+ */
+export function multipleLinearRegression(y: number[], xs: number[][]): MultipleRegressionResult | null {
+  const k = xs.length;
+  const n = y.length;
+  if (k === 0 || xs.some((col) => col.length !== n)) return null;
+
+  const rows: number[][] = [];
+  const ys: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const xvals = xs.map((col) => col[i]);
+    if (!Number.isFinite(y[i]) || xvals.some((v) => !Number.isFinite(v))) continue;
+    rows.push([1, ...xvals]);
+    ys.push(y[i]);
+  }
+  const p = k + 1; // params including intercept
+  if (rows.length < p + 1) return null;
+
+  const XtX: number[][] = Array.from({ length: p }, () => Array(p).fill(0));
+  const Xty: number[] = Array(p).fill(0);
+  for (let i = 0; i < rows.length; i++) {
+    for (let a = 0; a < p; a++) {
+      Xty[a] += rows[i][a] * ys[i];
+      for (let b = 0; b < p; b++) XtX[a][b] += rows[i][a] * rows[i][b];
+    }
+  }
+  const beta = solveLinearSystem(XtX, Xty);
+  if (!beta) return null;
+
+  const yMean = ys.reduce((s, v) => s + v, 0) / ys.length;
+  let ssRes = 0;
+  let ssTot = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const pred = rows[i].reduce((s, v, idx) => s + v * beta[idx], 0);
+    ssRes += (ys[i] - pred) ** 2;
+    ssTot += (ys[i] - yMean) ** 2;
+  }
+  return {
+    intercept: beta[0],
+    coefficients: beta.slice(1),
+    rSquared: ssTot > 0 ? 1 - ssRes / ssTot : 0,
+    n: rows.length,
+  };
+}
+
 export function median(values: number[]): number | null {
   const clean = values.filter((v) => Number.isFinite(v));
   if (clean.length === 0) return null;

@@ -42,7 +42,7 @@ export interface FmpProfile {
   symbol: string;
   companyName: string;
   price: number;
-  mktCap: number;
+  marketCap: number; // confirmed live against a real FMP response — the field is "marketCap", not the commonly-assumed "mktCap"
   sector: string;
   industry: string;
   beta: number;

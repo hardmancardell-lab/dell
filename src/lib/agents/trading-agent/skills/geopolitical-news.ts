@@ -25,7 +25,12 @@ async function fetchGdelt<T>(params: Record<string, string>): Promise<T> {
     url.searchParams.set(key, value);
   }
 
-  const res = await fetch(url.toString(), { next: { revalidate: 60 * 15 } }); // 15 min cache
+  // Widened from 15 to 60 min — GDELT's real rate limit appears to be shared
+  // across all traffic on Vercel's egress IPs, not just this app's own
+  // pacing (confirmed live: fresh single requests 429'd with no other
+  // in-flight calls). A longer cache window is the one lever this app
+  // actually controls to cut real request volume against that limit.
+  const res = await fetch(url.toString(), { next: { revalidate: 60 * 60 } });
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -208,9 +213,15 @@ export async function getGeopoliticalNews(
   }
 
   if (articles.length === 0 && coverageVolume.length === 0) {
-    throw new Error(
-      `No data returned from GDELT for query "${query}". ${dataLimitations.join(" ")}`
-    );
+    // GDELT's public rate limit is shared across all traffic hitting it from
+    // Vercel's egress IPs, not just this app's own request pacing — so a
+    // total outage here is a real, sometimes-frequent condition, not an edge
+    // case. Degrade to an empty-but-valid result (same "never fabricate, but
+    // never hard-crash a feature over an unconfigured/unavailable third
+    // party" convention every other provider in this app already follows)
+    // instead of throwing and taking down every caller (FX coverage check,
+    // ticker news panel, currency-expert analysis, thematic sector news).
+    dataLimitations.push("GDELT returned no usable data for this query right now (likely rate-limited) — this section is empty rather than showing stale or fabricated results. Try again shortly.");
   }
 
   return { query, pairLabel, mechanismNote, articles, coverageVolume, dataLimitations };

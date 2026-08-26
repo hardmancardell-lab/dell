@@ -1,35 +1,94 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
-const COOKIE_NAME = "site_access";
+const SITE_GATE_COOKIE = "site_access";
+
+const PUBLIC_PATH_PREFIXES = [
+  "/admin",
+  "/client",
+  "/login",
+  "/signup",
+  "/gate",
+  "/api/admin",
+  "/api/client",
+  "/api/gate",
+  "/api/auth",
+  // Admin-only API routes that don't live under /api/admin — all already
+  // gated by isAdminSessionValid()'s separate admin-secret cookie, so they
+  // shouldn't also require a regular-user Supabase session.
+  "/api/advisor",
+  "/api/webull-token",
+  "/api/webull-quote-test",
+  // Read-only market data + the anonymous, session-id-based Paper Trading
+  // feature (never had a login requirement, by design) — both are consumed
+  // by PriceChart, which is now also embedded in the public /client/[slug]
+  // dashboard (no Supabase session there), so neither can require one.
+  "/api/chart-bars",
+  "/api/paper-trading",
+  "/api/debug-check-user",
+  "/api/debug-check-link",
+  "/api/debug-generate-link",
+];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 
 /**
- * Site-wide access gate — beta test phase is over, no public access while this
- * IP isn't meant to be visible to anyone but the owner. Every route redirects
- * to /gate until the correct password is entered there (see /api/gate, which
- * sets the httpOnly cookie this checks). If SITE_ACCESS_PASSWORD isn't set,
- * the gate fails open (no lockout risk from a missing env var) — set it in
- * Vercel to actually enable the lock.
+ * Two independent gates, layered in order:
+ * 1. Site-wide beta-access password (unchanged from before — SITE_ACCESS_PASSWORD,
+ *    /gate). Still required first for anyone without the shared password.
+ * 2. Real per-user Supabase Auth session, required for everything except
+ *    /admin/* (its own admin-secret cookie), /client/* (its own per-client
+ *    passcode), and the auth pages themselves — those three areas keep their
+ *    existing, separate auth mechanisms untouched.
  */
-export function middleware(request: NextRequest) {
-  const password = process.env.SITE_ACCESS_PASSWORD;
-  if (!password) return NextResponse.next();
+export async function middleware(request: NextRequest) {
+  const sitePassword = process.env.SITE_ACCESS_PASSWORD;
+  if (sitePassword) {
+    const cookie = request.cookies.get(SITE_GATE_COOKIE)?.value;
+    if (cookie !== sitePassword) {
+      return NextResponse.redirect(new URL("/gate", request.url));
+    }
+  }
 
-  const cookie = request.cookies.get(COOKIE_NAME)?.value;
-  if (cookie === password) return NextResponse.next();
+  if (isPublicPath(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
 
-  const gateUrl = new URL("/gate", request.url);
-  return NextResponse.redirect(gateUrl);
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        },
+      },
+    }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  return response;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match every route except:
-     * - /gate (the password page itself)
-     * - /api/gate (the password-check endpoint)
-     * - Next.js internals and static assets
-     */
-    "/((?!gate|api/gate|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|icons/|manifest.webmanifest|sw.js|icon-|videos/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|icons/|manifest.webmanifest|sw.js|icon-|videos/).*)",
   ],
 };
