@@ -32,6 +32,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/interaction-effects",
   "/api/correlation-matrix",
   "/api/debug-backfill-qtum-sale",
+  "/api/debug-list-qtum-sales",
 ];
 
 function isPublicPath(pathname: string): boolean {
