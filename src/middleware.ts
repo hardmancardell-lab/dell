@@ -26,6 +26,11 @@ const PUBLIC_PATH_PREFIXES = [
   // dashboard (no Supabase session there), so neither can require one.
   "/api/chart-bars",
   "/api/paper-trading",
+  // Ticker-parameterized market-data studies — same "read-only market data,
+  // no login requirement by design" rationale as chart-bars above.
+  "/api/gap-calendar-study",
+  "/api/interaction-effects",
+  "/api/correlation-matrix",
 ];
 
 function isPublicPath(pathname: string): boolean {
