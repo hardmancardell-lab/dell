@@ -26,9 +26,6 @@ const PUBLIC_PATH_PREFIXES = [
   // dashboard (no Supabase session there), so neither can require one.
   "/api/chart-bars",
   "/api/paper-trading",
-  "/api/debug-check-user",
-  "/api/debug-check-link",
-  "/api/debug-generate-link",
 ];
 
 function isPublicPath(pathname: string): boolean {
