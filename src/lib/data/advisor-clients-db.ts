@@ -137,6 +137,14 @@ export async function getAdvisorClientByUser(userId: string, email: string): Pro
     { method: "GET", prefer: "return=representation" }
   );
   if (byEmail.length === 0) return null;
+  if (byEmail.length > 1) {
+    // Two unlinked client rows share this email — auto-linking to either one
+    // would risk handing this user someone else's portfolio. Refuse and
+    // require an advisor to resolve the duplicate manually.
+    throw new Error(
+      `${byEmail.length} unlinked advisor_clients rows share the email ${email.trim().toLowerCase()} — refusing to auto-link. Resolve the duplicate linked_email manually.`
+    );
+  }
 
   const linked = await supabaseRequest<ClientRow[]>(
     `advisor_clients?id=eq.${encodeURIComponent(byEmail[0].id)}`,
