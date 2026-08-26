@@ -9,11 +9,13 @@ export async function GET(request: Request) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return NextResponse.json({ error: "Not configured." }, { status: 503 });
 
-  const res = await fetch(`${url}/auth/v1/admin/users?filter=email.ilike.*${encodeURIComponent(email)}*&per_page=5`, {
+  const res = await fetch(`${url}/auth/v1/admin/users?per_page=200`, {
     headers: { apikey: key, Authorization: `Bearer ${key}` },
   });
   const json = await res.json();
-  const users = (json.users ?? []).map((u: Record<string, unknown>) => ({
+  const allUsers = (json.users ?? []) as Record<string, unknown>[];
+  const matched = allUsers.filter((u) => String(u.email ?? "").toLowerCase().includes(email.toLowerCase()));
+  const users = matched.map((u: Record<string, unknown>) => ({
     id: u.id,
     email: u.email,
     last_sign_in_at: u.last_sign_in_at,
