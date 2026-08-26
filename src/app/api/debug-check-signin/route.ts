@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     headers: { apikey: key, Authorization: `Bearer ${key}` },
   });
   const json = await res.json();
-  const allUsers = (json.users ?? []) as Record<string, unknown>[];
+  const allUsers = (Array.isArray(json) ? json : json.users ?? []) as Record<string, unknown>[];
   const matched = allUsers.filter((u) => String(u.email ?? "").toLowerCase().includes(email.toLowerCase()));
   const users = matched.map((u: Record<string, unknown>) => ({
     id: u.id,
@@ -22,5 +22,9 @@ export async function GET(request: Request) {
     email_confirmed_at: u.email_confirmed_at,
     created_at: u.created_at,
   }));
-  return NextResponse.json({ status: res.status, users });
+  return NextResponse.json({
+    status: res.status,
+    users,
+    diagnostic: { topLevelKeys: Object.keys(json), totalUsersReturned: allUsers.length, isArray: Array.isArray(json) },
+  });
 }
