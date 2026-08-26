@@ -637,6 +637,18 @@ export interface AdvisorClient {
   createdAt: string;
 }
 
+export interface RealizedSale {
+  id: string;
+  symbol: string;
+  sharesSold: number;
+  salePricePerShare: number;
+  fee: number;
+  costBasisPerShare: number; // the cost basis of the lot at the moment of sale — not re-derived later
+  realizedPnl: number; // (salePricePerShare - costBasisPerShare) * sharesSold - fee
+  saleDate: string; // YYYY-MM-DD
+  createdAt: string;
+}
+
 export interface PortfolioValuation {
   holding: PortfolioHolding;
   currentPrice: number | null;

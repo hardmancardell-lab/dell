@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
-import type { AdvisorClient, AssetClass, PortfolioHolding } from "@/lib/agents/trading-agent/types";
+import type { AdvisorClient, AssetClass, PortfolioHolding, RealizedSale } from "@/lib/agents/trading-agent/types";
 
 const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
 
@@ -27,6 +27,15 @@ export function AdvisorClientsManager() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<PortfolioHolding[] | null>(null);
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
+  const [realizedSales, setRealizedSales] = useState<RealizedSale[] | null>(null);
+  const [totalRealizedPnl, setTotalRealizedPnl] = useState(0);
+  const [sellingHoldingId, setSellingHoldingId] = useState<string | null>(null);
+  const [sellShares, setSellShares] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
+  const [sellFee, setSellFee] = useState("0");
+  const [sellDate, setSellDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [sellError, setSellError] = useState<string | null>(null);
+  const [selling, setSelling] = useState(false);
 
   const [symbol, setSymbol] = useState("");
   const [assetClass, setAssetClass] = useState<AssetClass>("equity");
@@ -172,13 +181,62 @@ export function AdvisorClientsManager() {
     setSelectedSlug(slug);
     setHoldings(null);
     setHoldingsError(null);
+    setRealizedSales(null);
     try {
-      const res = await fetch(`/api/advisor/clients/${slug}/holdings`);
-      const json = await res.json();
-      if (!res.ok) setHoldingsError(json.error ?? "Unknown error");
-      else setHoldings(json.holdings as PortfolioHolding[]);
+      const [holdingsRes, pnlRes] = await Promise.all([
+        fetch(`/api/advisor/clients/${slug}/holdings`),
+        fetch(`/api/advisor/clients/${slug}/realized-pnl`),
+      ]);
+      const holdingsJson = await holdingsRes.json();
+      if (!holdingsRes.ok) setHoldingsError(holdingsJson.error ?? "Unknown error");
+      else setHoldings(holdingsJson.holdings as PortfolioHolding[]);
+
+      const pnlJson = await pnlRes.json();
+      if (pnlRes.ok) {
+        setRealizedSales(pnlJson.sales as RealizedSale[]);
+        setTotalRealizedPnl(pnlJson.totalRealizedPnl as number);
+      }
     } catch (err) {
       setHoldingsError(err instanceof Error ? err.message : "Unknown error");
+    }
+  }
+
+  function startSell(holding: PortfolioHolding) {
+    setSellingHoldingId(holding.id);
+    setSellShares(String(holding.shares));
+    setSellPrice("");
+    setSellFee("0");
+    setSellDate(new Date().toISOString().slice(0, 10));
+    setSellError(null);
+  }
+
+  async function submitSell(holdingId: string) {
+    if (!selectedSlug) return;
+    const sharesNum = Number(sellShares);
+    const priceNum = Number(sellPrice);
+    const feeNum = Number(sellFee) || 0;
+    if (!Number.isFinite(sharesNum) || sharesNum <= 0 || !Number.isFinite(priceNum)) {
+      setSellError("Enter a valid share count and sale price.");
+      return;
+    }
+    setSelling(true);
+    setSellError(null);
+    try {
+      const res = await fetch(`/api/advisor/clients/${selectedSlug}/holdings/${holdingId}/sell`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sharesSold: sharesNum, salePricePerShare: priceNum, fee: feeNum, saleDate: sellDate }),
+      });
+      const json = await res.json();
+      if (!res.ok) setSellError(json.error ?? "Unknown error");
+      else {
+        setSellingHoldingId(null);
+        await loadHoldings(selectedSlug);
+      }
+    } catch (err) {
+      setSellError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setSelling(false);
     }
   }
 
@@ -450,22 +508,135 @@ export function AdvisorClientsManager() {
                         </thead>
                         <tbody>
                           {holdings.map((h) => (
-                            <tr key={h.id} className="border-t border-zinc-800/60">
-                              <td className="py-1.5 text-zinc-100 font-medium">{h.symbol}</td>
-                              <td className="py-1.5 text-zinc-400">{assetClassLabel(h.assetClass)}</td>
-                              <td className="py-1.5 text-right tabular-nums text-zinc-300">{h.shares}</td>
-                              <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(h.costBasisPerShare)}</td>
-                              <td className="py-1.5 text-zinc-400">{h.acquiredDate}</td>
-                              <td className="py-1.5 text-right">
-                                <button onClick={() => removeHolding(h.id)} className="text-zinc-500 hover:text-red-400">
-                                  &times;
-                                </button>
-                              </td>
-                            </tr>
+                            <Fragment key={h.id}>
+                              <tr className="border-t border-zinc-800/60">
+                                <td className="py-1.5 text-zinc-100 font-medium">{h.symbol}</td>
+                                <td className="py-1.5 text-zinc-400">{assetClassLabel(h.assetClass)}</td>
+                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{h.shares}</td>
+                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(h.costBasisPerShare)}</td>
+                                <td className="py-1.5 text-zinc-400">{h.acquiredDate}</td>
+                                <td className="py-1.5 text-right whitespace-nowrap">
+                                  <button
+                                    onClick={() => (sellingHoldingId === h.id ? setSellingHoldingId(null) : startSell(h))}
+                                    className="text-teal-400 hover:text-teal-300 mr-3"
+                                  >
+                                    {sellingHoldingId === h.id ? "Cancel" : "Sell"}
+                                  </button>
+                                  <button onClick={() => removeHolding(h.id)} className="text-zinc-500 hover:text-red-400" title="Remove without recording a sale (e.g. entered in error)">
+                                    &times;
+                                  </button>
+                                </td>
+                              </tr>
+                              {sellingHoldingId === h.id && (
+                                <tr className="border-t border-zinc-800/40 bg-zinc-950/40">
+                                  <td colSpan={6} className="py-2">
+                                    <div className="flex flex-wrap items-end gap-2">
+                                      <div>
+                                        <label className="block text-[10px] text-zinc-500 mb-0.5">Shares sold</label>
+                                        <input
+                                          value={sellShares}
+                                          onChange={(e) => setSellShares(e.target.value)}
+                                          type="number"
+                                          step="any"
+                                          max={h.shares}
+                                          className="text-xs border border-zinc-700 rounded px-2 py-1 bg-transparent w-20"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] text-zinc-500 mb-0.5">Sale price/share</label>
+                                        <input
+                                          value={sellPrice}
+                                          onChange={(e) => setSellPrice(e.target.value)}
+                                          type="number"
+                                          step="any"
+                                          placeholder="0.00"
+                                          className="text-xs border border-zinc-700 rounded px-2 py-1 bg-transparent w-24"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] text-zinc-500 mb-0.5">Fee ($)</label>
+                                        <input
+                                          value={sellFee}
+                                          onChange={(e) => setSellFee(e.target.value)}
+                                          type="number"
+                                          step="any"
+                                          className="text-xs border border-zinc-700 rounded px-2 py-1 bg-transparent w-16"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] text-zinc-500 mb-0.5">Sale date</label>
+                                        <input
+                                          value={sellDate}
+                                          onChange={(e) => setSellDate(e.target.value)}
+                                          type="date"
+                                          className="text-xs border border-zinc-700 rounded px-2 py-1 bg-transparent"
+                                        />
+                                      </div>
+                                      <button
+                                        onClick={() => submitSell(h.id)}
+                                        disabled={selling}
+                                        className="text-xs px-3 py-1.5 rounded bg-teal-500 text-zinc-950 disabled:opacity-50"
+                                      >
+                                        {selling ? "Recording…" : "Record Sale"}
+                                      </button>
+                                      {Number(sellShares) > 0 && Number(sellPrice) > 0 && (
+                                        <span className="text-[11px] text-zinc-500">
+                                          Realized: {fmtUsd((Number(sellPrice) - h.costBasisPerShare) * Number(sellShares) - (Number(sellFee) || 0))}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {sellError && <p className="text-xs text-red-400 mt-1.5">{sellError}</p>}
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
                           ))}
                         </tbody>
                       </table>
                     )}
+
+                    <div className="mt-5 pt-4 border-t border-zinc-800/60">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-medium text-zinc-300">Realized P&amp;L</div>
+                        <div className={`text-xs font-medium tabular-nums ${totalRealizedPnl >= 0 ? "text-teal-400" : "text-red-400"}`}>
+                          Total: {fmtUsd(totalRealizedPnl)}
+                        </div>
+                      </div>
+                      {realizedSales === null ? (
+                        <p className="text-xs text-zinc-500">Loading…</p>
+                      ) : realizedSales.length === 0 ? (
+                        <p className="text-xs text-zinc-500">No sales recorded yet.</p>
+                      ) : (
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-left text-zinc-500">
+                              <th className="pb-1 font-normal">Symbol</th>
+                              <th className="pb-1 font-normal text-right">Shares</th>
+                              <th className="pb-1 font-normal text-right">Sale Price</th>
+                              <th className="pb-1 font-normal text-right">Cost Basis</th>
+                              <th className="pb-1 font-normal text-right">Fee</th>
+                              <th className="pb-1 font-normal text-right">Realized P&amp;L</th>
+                              <th className="pb-1 font-normal">Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {realizedSales.map((s) => (
+                              <tr key={s.id} className="border-t border-zinc-800/60">
+                                <td className="py-1.5 text-zinc-100 font-medium">{s.symbol}</td>
+                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{s.sharesSold}</td>
+                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(s.salePricePerShare)}</td>
+                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(s.costBasisPerShare)}</td>
+                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(s.fee)}</td>
+                                <td className={`py-1.5 text-right tabular-nums font-medium ${s.realizedPnl >= 0 ? "text-teal-400" : "text-red-400"}`}>
+                                  {fmtUsd(s.realizedPnl)}
+                                </td>
+                                <td className="py-1.5 text-zinc-400">{s.saleDate}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

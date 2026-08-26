@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "crypto";
-import type { AdvisorClient, PortfolioHolding } from "@/lib/agents/trading-agent/types";
+import type { AdvisorClient, PortfolioHolding, RealizedSale } from "@/lib/agents/trading-agent/types";
 
 /**
  * Plain-fetch Supabase REST CRUD for advisor_clients/advisor_client_holdings
@@ -239,4 +239,106 @@ export async function createClientHolding(
 
 export async function deleteClientHolding(holdingId: string): Promise<void> {
   await supabaseRequest("advisor_client_holdings?id=eq." + encodeURIComponent(holdingId), { method: "DELETE" });
+}
+
+async function getClientHoldingRowById(holdingId: string): Promise<HoldingRow | null> {
+  const rows = await supabaseRequest<HoldingRow[]>(
+    `advisor_client_holdings?id=eq.${encodeURIComponent(holdingId)}&select=*`,
+    { method: "GET", prefer: "return=representation" }
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
+async function updateClientHoldingShares(holdingId: string, shares: number): Promise<PortfolioHolding> {
+  const rows = await supabaseRequest<HoldingRow[]>("advisor_client_holdings?id=eq." + encodeURIComponent(holdingId), {
+    method: "PATCH",
+    prefer: "return=representation",
+    body: { shares },
+  });
+  return rowToHolding(rows[0]);
+}
+
+interface RealizedSaleRow {
+  id: string;
+  client_id: string;
+  symbol: string;
+  shares_sold: number;
+  sale_price_per_share: number;
+  fee: number;
+  cost_basis_per_share: number;
+  realized_pnl: number;
+  sale_date: string;
+  created_at: string;
+}
+
+function rowToRealizedSale(row: RealizedSaleRow): RealizedSale {
+  return {
+    id: row.id,
+    symbol: row.symbol,
+    sharesSold: Number(row.shares_sold),
+    salePricePerShare: Number(row.sale_price_per_share),
+    fee: Number(row.fee),
+    costBasisPerShare: Number(row.cost_basis_per_share),
+    realizedPnl: Number(row.realized_pnl),
+    saleDate: row.sale_date,
+    createdAt: row.created_at,
+  };
+}
+
+export async function listRealizedPnl(clientId: string): Promise<RealizedSale[]> {
+  const rows = await supabaseRequest<RealizedSaleRow[]>(
+    `advisor_client_realized_pnl?client_id=eq.${encodeURIComponent(clientId)}&select=*&order=sale_date.desc,created_at.desc`,
+    { method: "GET", prefer: "return=representation" }
+  );
+  return rows.map(rowToRealizedSale);
+}
+
+/**
+ * Sells shares() out of an existing lot, records the realized P&L against
+ * that lot's own cost basis (never re-derived or averaged across lots), and
+ * either reduces the lot's remaining share count or deletes it outright on a
+ * full-position exit. This is the only path that should ever populate
+ * advisor_client_realized_pnl — a plain deleteClientHolding (e.g. removing a
+ * position entered in error) intentionally does NOT create a realized-sale
+ * row, since no real sale happened.
+ */
+export async function sellClientHolding(
+  holdingId: string,
+  sharesSold: number,
+  salePricePerShare: number,
+  fee: number,
+  saleDate: string
+): Promise<RealizedSale> {
+  if (sharesSold <= 0) throw new Error("sharesSold must be positive.");
+  const holdingRow = await getClientHoldingRowById(holdingId);
+  if (!holdingRow) throw new Error("Holding not found.");
+  if (sharesSold > holdingRow.shares) {
+    throw new Error(`Cannot sell ${sharesSold} shares — only ${holdingRow.shares} shares held.`);
+  }
+
+  const costBasisPerShare = holdingRow.cost_basis_per_share;
+  const realizedPnl = (salePricePerShare - costBasisPerShare) * sharesSold - fee;
+  const rows = await supabaseRequest<RealizedSaleRow[]>("advisor_client_realized_pnl", {
+    method: "POST",
+    prefer: "return=representation",
+    body: {
+      client_id: holdingRow.client_id,
+      symbol: holdingRow.symbol,
+      shares_sold: sharesSold,
+      sale_price_per_share: salePricePerShare,
+      fee,
+      cost_basis_per_share: costBasisPerShare,
+      realized_pnl: realizedPnl,
+      sale_date: saleDate,
+    },
+  });
+
+  const remaining = holdingRow.shares - sharesSold;
+  if (remaining === 0) {
+    await deleteClientHolding(holdingId);
+  } else {
+    await updateClientHoldingShares(holdingId, remaining);
+  }
+
+  return rowToRealizedSale(rows[0]);
 }
