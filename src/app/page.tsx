@@ -23,6 +23,7 @@ import { HistoricalBacktestTab } from "@/components/HistoricalBacktestTab";
 import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
 import { PremarketGapHodLodTab } from "@/components/PremarketGapHodLodTab";
 import { GapCalendarStudyTab } from "@/components/GapCalendarStudyTab";
+import { RequiresPlacementTier } from "@/components/RequiresPlacementTier";
 import { OrbStrategyTab } from "@/components/OrbStrategyTab";
 import { TradingDashboardTab } from "@/components/TradingDashboardTab";
 import { GlossaryTab } from "@/components/GlossaryTab";
@@ -555,14 +556,30 @@ export default async function Home() {
                               {
                                 id: "premarket-gaps",
                                 label: "Premarket Gaps",
-                                content: <PremarketGapHodLodTab key="equities-premarket-gaps" defaultTicker="AAPL" />,
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <PremarketGapHodLodTab key="equities-premarket-gaps" defaultTicker="AAPL" />
+                                  </RequiresPlacementTier>
+                                ),
                               },
                               {
                                 id: "gap-calendar-study",
                                 label: "Gap & Calendar Study",
-                                content: <GapCalendarStudyTab key="equities-gap-calendar-study" defaultTicker="AAPL" />,
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <GapCalendarStudyTab key="equities-gap-calendar-study" defaultTicker="AAPL" />
+                                  </RequiresPlacementTier>
+                                ),
                               },
-                              { id: "orb", label: "ORB Strategy", content: <OrbStrategyTab /> },
+                              {
+                                id: "orb",
+                                label: "ORB Strategy",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <OrbStrategyTab />
+                                  </RequiresPlacementTier>
+                                ),
+                              },
                             ]}
                           />
                         </div>
@@ -615,7 +632,15 @@ export default async function Home() {
                             size="tertiary"
                             tabs={[
                               { id: "dashboard", label: "Dashboard", content: <OptionsDashboardTab /> },
-                              { id: "strategy-guide", label: "Strategy Guide", content: <OptionsStrategiesTab /> },
+                              {
+                                id: "strategy-guide",
+                                label: "Strategy Guide",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <OptionsStrategiesTab />
+                                  </RequiresPlacementTier>
+                                ),
+                              },
                               { id: "calculator", label: "Calculator", content: <OptionsCalculatorTab /> },
                               { id: "paper-backtest", label: "Paper Backtest Log", content: <PaperBacktestLogTab /> },
                               { id: "trade-options", label: "Trade Options", content: <OptionsChainTradeTab /> },
@@ -654,7 +679,11 @@ export default async function Home() {
                               {
                                 id: "orb",
                                 label: "ORB Strategy",
-                                content: <OrbStrategyTab filterAssetClass="forex" defaultTicker="EUR/USD" />,
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <OrbStrategyTab filterAssetClass="forex" defaultTicker="EUR/USD" />
+                                  </RequiresPlacementTier>
+                                ),
                               },
                               { id: "news", label: "News Search", content: <InternationalEconomicsTab /> },
                               {
@@ -702,7 +731,11 @@ export default async function Home() {
                               {
                                 id: "orb",
                                 label: "ORB Strategy",
-                                content: <OrbStrategyTab filterAssetClass="future" defaultTicker="SPY" />,
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <OrbStrategyTab filterAssetClass="future" defaultTicker="SPY" />
+                                  </RequiresPlacementTier>
+                                ),
                               },
                               {
                                 id: "rolling-move-stats",
@@ -759,7 +792,11 @@ export default async function Home() {
                               {
                                 id: "orb",
                                 label: "ORB Strategy",
-                                content: <OrbStrategyTab filterAssetClass="commodity" defaultTicker="GLD" />,
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <OrbStrategyTab filterAssetClass="commodity" defaultTicker="GLD" />
+                                  </RequiresPlacementTier>
+                                ),
                               },
                               {
                                 id: "rolling-move-stats",
