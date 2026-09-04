@@ -15,6 +15,8 @@ import {
   toEasternParts,
 } from "./time-windows";
 import { mean, median, stdDev } from "../stats";
+import { getFedRateRegimeTimeline, classifyRegimeForDate } from "./macro-regime";
+import type { FedRateRegime } from "./macro-regime";
 
 /**
  * Shared fetch helper for all three studies below — splits an arbitrary date
@@ -194,6 +196,7 @@ export interface RecentDayRow {
   overnightGapPct: number | null;
   dayReturnPct: number | null; // close-to-close vs prior session's close
   bucket: "gap_up" | "gap_down" | "flat";
+  fedRateRegime: FedRateRegime | null; // null when there isn't enough FEDFUNDS history before this date to classify
 }
 
 export interface GroupStats {
@@ -214,6 +217,18 @@ export interface RecentDayVarianceResult {
   gapDown: GroupStats;
   gapUpVsGapDownMeanDiffPct: number | null;
   gapUpVsGapDownBootstrap: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
+  // Same gap-up/gap-down comparison, re-run separately within each Fed
+  // rate regime actually present in the window — "this pattern only held
+  // during easing cycles" is a materially stronger claim than the
+  // unconditioned version above, using the same bootstrap machinery.
+  byRegime: {
+    regime: FedRateRegime;
+    all: GroupStats;
+    gapUp: GroupStats;
+    gapDown: GroupStats;
+    gapUpVsGapDownMeanDiffPct: number | null;
+    gapUpVsGapDownBootstrap: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
+  }[];
   dataLimitations: string[];
 }
 
@@ -256,11 +271,18 @@ export async function getRecentDayVarianceStudy(
   dayCount = 21,
   flatThresholdPct = 0.1
 ): Promise<RecentDayVarianceResult> {
-  const dataLimitations: string[] = [DATA_SOURCE_LIMITATION];
+  const dataLimitations: string[] = [
+    DATA_SOURCE_LIMITATION,
+    "Fed rate regime is classified from FRED's FEDFUNDS series (trailing ~6-month trend, +/-0.2pp threshold to filter noise) as of each day's own date, not today's regime applied retroactively — but it's still just one macro signal among many that could plausibly matter (inflation, employment, geopolitical events aren't factored in here).",
+  ];
   const now = Date.now();
   const calendarLookbackMs = (dayCount + 15) * 24 * 60 * 60 * 1000; // buffer for weekends/holidays
-  const bars = await fetchMinuteBarsChunked(ticker, now - calendarLookbackMs, now);
+  const [bars, regimeTimeline] = await Promise.all([
+    fetchMinuteBarsChunked(ticker, now - calendarLookbackMs, now),
+    getFedRateRegimeTimeline().catch(() => null), // regime tagging degrades to null, never fails the whole study
+  ]);
   const byDay = groupCandlesByEasternDay(bars);
+  if (!regimeTimeline) dataLimitations.push("Fed rate regime unavailable this run (FRED lookup failed) — every day shows fedRateRegime: null.");
 
   const rows: RecentDayRow[] = [];
   for (let i = 1; i < byDay.length; i++) {
@@ -275,8 +297,9 @@ export async function getRecentDayVarianceStudy(
     const dayReturnPct = ((todayClose - priorClose) / priorClose) * 100;
     const bucket: RecentDayRow["bucket"] =
       overnightGapPct > flatThresholdPct ? "gap_up" : overnightGapPct < -flatThresholdPct ? "gap_down" : "flat";
+    const fedRateRegime = regimeTimeline ? classifyRegimeForDate(day.dateKey, regimeTimeline) : null;
 
-    rows.push({ dateKey: day.dateKey, overnightGapPct, dayReturnPct, bucket });
+    rows.push({ dateKey: day.dateKey, overnightGapPct, dayReturnPct, bucket, fedRateRegime });
   }
 
   const lastN = rows.slice(-dayCount);
@@ -293,6 +316,29 @@ export async function getRecentDayVarianceStudy(
     );
   }
 
+  const regimesPresent = [...new Set(lastN.map((r) => r.fedRateRegime).filter((r): r is FedRateRegime => r !== null))];
+  const byRegime = regimesPresent.map((regime) => {
+    const regimeDays = lastN.filter((r) => r.fedRateRegime === regime);
+    const regimeAll = regimeDays.map((r) => r.dayReturnPct!).filter((v) => Number.isFinite(v));
+    const regimeUp = regimeDays.filter((r) => r.bucket === "gap_up").map((r) => r.dayReturnPct!);
+    const regimeDown = regimeDays.filter((r) => r.bucket === "gap_down").map((r) => r.dayReturnPct!);
+    return {
+      regime,
+      all: groupStatsOf(regimeAll),
+      gapUp: groupStatsOf(regimeUp),
+      gapDown: groupStatsOf(regimeDown),
+      gapUpVsGapDownMeanDiffPct: mean(regimeUp) !== null && mean(regimeDown) !== null ? mean(regimeUp)! - mean(regimeDown)! : null,
+      gapUpVsGapDownBootstrap: bootstrapMeanDiffCi(regimeUp, regimeDown),
+    };
+  });
+  if (regimesPresent.length <= 1) {
+    dataLimitations.push(
+      regimesPresent.length === 0
+        ? "No regime-tagged days in this window — regime breakdown is empty."
+        : `Every day in this window fell in the same regime (${regimesPresent[0]}) — a per-regime comparison needs a longer dayCount to span more than one Fed cycle.`
+    );
+  }
+
   return {
     ticker,
     requestedDayCount: dayCount,
@@ -305,6 +351,7 @@ export async function getRecentDayVarianceStudy(
     gapUpVsGapDownMeanDiffPct:
       mean(gapUpReturns) !== null && mean(gapDownReturns) !== null ? mean(gapUpReturns)! - mean(gapDownReturns)! : null,
     gapUpVsGapDownBootstrap: bootstrapMeanDiffCi(gapUpReturns, gapDownReturns),
+    byRegime,
     dataLimitations,
   };
 }

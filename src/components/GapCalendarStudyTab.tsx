@@ -284,6 +284,7 @@ export function GapCalendarStudyTab({ defaultTicker = "AAPL" }: { defaultTicker?
                     <th className={TH_CLASS}>Overnight Gap</th>
                     <th className={TH_CLASS}>Close-to-Close Move</th>
                     <th className={TH_CLASS}>Bucket</th>
+                    <th className={TH_CLASS}>Fed Regime</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -293,11 +294,43 @@ export function GapCalendarStudyTab({ defaultTicker = "AAPL" }: { defaultTicker?
                       <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{fmtPct(row.overnightGapPct)}</td>
                       <td className={`${TD_CLASS} font-mono`} style={{ color: bucketColor(row.bucket) }}>{fmtPct(row.dayReturnPct)}</td>
                       <td className={`${TD_CLASS} font-mono`} style={{ color: bucketColor(row.bucket) }}>{row.bucket.replace("_", " ")}</td>
+                      <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{row.fedRateRegime ?? "N/A"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {varianceResult.byRegime.length > 0 && (
+              <div>
+                <div className="jv-label mb-2">Gap-up vs. gap-down, by Fed rate regime</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }} className="text-left">
+                        <th className={TH_CLASS}>Regime</th>
+                        <th className={TH_CLASS}>Gap-Up Mean (n)</th>
+                        <th className={TH_CLASS}>Gap-Down Mean (n)</th>
+                        <th className={TH_CLASS}>Bootstrap 95% CI on the Gap</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {varianceResult.byRegime.map((r) => (
+                        <tr key={r.regime} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                          <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-0)" }}>{r.regime}</td>
+                          <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--signal)" }}>{fmtPct(r.gapUp.meanPct)} (n={r.gapUp.count})</td>
+                          <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--danger)" }}>{fmtPct(r.gapDown.meanPct)} (n={r.gapDown.count})</td>
+                          <td className={`${TD_CLASS} font-mono`} style={{ color: r.gapUpVsGapDownBootstrap.ciExcludesZero ? "var(--signal)" : "var(--text-2)" }}>
+                            [{fmtPct(r.gapUpVsGapDownBootstrap.lower)}, {fmtPct(r.gapUpVsGapDownBootstrap.upper)}]
+                            {r.gapUpVsGapDownBootstrap.ciExcludesZero ? " — significant" : ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             {varianceResult.dataLimitations.map((d) => (
               <div key={d.slice(0, 30)} className="text-xs" style={{ color: "var(--verdict)" }}>{d}</div>
             ))}
