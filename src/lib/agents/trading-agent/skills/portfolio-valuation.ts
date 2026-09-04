@@ -2,21 +2,8 @@ import { fetchQuote } from "@/lib/data/market-data";
 import { fetchProfile } from "@/lib/data/fmp";
 import { assetClassLabel } from "../asset-class-label";
 import { notionalMultiplier, getOptionContractQuote } from "./paper-trading-engine";
+import { THEMATIC_ETF_SECTOR_OVERRIDES } from "./sector-lookup";
 import type { AllocationSlice, PortfolioHolding, PortfolioSummary, PortfolioValuation } from "../types";
-
-/**
- * FMP's /profile sector tag reflects the fund sponsor's own GICS
- * classification (often "Financial Services" for every ETF issuer),
- * which is meaningless for a thematic ETF holding — a CIBR investor cares
- * that it's cybersecurity exposure, not that the fund is issued by a
- * financial company. Overrides take priority over the FMP lookup below.
- */
-const THEMATIC_ETF_SECTOR_OVERRIDES: Record<string, string> = {
-  CIBR: "Cybersecurity",
-  DTCR: "Tech/AI Infrastructure",
-  NLR: "Nuclear Energy",
-  QTUM: "Quantum",
-};
 
 /**
  * Per-holding valuation, same scanOne-style isolation as watchlist-scan.ts —

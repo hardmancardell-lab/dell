@@ -1718,4 +1718,8 @@ export interface GuidedTradeSignal {
   exitType: HypothesisExitType;
   exitRule: string;
   entryRule: string;
+  // Populated only when the request comes from an authenticated user with a
+  // linked advisor_clients portfolio — null/false for the general public.
+  ownedByUser: boolean;
+  relatedHoldingSymbol: string | null; // e.g. "NLR" if this signal is on OKLO and OKLO shares NLR's sector
 }

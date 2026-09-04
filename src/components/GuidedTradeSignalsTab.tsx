@@ -36,6 +36,19 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
         </div>
       </div>
 
+      {(signal.ownedByUser || signal.relatedHoldingSymbol) && (
+        <div
+          className="inline-block text-[11px] font-medium px-2 py-0.5 rounded mb-2"
+          style={
+            signal.ownedByUser
+              ? { color: "var(--signal)", background: "color-mix(in srgb, var(--signal) 15%, transparent)" }
+              : { color: "var(--text-1)", background: "var(--ink-800)" }
+          }
+        >
+          {signal.ownedByUser ? "You hold this" : `Related to your ${signal.relatedHoldingSymbol} position`}
+        </div>
+      )}
+
       <p className="text-sm mb-1" style={{ color: "var(--text-1)" }}>
         This exact setup happened <strong>{signal.sampleSize}</strong> times before in {signal.ticker}&apos;s real history.
         It worked out (a positive move) <strong>{signal.historicalWinRatePct.toFixed(0)}%</strong> of the time, holding for {signal.horizonLabel}.
