@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
 import type { AdvisorClient, AssetClass, PortfolioHolding, RealizedSale } from "@/lib/agents/trading-agent/types";
+import type { WashSaleFlag } from "@/lib/agents/trading-agent/skills/wash-sale-check";
 
 const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
 
@@ -29,6 +30,7 @@ export function AdvisorClientsManager() {
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
   const [realizedSales, setRealizedSales] = useState<RealizedSale[] | null>(null);
   const [totalRealizedPnl, setTotalRealizedPnl] = useState(0);
+  const [washSaleFlags, setWashSaleFlags] = useState<WashSaleFlag[]>([]);
   const [sellingHoldingId, setSellingHoldingId] = useState<string | null>(null);
   const [sellShares, setSellShares] = useState("");
   const [sellPrice, setSellPrice] = useState("");
@@ -195,6 +197,7 @@ export function AdvisorClientsManager() {
       if (pnlRes.ok) {
         setRealizedSales(pnlJson.sales as RealizedSale[]);
         setTotalRealizedPnl(pnlJson.totalRealizedPnl as number);
+        setWashSaleFlags((pnlJson.washSaleFlags as WashSaleFlag[]) ?? []);
       }
     } catch (err) {
       setHoldingsError(err instanceof Error ? err.message : "Unknown error");
@@ -605,6 +608,14 @@ export function AdvisorClientsManager() {
                           Total: {fmtUsd(totalRealizedPnl)}
                         </div>
                       </div>
+                      {washSaleFlags.length > 0 && (
+                        <div className="mb-3 rounded border border-amber-800 bg-amber-950/40 p-2.5 text-xs text-amber-300">
+                          <strong>{washSaleFlags.length} potential wash-sale{washSaleFlags.length === 1 ? "" : "s"}</strong> — a
+                          loss was realized within 30 days of acquiring a matching lot of the same symbol. Directional flag
+                          only, not tax advice: checks exact-ticker proximity, not the full &quot;substantially identical
+                          security&quot; rule.
+                        </div>
+                      )}
                       {realizedSales === null ? (
                         <p className="text-xs text-zinc-500">Loading…</p>
                       ) : realizedSales.length === 0 ? (
@@ -623,19 +634,29 @@ export function AdvisorClientsManager() {
                             </tr>
                           </thead>
                           <tbody>
-                            {realizedSales.map((s) => (
-                              <tr key={s.id} className="border-t border-zinc-800/60">
-                                <td className="py-1.5 text-zinc-100 font-medium">{s.symbol}</td>
-                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{s.sharesSold}</td>
-                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(s.salePricePerShare)}</td>
-                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(s.costBasisPerShare)}</td>
-                                <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(s.fee)}</td>
-                                <td className={`py-1.5 text-right tabular-nums font-medium ${s.realizedPnl >= 0 ? "text-teal-400" : "text-red-400"}`}>
-                                  {fmtUsd(s.realizedPnl)}
-                                </td>
-                                <td className="py-1.5 text-zinc-400">{s.saleDate}</td>
-                              </tr>
-                            ))}
+                            {realizedSales.map((s) => {
+                              const flag = washSaleFlags.find((f) => f.saleId === s.id);
+                              return (
+                                <tr key={s.id} className="border-t border-zinc-800/60">
+                                  <td className="py-1.5 text-zinc-100 font-medium">
+                                    {s.symbol}
+                                    {flag && (
+                                      <span className="ml-1.5 text-amber-400" title={`Lot re-acquired ${Math.abs(flag.daysBetween)} day(s) ${flag.daysBetween >= 0 ? "after" : "before"} this sale`}>
+                                        ⚠
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-1.5 text-right tabular-nums text-zinc-300">{s.sharesSold}</td>
+                                  <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(s.salePricePerShare)}</td>
+                                  <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(s.costBasisPerShare)}</td>
+                                  <td className="py-1.5 text-right tabular-nums text-zinc-300">{fmtUsd(s.fee)}</td>
+                                  <td className={`py-1.5 text-right tabular-nums font-medium ${s.realizedPnl >= 0 ? "text-teal-400" : "text-red-400"}`}>
+                                    {fmtUsd(s.realizedPnl)}
+                                  </td>
+                                  <td className="py-1.5 text-zinc-400">{s.saleDate}</td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       )}
