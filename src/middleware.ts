@@ -31,6 +31,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/gap-calendar-study",
   "/api/interaction-effects",
   "/api/correlation-matrix",
+  "/api/debug-verify-guided-signals",
 ];
 
 function isPublicPath(pathname: string): boolean {
