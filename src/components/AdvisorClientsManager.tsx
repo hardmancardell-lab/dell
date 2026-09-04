@@ -278,7 +278,10 @@ export function AdvisorClientsManager() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-6 py-10">
       <div className="max-w-3xl mx-auto flex flex-col gap-8">
         <div>
-          <a href="/admin/analytics" className="text-xs text-teal-400 hover:underline">→ Usage Analytics</a>
+          <div className="flex gap-3">
+            <a href="/admin/analytics" className="text-xs text-teal-400 hover:underline">→ Usage Analytics</a>
+            <a href="/admin/book-risk" className="text-xs text-teal-400 hover:underline">→ Book Risk</a>
+          </div>
           <h1 className="text-xl font-semibold text-zinc-50 mt-1">Client Dashboards</h1>
           <p className="text-sm text-zinc-400 mt-1">
             Create a private, passcode-protected link for a specific client. They see a read-only view of the
