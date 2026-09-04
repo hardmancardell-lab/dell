@@ -770,6 +770,27 @@ export interface RebalancingRow {
   action: "buy" | "sell" | "hold";
 }
 
+export interface TaxLotConsumption {
+  holdingId: string;
+  acquiredDate: string;
+  sharesFromLot: number;
+  holdingPeriodDays: number;
+  isLongTerm: boolean; // held >= 365 days as of the as-of date
+  estimatedGainLoss: number;
+}
+
+export interface TaxLotImpact {
+  symbol: string;
+  currentPrice: number;
+  dollarAmountRequested: number;
+  totalSharesAvailable: number;
+  lots: TaxLotConsumption[]; // FIFO order, oldest lot first
+  totalEstimatedGainLoss: number;
+  shortTermGainLoss: number;
+  longTermGainLoss: number;
+  exceedsAvailableShares: boolean; // the requested sell amount is larger than total shares held
+}
+
 export interface HedgeCalculatorInput {
   positionShares: number; // positive = long stock, negative = short stock
   optionType: "call" | "put";

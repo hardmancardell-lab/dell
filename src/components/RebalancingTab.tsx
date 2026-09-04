@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import { computeRebalancing } from "@/lib/agents/trading-agent/skills/portfolio-rebalancing";
 import { computeHedge } from "@/lib/agents/trading-agent/skills/hedge-calculator";
+import { computeTaxLotImpact } from "@/lib/agents/trading-agent/skills/tax-lot-impact";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { StatCard } from "./StatCard";
 import type { OptionType } from "@/lib/agents/trading-agent/black-scholes";
@@ -13,10 +14,63 @@ function fmtUsd(v: number): string {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+function TaxLotImpactPanel({ symbol, dollarAmount, summary }: { symbol: string; dollarAmount: number; summary: PortfolioSummary }) {
+  const impact = useMemo(
+    () => computeTaxLotImpact(symbol, Math.abs(dollarAmount), summary.valuations),
+    [symbol, dollarAmount, summary]
+  );
+  if (!impact) return null;
+
+  return (
+    <div className="mt-2 mb-1 p-3 rounded" style={{ background: "var(--ink-800)", border: "1px solid var(--line)" }}>
+      <div className="text-xs font-medium mb-2" style={{ color: "var(--text-0)" }}>
+        Which lots this sell would touch (FIFO — oldest first)
+      </div>
+      {impact.exceedsAvailableShares && (
+        <p className="text-xs mb-2" style={{ color: "var(--verdict)" }}>
+          This sell amount exceeds total shares held ({impact.totalSharesAvailable.toFixed(2)} available) — showing what selling everything would look like.
+        </p>
+      )}
+      <table className="jv-table text-xs">
+        <thead>
+          <tr>
+            <th className="text-left">Acquired</th>
+            <th className="text-right">Shares</th>
+            <th className="text-right">Holding Period</th>
+            <th className="text-left">Term</th>
+            <th className="text-right">Est. Gain/Loss</th>
+          </tr>
+        </thead>
+        <tbody>
+          {impact.lots.map((l) => (
+            <tr key={l.holdingId}>
+              <td>{l.acquiredDate}</td>
+              <td className="jv-num">{l.sharesFromLot.toFixed(2)}</td>
+              <td className="jv-num" style={{ color: "var(--text-2)" }}>{l.holdingPeriodDays}d</td>
+              <td style={{ color: l.isLongTerm ? "var(--signal)" : "var(--verdict)" }}>{l.isLongTerm ? "Long-term" : "Short-term"}</td>
+              <td className={`jv-num ${l.estimatedGainLoss >= 0 ? "jv-pnl-up" : "jv-pnl-down"}`}>{fmtUsd(l.estimatedGainLoss)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex gap-4 mt-2 text-xs" style={{ color: "var(--text-2)" }}>
+        <span>Short-term: <strong className={impact.shortTermGainLoss >= 0 ? "jv-pnl-up" : "jv-pnl-down"}>{fmtUsd(impact.shortTermGainLoss)}</strong></span>
+        <span>Long-term: <strong className={impact.longTermGainLoss >= 0 ? "jv-pnl-up" : "jv-pnl-down"}>{fmtUsd(impact.longTermGainLoss)}</strong></span>
+        <span>Total: <strong className={impact.totalEstimatedGainLoss >= 0 ? "jv-pnl-up" : "jv-pnl-down"}>{fmtUsd(impact.totalEstimatedGainLoss)}</strong></span>
+      </div>
+      <p className="text-[11px] mt-2" style={{ color: "var(--text-2)" }}>
+        Estimate for planning only, not a booked trade or tax advice — assumes FIFO lot selection and today&apos;s price; the
+        real gain/loss depends on the fill price actually received and any specific-lot election you make with your broker.
+      </p>
+    </div>
+  );
+}
+
 function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
   const { holdings } = usePortfolio();
   const uniqueSymbols = useMemo(() => [...new Set(holdings.map((h) => h.symbol))], [holdings]);
   const [targets, setTargets] = useState<Record<string, string>>({});
+  const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
   const { track } = useTrackEvent();
 
   const currentValues = useMemo(() => {
@@ -63,39 +117,57 @@ function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.symbol}>
-                <td className="font-medium">{r.symbol}</td>
-                <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.currentPercent.toFixed(1)}%</td>
-                <td className="jv-num">
-                  <input
-                    type="number"
-                    step="any"
-                    value={targets[r.symbol] ?? ""}
-                    onChange={(e) => setTargets((prev) => ({ ...prev, [r.symbol]: e.target.value }))}
-                    onBlur={() => track("rebalancing_computed", { tab: "Rebalancing", metadata: { symbolCount: uniqueSymbols.length } })}
-                    placeholder="0"
-                    className="jv-input w-20 text-right"
-                  />
-                </td>
-                <td className={`jv-num ${r.deltaValue > 0 ? "jv-pnl-up" : r.deltaValue < 0 ? "jv-pnl-down" : "jv-pnl-flat"}`}>
-                  {fmtUsd(r.deltaValue)}
-                </td>
-                <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.deltaShares !== null ? r.deltaShares.toFixed(2) : "N/A"}</td>
-                <td>
-                  <span
-                    className="jv-badge"
-                    style={
-                      r.action === "buy"
-                        ? { color: "var(--signal)", borderColor: "var(--signal-dim)", background: "rgba(79, 232, 208, 0.06)" }
-                        : r.action === "sell"
-                          ? { color: "var(--danger)", borderColor: "var(--danger)", background: "rgba(232, 99, 122, 0.08)" }
-                          : { color: "var(--text-1)", borderColor: "var(--line-bright)" }
-                    }
-                  >
-                    {r.action}
-                  </span>
-                </td>
-              </tr>
+              <Fragment key={r.symbol}>
+                <tr>
+                  <td className="font-medium">{r.symbol}</td>
+                  <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.currentPercent.toFixed(1)}%</td>
+                  <td className="jv-num">
+                    <input
+                      type="number"
+                      step="any"
+                      value={targets[r.symbol] ?? ""}
+                      onChange={(e) => setTargets((prev) => ({ ...prev, [r.symbol]: e.target.value }))}
+                      onBlur={() => track("rebalancing_computed", { tab: "Rebalancing", metadata: { symbolCount: uniqueSymbols.length } })}
+                      placeholder="0"
+                      className="jv-input w-20 text-right"
+                    />
+                  </td>
+                  <td className={`jv-num ${r.deltaValue > 0 ? "jv-pnl-up" : r.deltaValue < 0 ? "jv-pnl-down" : "jv-pnl-flat"}`}>
+                    {fmtUsd(r.deltaValue)}
+                  </td>
+                  <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.deltaShares !== null ? r.deltaShares.toFixed(2) : "N/A"}</td>
+                  <td>
+                    <span
+                      className="jv-badge"
+                      style={
+                        r.action === "buy"
+                          ? { color: "var(--signal)", borderColor: "var(--signal-dim)", background: "rgba(79, 232, 208, 0.06)" }
+                          : r.action === "sell"
+                            ? { color: "var(--danger)", borderColor: "var(--danger)", background: "rgba(232, 99, 122, 0.08)" }
+                            : { color: "var(--text-1)", borderColor: "var(--line-bright)" }
+                      }
+                    >
+                      {r.action}
+                    </span>
+                    {r.action === "sell" && (
+                      <button
+                        onClick={() => setExpandedSymbol(expandedSymbol === r.symbol ? null : r.symbol)}
+                        className="ml-2 text-xs underline"
+                        style={{ color: "var(--text-2)" }}
+                      >
+                        {expandedSymbol === r.symbol ? "Hide lots" : "Tax lots"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+                {expandedSymbol === r.symbol && r.action === "sell" && (
+                  <tr>
+                    <td colSpan={6}>
+                      <TaxLotImpactPanel symbol={r.symbol} dollarAmount={r.deltaValue} summary={summary} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>
