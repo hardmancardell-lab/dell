@@ -8,7 +8,15 @@ import { fetchQuote } from "@/lib/data/market-data";
 export async function GET() {
   const diagnostics: Record<string, string> = {};
   try {
-    diagnostics.step = "getRecentHypotheses";
+    diagnostics.step = "getRecentHypotheses(1)";
+    const hyp1 = await getRecentHypotheses(1);
+    diagnostics.hyp1Count = String(hyp1.length);
+
+    diagnostics.step = "getRecentHypotheses(10)";
+    const hyp10 = await getRecentHypotheses(10);
+    diagnostics.hyp10Count = String(hyp10.length);
+
+    diagnostics.step = "getRecentHypotheses(200)";
     const hyp = await getRecentHypotheses(200);
     diagnostics.hypothesesCount = String(hyp.length);
 
