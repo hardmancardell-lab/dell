@@ -48,7 +48,8 @@ function percentileCi(values: number[], ci: number): { lower: number | null; upp
   return { lower, upper, ciExcludesZero: lower > 0 || upper < 0 };
 }
 
-function buildRegression(x: number[], y: number[]): BuybackRegressionResult | null {
+/** Exported for reuse by other event-study skills (e.g. corporate-buyback-offering.ts) that need the same regression + bootstrap-CI shape without duplicating it. */
+export function buildRegression(x: number[], y: number[]): BuybackRegressionResult | null {
   const reg = linearRegression(x, y);
   if (!reg) return null;
   const { lower, upper, ciExcludesZero } = bootstrapRegressionSlope(x, y);
@@ -156,8 +157,8 @@ function betaDriftCheck(dateKeys: string[], benchmark: number[], target: number[
   };
 }
 
-/** dateKey -> single-day % return, built from a dateKey-sorted DailyBar[] (same alignment discipline portfolio-analytics.ts uses for multi-symbol return series — never assume two symbols' bars line up by array index). */
-function returnsByDate(bars: DailyBar[]): Map<string, number> {
+/** dateKey -> single-day % return, built from a dateKey-sorted DailyBar[] (same alignment discipline portfolio-analytics.ts uses for multi-symbol return series — never assume two symbols' bars line up by array index). Exported for reuse (see buildRegression above). */
+export function returnsByDate(bars: DailyBar[]): Map<string, number> {
   const map = new Map<string, number>();
   for (let i = 1; i < bars.length; i++) {
     const prior = bars[i - 1].close;

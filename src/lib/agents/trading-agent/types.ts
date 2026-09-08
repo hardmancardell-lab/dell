@@ -1,5 +1,6 @@
 import type { Greeks } from "./black-scholes";
 import type { WinLossMetrics } from "./stats";
+import type { BootstrapCiResult } from "./skills/stats-tests";
 
 export interface BlackScholesInputs {
   spotPrice: number;
@@ -1721,6 +1722,38 @@ export interface BuybackAnomalyResult {
   day0DummyRegression: DummyVariableRegressionResult | null;
   day1DummyRegression: DummyVariableRegressionResult | null;
   betaDrift: BetaDriftResult | null;
+  dataLimitations: string[];
+}
+
+// --- Corporate Buybacks & Offerings (event study) ---
+
+export interface CorporateOfferingEventRow {
+  filingDate: string;
+  formType: string; // e.g. "424B5", "S-3"
+  url: string;
+  day0ReturnPct: number;
+  day1ReturnPct: number;
+  day0AbnormalReturnPct: number | null;
+  day1AbnormalReturnPct: number | null;
+}
+
+export interface CorporateBuybackDisclosureRow {
+  periodEndDate: string;
+  filingDate: string;
+  repurchasedUsd: number; // magnitude — Math.abs() of FMP's (negative) commonStockRepurchased
+  day0ReturnPct: number | null; // % move on the filing date, if a matching trading-day bar exists
+}
+
+export interface CorporateBuybackOfferingResult {
+  ticker: string;
+  benchmarkTicker: string;
+  marketModel: MarketModelFit | null;
+  offeringEvents: CorporateOfferingEventRow[];
+  offeringDay0Stats: BootstrapCiResult | null;
+  offeringDay1Stats: BootstrapCiResult | null;
+  offeringDay0AbnormalStats: BootstrapCiResult | null;
+  offeringDay1AbnormalStats: BootstrapCiResult | null;
+  buybackDisclosures: CorporateBuybackDisclosureRow[];
   dataLimitations: string[];
 }
 

@@ -79,11 +79,19 @@ export interface FmpBalanceSheet {
 
 export interface FmpCashFlowStatement {
   date: string;
+  // FMP's own (long-documented) field name, misspelled "filling" not
+  // "filing" — kept as-is rather than renamed, since this must match the
+  // real API response. Falls back to `date` (period end) when absent, per
+  // the same "disclose the simplification" convention used elsewhere.
+  fillingDate?: string;
   capitalExpenditure: number;
   depreciationAndAmortization: number;
   stockBasedCompensation: number;
   operatingCashFlow: number;
   freeCashFlow: number;
+  // Negative = cash outflow (repurchases), matching capitalExpenditure's own
+  // sign convention above — callers take Math.abs() for a dollar magnitude.
+  commonStockRepurchased?: number;
 }
 
 export interface FmpDividendRecord {
@@ -121,10 +129,10 @@ export function fetchBalanceSheet(ticker: string, limit = 10) {
   });
 }
 
-export function fetchCashFlowStatement(ticker: string, limit = 10) {
+export function fetchCashFlowStatement(ticker: string, limit = 10, period: "annual" | "quarter" = "annual") {
   return fetchFmp<FmpCashFlowStatement[]>("/cash-flow-statement", {
     symbol: ticker,
-    period: "annual",
+    period,
     limit: String(Math.min(limit, FREE_TIER_STATEMENT_LIMIT)),
   });
 }

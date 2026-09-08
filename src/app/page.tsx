@@ -59,6 +59,7 @@ import { PortfolioMethodologyTab } from "@/components/PortfolioMethodologyTab";
 import { FinancialLiteracyTab } from "@/components/FinancialLiteracyTab";
 import { AssistantChatTab } from "@/components/AssistantChatTab";
 import { SupplyDemandShockScanTab } from "@/components/SupplyDemandShockScanTab";
+import { CorporateBuybackOfferingTab } from "@/components/CorporateBuybackOfferingTab";
 
 function ConditionBadge({ text }: { text: string }) {
   return <span className="jv-badge c-neutral">{text}</span>;
@@ -585,6 +586,11 @@ export default async function Home() {
                                 id: "treasury-buyback-anomaly",
                                 label: "Treasury Buyback Anomaly",
                                 content: <BuybackAnomalyTab />,
+                              },
+                              {
+                                id: "corporate-buyback-offering",
+                                label: "Corporate Buybacks & Offerings",
+                                content: <CorporateBuybackOfferingTab />,
                               },
                             ]}
                           />
