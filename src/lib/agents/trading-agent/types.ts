@@ -399,9 +399,18 @@ export interface YieldCurveInversion {
   toTenor: string;
 }
 
+export interface YieldCurveNamedSpread {
+  label: string; // e.g. "30Y − 10Y"
+  longTenorLabel: string;
+  shortTenorLabel: string;
+  spreadPct: number | null; // longTenor yield minus shortTenor yield, in percentage points
+  asOfDate: string | null;
+}
+
 export interface YieldCurveResult {
   points: YieldCurvePoint[];
   inversions: YieldCurveInversion[];
+  namedSpreads: YieldCurveNamedSpread[];
   creditSpreads: FredSeriesPoint[];
   dataLimitations: string[];
 }

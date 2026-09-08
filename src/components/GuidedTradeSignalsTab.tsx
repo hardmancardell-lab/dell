@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { PaperOrderForm } from "./PaperOrderForm";
+import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import type { GuidedTradeSignal } from "@/lib/agents/trading-agent/types";
 
 function fmtUsd(v: number): string {
@@ -95,12 +96,14 @@ export function GuidedTradeSignalsTab() {
   const [signals, setSignals] = useState<GuidedTradeSignal[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { holdings, hydrated } = usePortfolio();
 
-  async function load() {
+  async function load(localSymbols: string[]) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/guided-trade-signals");
+      const qs = localSymbols.length > 0 ? `?localSymbols=${encodeURIComponent(localSymbols.join(","))}` : "";
+      const res = await fetch(`/api/guided-trade-signals${qs}`);
       const json = await res.json();
       if (!res.ok) setError(json.error ?? "Unknown error");
       else setSignals(json.signals as GuidedTradeSignal[]);
@@ -112,8 +115,13 @@ export function GuidedTradeSignalsTab() {
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    // Wait for the local (localStorage) Portfolio Tracker to hydrate so a
+    // self-directed user's own holdings are included in the very first
+    // request — otherwise "You hold this" would flash in only on a refetch.
+    if (!hydrated) return;
+    load(holdings.map((h) => h.symbol));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
 
   return (
     <div className="jarvis flex flex-col gap-6">

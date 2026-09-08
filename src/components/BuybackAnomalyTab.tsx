@@ -89,7 +89,7 @@ function RegressionScatter({ title, data }: { title: string; data: { x: number; 
 }
 
 export function BuybackAnomalyTab() {
-  const [ticker, setTicker] = useState("GLD");
+  const [ticker, setTicker] = useState("SPY");
   const [result, setResult] = useState<BuybackAnomalyResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

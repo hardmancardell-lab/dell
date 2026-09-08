@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminViewAsSlug } from "@/lib/admin-view-as";
-import { getAdvisorClientByUser, getAdvisorClientBySlug, listClientHoldings } from "@/lib/data/advisor-clients-db";
+import { getAdvisorClientByUser, getAdvisorClientBySlug, listClientHoldings, listRealizedPnl } from "@/lib/data/advisor-clients-db";
 import { valuatePortfolio } from "@/lib/agents/trading-agent/skills/portfolio-valuation";
+import { checkWashSaleRisk } from "@/lib/agents/trading-agent/skills/wash-sale-check";
 import type { AdvisorClient } from "@/lib/agents/trading-agent/types";
 
 /**
@@ -45,12 +46,14 @@ export async function GET() {
 
 async function buildPortfolioResponse(client: AdvisorClient, viewingAs: boolean) {
   try {
-    const holdings = await listClientHoldings(client.id);
+    const [holdings, sales] = await Promise.all([listClientHoldings(client.id), listRealizedPnl(client.id)]);
+    const totalRealizedPnl = sales.reduce((sum, s) => sum + s.realizedPnl, 0);
+    const washSaleFlags = checkWashSaleRisk(sales, holdings);
     if (holdings.length === 0) {
-      return NextResponse.json({ linked: true, viewingAs, clientName: client.name, summary: null, holdingsCount: 0, cashBalance: client.cashBalance });
+      return NextResponse.json({ linked: true, viewingAs, clientName: client.name, summary: null, holdingsCount: 0, cashBalance: client.cashBalance, sales, totalRealizedPnl, washSaleFlags });
     }
     const summary = await valuatePortfolio(holdings);
-    return NextResponse.json({ linked: true, viewingAs, clientName: client.name, summary, holdingsCount: holdings.length, cashBalance: client.cashBalance });
+    return NextResponse.json({ linked: true, viewingAs, clientName: client.name, summary, holdingsCount: holdings.length, cashBalance: client.cashBalance, sales, totalRealizedPnl, washSaleFlags });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

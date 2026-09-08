@@ -1,12 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { usePortfolio, useRealizedPnl } from "@/lib/agents/trading-agent/portfolio-storage";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
 import { StatCard } from "./StatCard";
 import { PriceChart } from "./PriceChart";
 import { AllocationPieChart, withCashSlice } from "./AllocationPieChart";
-import type { AssetClass, PortfolioHolding, PortfolioShockScanResult, PortfolioSummary } from "@/lib/agents/trading-agent/types";
+import { ShockScanEntryCard } from "./ShockScanEntryCard";
+import { RealizedPnlPanel } from "./RealizedPnlPanel";
+import { checkWashSaleRisk } from "@/lib/agents/trading-agent/skills/wash-sale-check";
+import type { AssetClass, PortfolioHolding, PortfolioShockScanResult, PortfolioSummary, RealizedSale } from "@/lib/agents/trading-agent/types";
+import type { WashSaleFlag } from "@/lib/agents/trading-agent/skills/wash-sale-check";
 
 const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
 
@@ -32,10 +36,23 @@ interface MyPortfolioResponse {
   summary?: PortfolioSummary | null;
   holdingsCount?: number;
   cashBalance?: number;
+  sales?: RealizedSale[];
+  totalRealizedPnl?: number;
+  washSaleFlags?: WashSaleFlag[];
 }
 
 export function PortfolioDashboardTab() {
   const local = usePortfolio();
+  const localRealized = useRealizedPnl();
+  const [linkedSales, setLinkedSales] = useState<RealizedSale[]>([]);
+  const [linkedTotalRealizedPnl, setLinkedTotalRealizedPnl] = useState(0);
+  const [linkedWashSaleFlags, setLinkedWashSaleFlags] = useState<WashSaleFlag[]>([]);
+  const [sellingHoldingId, setSellingHoldingId] = useState<string | null>(null);
+  const [sellShares, setSellShares] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
+  const [sellFee, setSellFee] = useState("0");
+  const [sellDate, setSellDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [sellError, setSellError] = useState<string | null>(null);
 
   // "checking" avoids a flash of the empty local-tracker form before we
   // know whether this account is linked to a real advisor-managed portfolio.
@@ -71,6 +88,9 @@ export function PortfolioDashboardTab() {
       setLinkedClientName(json.clientName ?? "");
       setLinkedCashBalance(json.cashBalance ?? 0);
       setSummary(json.summary ?? null);
+      setLinkedSales(json.sales ?? []);
+      setLinkedTotalRealizedPnl(json.totalRealizedPnl ?? 0);
+      setLinkedWashSaleFlags(json.washSaleFlags ?? []);
     } else {
       setMode("local");
     }
@@ -166,6 +186,38 @@ export function PortfolioDashboardTab() {
     } else {
       local.removeHolding(holdingId);
     }
+  }
+
+  function startSell(holdingId: string) {
+    setSellingHoldingId(holdingId);
+    setSellShares("");
+    setSellPrice("");
+    setSellFee("0");
+    setSellDate(new Date().toISOString().slice(0, 10));
+    setSellError(null);
+  }
+
+  // Sell is local-tracker only — an advisor-managed holding stays
+  // admin-initiated (see AdvisorClientsManager), so this never runs in
+  // "linked" mode.
+  function submitSell(holdingId: string) {
+    const sharesNum = Number(sellShares);
+    const priceNum = Number(sellPrice);
+    const feeNum = Number(sellFee) || 0;
+    if (!Number.isFinite(sharesNum) || sharesNum <= 0 || !Number.isFinite(priceNum) || !sellDate) {
+      setSellError("Enter a valid share count and sale price.");
+      return;
+    }
+    const sale = local.sellHolding(holdingId, sharesNum, priceNum, feeNum, sellDate);
+    if (!sale) {
+      setSellError("Couldn't record that sale — check the share count against what's held.");
+      return;
+    }
+    localRealized.refresh();
+    setSellingHoldingId(null);
+    // Matches add/remove's existing convention: the holdings table updates
+    // immediately (derived straight from local.holdings), but summary/
+    // allocation stats stay as-is until "Refresh Valuation" is clicked.
   }
 
   const runValuation = useCallback(async () => {
@@ -372,43 +424,91 @@ export function PortfolioDashboardTab() {
                 const pnlClass = pnl === null ? "" : pnl > 0 ? "jv-pnl-up" : pnl < 0 ? "jv-pnl-down" : "jv-pnl-flat";
                 const isSelected = chartSymbol?.symbol === h.symbol;
                 return (
-                  <tr key={h.id}>
-                    <td className="font-medium">
-                      <button
-                        onClick={() => setChartSymbol(isSelected ? null : { symbol: h.symbol, assetClass: h.assetClass })}
-                        className="hover:underline"
-                        style={{ color: isSelected ? "var(--signal)" : "inherit" }}
-                      >
-                        {h.symbol}
-                      </button>
-                    </td>
-                    <td style={{ color: "var(--text-2)" }}>{assetClassLabel(h.assetClass)}</td>
-                    <td className="jv-num">{h.shares}</td>
-                    <td className="jv-num">{fmtUsd(h.costBasisPerShare)}</td>
-                    <td className="jv-num">{v?.error ? <span className="text-xs" style={{ color: "var(--danger)" }}>{v.error}</span> : fmtUsd(v?.currentPrice ?? null)}</td>
-                    <td className="jv-num">{fmtUsd(v?.currentValue ?? null)}</td>
-                    <td className="jv-num" style={{ color: "var(--text-2)" }}>{fmtMarketCap(v?.marketCapUsd ?? null)}</td>
-                    <td className={`jv-num ${pnlClass}`}>
-                      {fmtUsd(pnl)} ({fmtPct(v?.unrealizedPLPercent ?? null)})
-                    </td>
-                    <td className="jv-num" style={{ color: "var(--text-2)" }}>
-                      {fmtPct(v?.annualizedReturnPercent ?? null)}
-                      {v && v.holdingPeriodDays < 365 && v.annualizedReturnPercent !== null && (
-                        <span className="block text-[10px]" style={{ color: "var(--text-2)" }}>{v.holdingPeriodDays}d held</span>
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        onClick={() => handleRemove(h.id)}
-                        aria-label={`Remove ${h.symbol}`}
-                        style={{ color: "var(--text-2)" }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-2)")}
-                      >
-                        &times;
-                      </button>
-                    </td>
-                  </tr>
+                  <Fragment key={h.id}>
+                    <tr>
+                      <td className="font-medium">
+                        <button
+                          onClick={() => setChartSymbol(isSelected ? null : { symbol: h.symbol, assetClass: h.assetClass })}
+                          className="hover:underline"
+                          style={{ color: isSelected ? "var(--signal)" : "inherit" }}
+                        >
+                          {h.symbol}
+                        </button>
+                      </td>
+                      <td style={{ color: "var(--text-2)" }}>{assetClassLabel(h.assetClass)}</td>
+                      <td className="jv-num">{h.shares}</td>
+                      <td className="jv-num">{fmtUsd(h.costBasisPerShare)}</td>
+                      <td className="jv-num">{v?.error ? <span className="text-xs" style={{ color: "var(--danger)" }}>{v.error}</span> : fmtUsd(v?.currentPrice ?? null)}</td>
+                      <td className="jv-num">{fmtUsd(v?.currentValue ?? null)}</td>
+                      <td className="jv-num" style={{ color: "var(--text-2)" }}>{fmtMarketCap(v?.marketCapUsd ?? null)}</td>
+                      <td className={`jv-num ${pnlClass}`}>
+                        {fmtUsd(pnl)} ({fmtPct(v?.unrealizedPLPercent ?? null)})
+                      </td>
+                      <td className="jv-num" style={{ color: "var(--text-2)" }}>
+                        {fmtPct(v?.annualizedReturnPercent ?? null)}
+                        {v && v.holdingPeriodDays < 365 && v.annualizedReturnPercent !== null && (
+                          <span className="block text-[10px]" style={{ color: "var(--text-2)" }}>{v.holdingPeriodDays}d held</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2 justify-end">
+                          {mode === "local" && (
+                            <button
+                              onClick={() => (sellingHoldingId === h.id ? setSellingHoldingId(null) : startSell(h.id))}
+                              className="text-xs"
+                              style={{ color: "var(--text-2)" }}
+                            >
+                              {sellingHoldingId === h.id ? "Cancel" : "Sell"}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleRemove(h.id)}
+                            aria-label={`Remove ${h.symbol}`}
+                            style={{ color: "var(--text-2)" }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-2)")}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {mode === "local" && sellingHoldingId === h.id && (
+                      <tr>
+                        <td colSpan={10}>
+                          <div className="flex flex-wrap items-end gap-2 py-2">
+                            <div>
+                              <label className="block text-xs mb-1" style={{ color: "var(--text-2)" }}>Shares sold</label>
+                              <input
+                                value={sellShares}
+                                onChange={(e) => setSellShares(e.target.value)}
+                                type="number"
+                                step="any"
+                                max={h.shares}
+                                className="jv-input w-24"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs mb-1" style={{ color: "var(--text-2)" }}>Sale price/share</label>
+                              <input value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} type="number" step="any" className="jv-input w-28" />
+                            </div>
+                            <div>
+                              <label className="block text-xs mb-1" style={{ color: "var(--text-2)" }}>Fee</label>
+                              <input value={sellFee} onChange={(e) => setSellFee(e.target.value)} type="number" step="any" className="jv-input w-20" />
+                            </div>
+                            <div>
+                              <label className="block text-xs mb-1" style={{ color: "var(--text-2)" }}>Sale date</label>
+                              <input value={sellDate} onChange={(e) => setSellDate(e.target.value)} type="date" className="jv-input" />
+                            </div>
+                            <button onClick={() => submitSell(h.id)} className="jv-btn">
+                              Record Sale
+                            </button>
+                          </div>
+                          {sellError && <p className="text-xs pb-2" style={{ color: "var(--danger)" }}>{sellError}</p>}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -513,33 +613,7 @@ export function PortfolioDashboardTab() {
                   <p className="text-sm" style={{ color: "var(--text-2)" }}>Real holdings mapped to a query, but the scan couldn&apos;t complete — see the reason below.</p>
                 )}
                 {shockScan.entries.map((e) => (
-                  <div
-                    key={e.query}
-                    className="jv-card"
-                    style={e.triggered ? { borderColor: "var(--verdict-dim)" } : undefined}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-sm font-semibold" style={{ color: "var(--text-0)" }}>{e.symbols.join(", ")}</div>
-                      {e.triggered && (
-                        <span className="jv-badge" style={{ color: "var(--verdict)", borderColor: "var(--verdict-dim)", background: "rgba(240, 168, 104, 0.08)" }}>
-                          Coverage spike: {e.coverageMultiple?.toFixed(1)}x average
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs mb-2" style={{ color: "var(--text-2)" }}>{e.mechanismNote}</p>
-                    {e.narrative && <p className="text-sm mb-2 whitespace-pre-wrap" style={{ color: "var(--text-1)" }}>{e.narrative}</p>}
-                    {e.headlines.length > 0 && (
-                      <ul className="text-xs list-disc pl-4 flex flex-col gap-1" style={{ color: "var(--text-2)" }}>
-                        {e.headlines.slice(0, 3).map((h) => (
-                          <li key={h.url}>
-                            <a href={h.url} target="_blank" rel="noopener noreferrer" className="underline">
-                              {h.title}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                  <ShockScanEntryCard key={e.query} entry={e} />
                 ))}
                 {shockScan.dataLimitations.length > 0 && (
                   <div className="flex flex-col gap-2">
@@ -554,6 +628,17 @@ export function PortfolioDashboardTab() {
             )}
           </div>
         </div>
+      )}
+
+      {mode === "linked" && (
+        <RealizedPnlPanel sales={linkedSales} totalRealizedPnl={linkedTotalRealizedPnl} washSaleFlags={linkedWashSaleFlags} />
+      )}
+      {mode === "local" && localRealized.hydrated && (
+        <RealizedPnlPanel
+          sales={localRealized.sales}
+          totalRealizedPnl={localRealized.sales.reduce((sum, s) => sum + s.realizedPnl, 0)}
+          washSaleFlags={checkWashSaleRisk(localRealized.sales, local.holdings)}
+        />
       )}
     </div>
   );

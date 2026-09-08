@@ -58,6 +58,7 @@ import { CorrelationFinderTab } from "@/components/CorrelationFinderTab";
 import { PortfolioMethodologyTab } from "@/components/PortfolioMethodologyTab";
 import { FinancialLiteracyTab } from "@/components/FinancialLiteracyTab";
 import { AssistantChatTab } from "@/components/AssistantChatTab";
+import { SupplyDemandShockScanTab } from "@/components/SupplyDemandShockScanTab";
 
 function ConditionBadge({ text }: { text: string }) {
   return <span className="jv-badge c-neutral">{text}</span>;
@@ -580,6 +581,11 @@ export default async function Home() {
                                   </RequiresPlacementTier>
                                 ),
                               },
+                              {
+                                id: "treasury-buyback-anomaly",
+                                label: "Treasury Buyback Anomaly",
+                                content: <BuybackAnomalyTab />,
+                              },
                             ]}
                           />
                         </div>
@@ -696,6 +702,11 @@ export default async function Home() {
                               },
                               { id: "news", label: "News Search", content: <InternationalEconomicsTab /> },
                               {
+                                id: "shock-scan",
+                                label: "Supply/Demand Shock Scan",
+                                content: <SupplyDemandShockScanTab assetClass="forex" defaultTicker="EUR/USD" />,
+                              },
+                              {
                                 id: "session-analysis",
                                 label: "Session Analysis",
                                 content: <SessionAnalysisTab defaultTicker="EUR/USD" />,
@@ -766,6 +777,11 @@ export default async function Home() {
                                 content: <SessionAnalysisTab defaultTicker="SPY" />,
                               },
                               {
+                                id: "shock-scan",
+                                label: "Supply/Demand Shock Scan",
+                                content: <SupplyDemandShockScanTab assetClass="future" defaultTicker="SPY" />,
+                              },
+                              {
                                 id: "sources",
                                 label: "Research Sources",
                                 content: <FuturesCommoditiesResearchSourcesTab assetLabel="futures" />,
@@ -831,9 +847,9 @@ export default async function Home() {
                                 content: <RollingMoveStatsTab defaultTicker="GLD" defaultAssetClass="commodity" />,
                               },
                               {
-                                id: "buyback-anomaly",
-                                label: "Buyback Anomaly",
-                                content: <BuybackAnomalyTab />,
+                                id: "shock-scan",
+                                label: "Supply/Demand Shock Scan",
+                                content: <SupplyDemandShockScanTab assetClass="commodity" defaultTicker="GLD" />,
                               },
                               {
                                 id: "sources",

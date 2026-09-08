@@ -1,5 +1,5 @@
 import { fetchFredSeries, latest } from "@/lib/data/fred";
-import type { FredSeriesPoint, YieldCurveInversion, YieldCurvePoint, YieldCurveResult } from "../types";
+import type { FredSeriesPoint, YieldCurveInversion, YieldCurveNamedSpread, YieldCurvePoint, YieldCurveResult } from "../types";
 
 // The full standard Treasury constant-maturity curve — bond-macro.ts and
 // macro-overview.ts only ever fetch T10Y2Y (a spread, not a level) and
@@ -18,6 +18,15 @@ const TREASURY_TENORS: { label: string; seriesId: string }[] = [
   { label: "10 Year", seriesId: "DGS10" },
   { label: "20 Year", seriesId: "DGS20" },
   { label: "30 Year", seriesId: "DGS30" },
+];
+
+// Named, non-adjacent spreads worth tracking explicitly beyond the adjacent-pair
+// inversion sweep below — 30s10s in particular is the long end of the curve
+// Treasury's own buyback operations target (see the "20Y to 30Y" bucket in the
+// Treasury Buyback Anomaly tool), so it's the relevant curve-shape context for
+// interpreting those operations' price reactions.
+const NAMED_SPREADS: { label: string; longTenorLabel: string; shortTenorLabel: string }[] = [
+  { label: "30Y − 10Y", longTenorLabel: "30 Year", shortTenorLabel: "10 Year" },
 ];
 
 // BAMLH0A0HYM2 (high yield) is already used by bond-macro.ts/macro-overview.ts;
@@ -73,6 +82,22 @@ export async function getYieldCurve(): Promise<YieldCurveResult> {
     }
   }
 
+  const namedSpreads: YieldCurveNamedSpread[] = NAMED_SPREADS.map((s) => {
+    const longPoint = points.find((p) => p.tenorLabel === s.longTenorLabel);
+    const shortPoint = points.find((p) => p.tenorLabel === s.shortTenorLabel);
+    if (!longPoint || longPoint.value === null || !shortPoint || shortPoint.value === null) {
+      dataLimitations.push(`${s.label} spread unavailable — one or both tenors failed to fetch.`);
+      return { label: s.label, longTenorLabel: s.longTenorLabel, shortTenorLabel: s.shortTenorLabel, spreadPct: null, asOfDate: null };
+    }
+    return {
+      label: s.label,
+      longTenorLabel: s.longTenorLabel,
+      shortTenorLabel: s.shortTenorLabel,
+      spreadPct: longPoint.value - shortPoint.value,
+      asOfDate: longPoint.date,
+    };
+  });
+
   const spreadResults = await Promise.allSettled(CREDIT_SPREAD_SERIES.map((s) => fetchFredSeries(s.seriesId, 5)));
   const creditSpreads: FredSeriesPoint[] = [];
   CREDIT_SPREAD_SERIES.forEach((s, i) => {
@@ -93,5 +118,5 @@ export async function getYieldCurve(): Promise<YieldCurveResult> {
     'An "inverted" segment is any adjacent tenor pair (in ascending order) where the longer tenor currently yields less than the shorter one — a full-curve generalization of the single 10Y-2Y check used on the Bonds Overview tab and the Macro tab.'
   );
 
-  return { points, inversions, creditSpreads, dataLimitations };
+  return { points, inversions, namedSpreads, creditSpreads, dataLimitations };
 }

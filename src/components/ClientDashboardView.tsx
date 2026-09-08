@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { StatCard } from "./StatCard";
 import { PriceChart } from "./PriceChart";
 import { AllocationPieChart, withCashSlice } from "./AllocationPieChart";
+import { RealizedPnlPanel } from "./RealizedPnlPanel";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
-import type { AssetClass, PortfolioSummary } from "@/lib/agents/trading-agent/types";
+import type { AssetClass, PortfolioSummary, RealizedSale } from "@/lib/agents/trading-agent/types";
+import type { WashSaleFlag } from "@/lib/agents/trading-agent/skills/wash-sale-check";
 
 function fmtUsd(v: number | null): string {
   return v !== null ? v.toLocaleString("en-US", { style: "currency", currency: "USD" }) : "N/A";
@@ -28,6 +30,9 @@ interface DashboardResponse {
   summary: PortfolioSummary | null;
   holdingsCount: number;
   cashBalance: number;
+  sales: RealizedSale[];
+  totalRealizedPnl: number;
+  washSaleFlags: WashSaleFlag[];
 }
 
 export function ClientDashboardView({ slug }: { slug: string }) {
@@ -140,7 +145,7 @@ export function ClientDashboardView({ slug }: { slug: string }) {
     );
   }
 
-  const { clientName, summary, holdingsCount, cashBalance } = data!;
+  const { clientName, summary, holdingsCount, cashBalance, sales, totalRealizedPnl, washSaleFlags } = data!;
   const holdingsValue = summary?.totalValue ?? 0;
   const totalAccountValue = holdingsValue + cashBalance;
 
@@ -261,6 +266,8 @@ export function ClientDashboardView({ slug }: { slug: string }) {
             )}
           </div>
         )}
+
+        <RealizedPnlPanel sales={sales} totalRealizedPnl={totalRealizedPnl} washSaleFlags={washSaleFlags} />
 
         <p className="text-xs pt-6" style={{ color: "var(--text-2)", borderTop: "1px solid var(--line)" }}>
           Real market data, no fabricated figures. This is a portfolio snapshot, not investment advice.

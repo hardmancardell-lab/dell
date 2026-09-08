@@ -79,6 +79,20 @@ export function YieldCurveTab() {
           </div>
 
           <div>
+            <div className="jv-strip-title">Named Spreads</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {data.namedSpreads.map((s) => (
+                <StatCard
+                  key={s.label}
+                  label={s.label}
+                  value={s.spreadPct !== null ? `${s.spreadPct >= 0 ? "+" : ""}${(s.spreadPct * 100).toFixed(0)} bps` : "N/A"}
+                  sub={s.asOfDate ? `${s.asOfDate} — negative means ${s.longTenorLabel} yields less than ${s.shortTenorLabel}` : undefined}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
             <div className="jv-strip-title">Credit Spreads</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {data.creditSpreads.map((s) => (
