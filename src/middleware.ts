@@ -31,6 +31,12 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/gap-calendar-study",
   "/api/interaction-effects",
   "/api/correlation-matrix",
+  // TEMP: stress-test batch for this session's new/moved features — revert after.
+  "/api/yield-curve",
+  "/api/buyback-anomaly",
+  "/api/corporate-buyback-offering",
+  "/api/portfolio-shock-scan",
+  "/api/guided-trade-signals",
 ];
 
 function isPublicPath(pathname: string): boolean {
