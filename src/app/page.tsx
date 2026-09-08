@@ -677,6 +677,15 @@ export default async function Home() {
                                 content: <BacktestSuiteTab key="currency-backtest-suite" defaultTicker="EUR/USD" assetClass="forex" />,
                               },
                               {
+                                id: "gap-calendar-study",
+                                label: "Gap & Calendar Study",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <GapCalendarStudyTab key="currency-gap-calendar-study" defaultTicker="EUR/USD" />
+                                  </RequiresPlacementTier>
+                                ),
+                              },
+                              {
                                 id: "orb",
                                 label: "ORB Strategy",
                                 content: (
@@ -727,6 +736,15 @@ export default async function Home() {
                                 id: "calendar-effects",
                                 label: "Calendar Effects",
                                 content: <CalendarEffectsTab key="futures-calendar-effects" defaultTicker="SPY" assetClass="future" />,
+                              },
+                              {
+                                id: "gap-calendar-study",
+                                label: "Gap & Calendar Study",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <GapCalendarStudyTab key="futures-gap-calendar-study" defaultTicker="SPY" />
+                                  </RequiresPlacementTier>
+                                ),
                               },
                               {
                                 id: "orb",
@@ -788,6 +806,15 @@ export default async function Home() {
                                 id: "calendar-effects",
                                 label: "Calendar Effects",
                                 content: <CalendarEffectsTab key="commodities-calendar-effects" defaultTicker="GLD" assetClass="commodity" />,
+                              },
+                              {
+                                id: "gap-calendar-study",
+                                label: "Gap & Calendar Study",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <GapCalendarStudyTab key="commodities-gap-calendar-study" defaultTicker="GLD" />
+                                  </RequiresPlacementTier>
+                                ),
                               },
                               {
                                 id: "orb",
