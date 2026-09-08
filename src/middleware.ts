@@ -38,6 +38,10 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/portfolio-shock-scan",
   "/api/guided-trade-signals",
   "/api/debug-jpy-macro",
+  "/api/historical-backtest",
+  "/api/calendar-day-of-week",
+  "/api/calendar-time-of-day",
+  "/api/orb-backtest",
 ];
 
 function isPublicPath(pathname: string): boolean {
