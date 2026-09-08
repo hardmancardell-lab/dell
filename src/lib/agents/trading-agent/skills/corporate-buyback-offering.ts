@@ -24,9 +24,11 @@ const OFFERING_FORMS = ["424B1", "424B2", "424B3", "424B4", "424B5", "S-1", "S-3
  * imply more rigor than the sample size can support. See dataLimitations for
  * every real constraint.
  *
- * 1. Offerings: real SEC EDGAR filing dates for actual registered secondary/
- *    follow-on equity offerings (424B-series, S-1, S-3) — a real, filed
- *    dilution event, not an inferred one from share-count deltas.
+ * 1. Offerings: real SEC EDGAR filing dates for registered securities
+ *    offerings (424B-series, S-1, S-3) — a real, filed event, not one
+ *    inferred from share-count deltas. Important caveat confirmed against
+ *    real data: these forms register equity OR debt, and this tool can't
+ *    tell which from the form type alone (see dataLimitations).
  * 2. Buyback disclosures: FMP's real quarterly cash-flow-statement
  *    commonStockRepurchased figure, dated to that filing's real filing date
  *    — the closest real, public proxy for "buyback activity became known,"
@@ -50,6 +52,9 @@ export async function runCorporateBuybackOfferingStudy(ticker: string): Promise<
 
   dataLimitations.push(
     "SEC EDGAR's submissions endpoint returns a bounded window of recent filings — this scan is capped to the 10 most recent matching filings, so a company with a long offering history further back won't show its full record here."
+  );
+  dataLimitations.push(
+    "424B-series/S-1/S-3 filings register EITHER equity OR debt securities — the form type alone doesn't say which, and this tool doesn't parse the filing itself to tell them apart. A company that regularly issues corporate bonds (e.g. Apple) will show 424B2 filings here that are real bond offerings, not equity dilution. Click through to the filing before treating any event here as a real dilution event."
   );
   dataLimitations.push(
     "FMP's free tier caps financial-statement history to 5 periods regardless of what's requested — with quarterly data that's roughly the last year, too few for a reliable regression, so buyback disclosures are shown as directional per-event data only (no fitted line)."

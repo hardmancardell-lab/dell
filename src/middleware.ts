@@ -31,7 +31,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/gap-calendar-study",
   "/api/interaction-effects",
   "/api/correlation-matrix",
-  "/api/corporate-buyback-offering", // TEMP: verifying the new corporate-buyback-offering skill against real SEC/FMP data, then reverting
 ];
 
 function isPublicPath(pathname: string): boolean {

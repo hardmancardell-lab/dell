@@ -39,11 +39,15 @@ export function CorporateBuybackOfferingTab() {
     <div className="jarvis flex flex-col gap-6">
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Two separate real event studies for {ticker || "a ticker"}: (1) how the stock has actually reacted to its own
-        real, filed secondary/follow-on equity offerings (SEC EDGAR 424B*/S-1/S-3 filings — a genuine registered
-        dilution event, not an inferred one), and (2) its real quarterly buyback disclosures (FMP&apos;s cash-flow
-        statement) alongside that filing date&apos;s price move. Deliberately simpler statistics than the Treasury
-        Buyback Anomaly tool — see the disclosures below for exactly why.
+        real, filed securities offerings (SEC EDGAR 424B-series/S-1/S-3 filings), and (2) its real quarterly buyback
+        disclosures (FMP&apos;s cash-flow statement) alongside that filing date&apos;s price move. Deliberately
+        simpler statistics than the Treasury Buyback Anomaly tool — see the disclosures below for exactly why.
       </p>
+      <div className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
+        Confirmed against real data: these SEC form types register equity <strong>or</strong> debt securities — a
+        company that regularly issues corporate bonds will show real bond offerings here, not equity dilution. Click
+        into a filing before treating any event as a real dilution event.
+      </div>
 
       <div className="flex items-end gap-3">
         <div>
