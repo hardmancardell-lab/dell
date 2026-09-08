@@ -37,6 +37,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/corporate-buyback-offering",
   "/api/portfolio-shock-scan",
   "/api/guided-trade-signals",
+  "/api/debug-jpy-macro",
 ];
 
 function isPublicPath(pathname: string): boolean {
