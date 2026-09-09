@@ -31,7 +31,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/gap-calendar-study",
   "/api/interaction-effects",
   "/api/correlation-matrix",
-  "/api/historical-backtest", // TEMP: verifying the new stop-loss overlay, then reverting
 ];
 
 function isPublicPath(pathname: string): boolean {
