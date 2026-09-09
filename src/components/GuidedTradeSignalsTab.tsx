@@ -16,8 +16,13 @@ function fmtRangePct(lower: number | null, upper: number | null): string | null 
   return `${f(lower)} to ${f(upper)}`;
 }
 
+function formatOptionLine(o: NonNullable<GuidedTradeSignal["suggestedOption"]>): string {
+  const exp = new Date(`${o.expirationDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return `${o.underlyingSymbol} $${o.strikePrice} ${o.optionRight === "call" ? "Call" : "Put"}, exp ${exp}`;
+}
+
 function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState<"option" | "stock" | null>(null);
   const [skipped, setSkipped] = useState(false);
   const range = fmtRangePct(signal.bootstrapCiLower, signal.bootstrapCiUpper);
   const sessionId = typeof window !== "undefined" ? getOrCreateSessionId() : "";
@@ -92,10 +97,22 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
         Exit: {signal.exitType === "time" ? "fixed holding period" : "price target/stop"} — {signal.exitRule}
       </p>
 
+      {signal.suggestedOption && (
+        <p className="text-sm mb-3" style={{ color: "var(--text-1)" }}>
+          Suggested option trade: <strong>{formatOptionLine(signal.suggestedOption)}</strong> — defined risk (max loss
+          is the premium paid), expiring past this setup&apos;s own {signal.horizonLabel} horizon.
+        </p>
+      )}
+
       {!expanded ? (
-        <div className="flex gap-2">
-          <button onClick={() => setExpanded(true)} className="jv-btn">
-            Take it (Paper Trade)
+        <div className="flex gap-2 flex-wrap">
+          {signal.suggestedOption && (
+            <button onClick={() => setExpanded("option")} className="jv-btn">
+              Take it (Option)
+            </button>
+          )}
+          <button onClick={() => setExpanded("stock")} className={signal.suggestedOption ? "jv-btn-outline" : "jv-btn"}>
+            Take it ({signal.suggestedOption ? "Stock instead" : "Paper Trade"})
           </button>
           <button onClick={() => setSkipped(true)} className="jv-btn-outline">
             Skip
@@ -103,14 +120,28 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
         </div>
       ) : (
         <div className="pt-3" style={{ borderTop: "1px solid var(--line)" }}>
-          <PaperOrderForm
-            sessionId={sessionId}
-            prefillSymbol={signal.ticker}
-            prefillAssetClass={signal.assetClass}
-            prefillPrice={signal.currentPrice}
-            compact
-            onFilled={() => setSkipped(true)}
-          />
+          {expanded === "option" && signal.suggestedOption ? (
+            <PaperOrderForm
+              sessionId={sessionId}
+              prefillOption={{
+                underlyingSymbol: signal.suggestedOption.underlyingSymbol,
+                expirationDate: signal.suggestedOption.expirationDate,
+                optionRight: signal.suggestedOption.optionRight,
+                strikePrice: signal.suggestedOption.strikePrice,
+              }}
+              compact
+              onFilled={() => setSkipped(true)}
+            />
+          ) : (
+            <PaperOrderForm
+              sessionId={sessionId}
+              prefillSymbol={signal.ticker}
+              prefillAssetClass={signal.assetClass}
+              prefillPrice={signal.currentPrice}
+              compact
+              onFilled={() => setSkipped(true)}
+            />
+          )}
         </div>
       )}
 

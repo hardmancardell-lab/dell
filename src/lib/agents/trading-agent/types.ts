@@ -1658,6 +1658,60 @@ export interface StrategyHypothesis {
 
 export type StopLossVerdict = "stops_hurt" | "stops_help" | "inconclusive";
 
+// --- Strategy Suggestions (internal forward-testing ledger) ---
+
+/**
+ * "long_option" — a single call or put matching the signal's direction,
+ * ATM, expiring past the signal's own horizon. Fully placeable through the
+ * existing single-leg paper-trading engine (see PaperOrderForm's
+ * prefillOption path) — this is the only variant ever shown to a client as
+ * a "place it" suggestion.
+ *
+ * "debit_spread" — the same ATM long leg, paired with a short leg at the
+ * expiration's contract closest to 0.30 absolute delta, further OTM. Real
+ * economics (net debit, max profit/loss) are tracked in the internal
+ * ledger for comparison, but this app's paper-trading engine has no
+ * two-leg order type, so it is never offered to a client to place — it
+ * exists purely for the admin-side research comparison the user asked for.
+ */
+export type OptionStrategyVariant = "long_option" | "debit_spread";
+
+export interface SuggestedOptionContract {
+  underlyingSymbol: string;
+  expirationDate: string;
+  optionRight: PaperOptionRight;
+  strikePrice: number;
+}
+
+export interface StrategySuggestion {
+  id: string;
+  createdAt: string;
+  ticker: string;
+  strategyType: string; // the guided signal's strategyType, e.g. "meanReversionOversold"
+  horizonLabel: string;
+  horizonDays: number;
+  direction: "long" | "short";
+  variant: OptionStrategyVariant;
+  underlyingSymbol: string;
+  expirationDate: string;
+  optionRight: PaperOptionRight;
+  longStrike: number;
+  shortStrike: number | null; // debit_spread only
+  entryDebit: number; // net premium paid per contract (long leg ask, minus short leg bid for a spread)
+  entryDate: string; // YYYY-MM-DD
+  status: "open" | "closed";
+  exitDebit: number | null;
+  exitDate: string | null;
+  realizedPnlPerContract: number | null; // (exitDebit - entryDebit) * 100, options contract multiplier
+  closeReason: string | null; // e.g. "reached horizon", "expired worthless before horizon"
+}
+
+export interface StrategySuggestionPair {
+  longOption: StrategySuggestion | null;
+  debitSpread: StrategySuggestion | null;
+  dataLimitations: string[];
+}
+
 // --- Treasury Buyback / GLD Event-Study Regression ---
 
 /** One real Treasury buyback operation (U.S. Treasury Fiscal Data API — verified live endpoint, not guessed). */
@@ -1821,6 +1875,10 @@ export interface GuidedTradeSignal {
   largestLossPct: number | null;
   maxDrawdownPct: number | null;
   stopLossVerdict: StopLossVerdict | null;
+  // The client-placeable suggestion — single-leg, ATM, expiring past this
+  // signal's own horizon. Null if no live options chain/expiration could be
+  // resolved for this ticker (e.g. no options trade on it).
+  suggestedOption: SuggestedOptionContract | null;
   // Populated only when the request comes from an authenticated user with a
   // linked advisor_clients portfolio — null/false for the general public.
   ownedByUser: boolean;

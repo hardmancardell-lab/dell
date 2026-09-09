@@ -4,6 +4,8 @@ import { computeMomentum, computeVolumeDisplacement } from "./scan-signals";
 import { computeMeanReversion } from "./mean-reversion";
 import { fetchQuote } from "@/lib/data/market-data";
 import { getSectorForSymbol } from "./sector-lookup";
+import { toEasternParts } from "./time-windows";
+import { getSuggestedOptionContract, recordSuggestionsForSignal } from "./strategy-suggestion";
 import type { DailyBar, GuidedTradeSignal, StrategyHypothesis } from "../types";
 
 /**
@@ -80,6 +82,7 @@ export async function getGuidedTradeSignals(ownedSymbols: string[] = []): Promis
     [...ownedSet].map(async (symbol) => ({ symbol, sector: await getSectorForSymbol(symbol) }))
   );
 
+  const todayDateKey = toEasternParts(Date.now()).dateKey;
   const results: GuidedTradeSignal[] = [];
   for (const h of bestByKey.values()) {
     try {
@@ -99,7 +102,7 @@ export async function getGuidedTradeSignals(ownedSymbols: string[] = []): Promis
         }
       }
 
-      results.push({
+      const signal: GuidedTradeSignal = {
         ticker: h.ticker,
         assetClass: h.assetClass,
         strategyType: h.strategyType,
@@ -116,9 +119,23 @@ export async function getGuidedTradeSignals(ownedSymbols: string[] = []): Promis
         largestLossPct: h.largestLossPct,
         maxDrawdownPct: h.maxDrawdownPct,
         stopLossVerdict: h.stopLossVerdict,
+        suggestedOption: null,
         ownedByUser,
         relatedHoldingSymbol,
-      });
+      };
+
+      // Best-effort, isolated from the signal itself: a broken options chain
+      // for this ticker degrades to no client-facing suggestion rather than
+      // dropping the whole signal, and never blocks the internal ledger
+      // write from being attempted separately.
+      try {
+        signal.suggestedOption = await getSuggestedOptionContract(signal, todayDateKey);
+      } catch {
+        signal.suggestedOption = null;
+      }
+      await recordSuggestionsForSignal(signal, todayDateKey);
+
+      results.push(signal);
     } catch {
       // Per-ticker isolation, same philosophy as watchlist-scan.ts — one
       // bad symbol never blanks the rest of the day's guided signals.

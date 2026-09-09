@@ -14,6 +14,8 @@ import { isPaperTradingDbConfigured } from "@/lib/data/paper-trading-db";
 import { runHypothesisSweep } from "@/lib/agents/trading-agent/skills/hypothesis-sweep";
 import type { HypothesisSweepResult } from "@/lib/agents/trading-agent/skills/hypothesis-sweep";
 import { isHypothesisLedgerConfigured } from "@/lib/data/hypothesis-ledger-db";
+import { resolveMaturedSuggestions } from "@/lib/agents/trading-agent/skills/strategy-suggestion";
+import { isStrategySuggestionDbConfigured } from "@/lib/data/strategy-suggestion-db";
 import type { AlertEvaluation, AlertRule, PaperOrderCheckResult } from "@/lib/agents/trading-agent/types";
 
 export const maxDuration = 60;
@@ -80,12 +82,25 @@ export async function GET(request: Request) {
     hypothesisSweep = { skipped: err instanceof Error ? err.message : "unknown error" };
   }
 
+  // Strategy suggestion ledger maturity check — independent of the
+  // once-a-week hypothesis sweep and the market-hours gate below, since a
+  // suggestion's horizon can mature on any day. Cheap (only touches open
+  // rows), so it runs on every cron tick regardless of market hours.
+  let strategySuggestions: Awaited<ReturnType<typeof resolveMaturedSuggestions>> | { skipped: string };
+  try {
+    strategySuggestions = !isStrategySuggestionDbConfigured()
+      ? { skipped: "Strategy suggestion ledger DB not configured." }
+      : await resolveMaturedSuggestions();
+  } catch (err) {
+    strategySuggestions = { skipped: err instanceof Error ? err.message : "unknown error" };
+  }
+
   if (!isAlertsDbConfigured()) {
-    return NextResponse.json({ ok: true, skipped: "Alerts DB not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset).", paperOrders, hypothesisSweep });
+    return NextResponse.json({ ok: true, skipped: "Alerts DB not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset).", paperOrders, hypothesisSweep, strategySuggestions });
   }
 
   if (!isDuringMarketHours()) {
-    return NextResponse.json({ ok: true, skipped: "Outside market hours (9:30am-4:00pm ET, weekdays).", paperOrders, hypothesisSweep });
+    return NextResponse.json({ ok: true, skipped: "Outside market hours (9:30am-4:00pm ET, weekdays).", paperOrders, hypothesisSweep, strategySuggestions });
   }
 
   const rules = await getActiveRulesWithSubscriptions();
@@ -177,5 +192,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ rulesEvaluated: rules.length, alertsSent, errors, paperOrders, hypothesisSweep });
+  return NextResponse.json({ rulesEvaluated: rules.length, alertsSent, errors, paperOrders, hypothesisSweep, strategySuggestions });
 }

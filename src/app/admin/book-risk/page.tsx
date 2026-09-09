@@ -15,6 +15,8 @@ function Dashboard({ data }: { data: BookRiskSummary }) {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="max-w-4xl mx-auto px-6 py-10">
         <a href="/admin/clients" className="text-xs text-teal-400 hover:underline">→ Client Dashboards</a>
+        {" · "}
+        <a href="/admin/strategy-ledger" className="text-xs text-teal-400 hover:underline">→ Strategy Ledger</a>
         <h1 className="text-2xl font-bold text-zinc-50 mt-1">Book Risk</h1>
         <p className="text-sm text-zinc-400 mt-1">
           Every real client holding, cross-referenced against today&apos;s live+validated Guided Trade Signals —
