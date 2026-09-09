@@ -4,9 +4,14 @@ import { useState } from "react";
 import { ORB_LOOKBACK_MONTH_OPTIONS } from "@/lib/agents/trading-agent/constants";
 import { GlossaryTerm } from "./GlossaryTerm";
 import { useTrackEvent } from "@/lib/analytics/use-track";
-import type { OrbTickerResult } from "@/lib/agents/trading-agent/types";
+import type { AtrOrbTickerResult, OrbTickerResult } from "@/lib/agents/trading-agent/types";
+
+type RangeMode = "clock" | "atr";
+type CombinedResult = (OrbTickerResult | AtrOrbTickerResult) & { rangeMode: RangeMode };
 
 const RANGE_OPTIONS: (5 | 15 | 30)[] = [5, 15, 30];
+const ATR_MULTIPLIER_OPTIONS = [0.25, 0.5, 0.75, 1];
+const ATR_PERIOD_OPTIONS = [7, 14, 21];
 const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal whitespace-nowrap";
 const TD_CLASS = "py-2 pr-4 whitespace-nowrap";
 
@@ -51,9 +56,12 @@ const TRADE_LOG_DISPLAY_LIMIT = 50;
 /** Reused across Equities/Currency/Futures/Commodities' own ORB Ticker Detail tabs — a single .jarvis island here upgrades all four. */
 export function OrbDetailTab({ defaultTicker = "AAPL" }: { defaultTicker?: string }) {
   const [ticker, setTicker] = useState(defaultTicker);
+  const [rangeMode, setRangeMode] = useState<RangeMode>("clock");
   const [openingRangeMinutes, setOpeningRangeMinutes] = useState<5 | 15 | 30>(15);
+  const [atrMultiplier, setAtrMultiplier] = useState(0.5);
+  const [atrPeriodDays, setAtrPeriodDays] = useState(14);
   const [lookbackMonths, setLookbackMonths] = useState(3);
-  const [result, setResult] = useState<OrbTickerResult | null>(null);
+  const [result, setResult] = useState<CombinedResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { track } = useTrackEvent();
@@ -65,17 +73,19 @@ export function OrbDetailTab({ defaultTicker = "AAPL" }: { defaultTicker?: strin
     setError(null);
     setResult(null);
     try {
-      const res = await fetch(
-        `/api/orb-backtest?ticker=${encodeURIComponent(ticker)}&openingRangeMinutes=${openingRangeMinutes}&lookbackMonths=${lookbackMonths}`
-      );
+      const url =
+        rangeMode === "atr"
+          ? `/api/orb-backtest?ticker=${encodeURIComponent(ticker)}&mode=atr&atrMultiplier=${atrMultiplier}&atrPeriodDays=${atrPeriodDays}&lookbackMonths=${lookbackMonths}`
+          : `/api/orb-backtest?ticker=${encodeURIComponent(ticker)}&openingRangeMinutes=${openingRangeMinutes}&lookbackMonths=${lookbackMonths}`;
+      const res = await fetch(url);
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "Unknown error");
         track("api_error", { tab: "ORB Ticker Detail", symbol: ticker, metadata: { endpoint: "orb-backtest", status: res.status } });
       } else {
-        const r = json as OrbTickerResult;
+        const r = { ...json, rangeMode } as CombinedResult;
         setResult(r);
-        track("orb_backtest_run", { tab: "ORB Ticker Detail", symbol: ticker, metadata: { openingRangeMinutes, lookbackMonths, passesAllThreeBars: r.horizons?.some((h) => h.passesAllThreeBars) ?? false } });
+        track("orb_backtest_run", { tab: "ORB Ticker Detail", symbol: ticker, metadata: { rangeMode, openingRangeMinutes, atrMultiplier, atrPeriodDays, lookbackMonths, passesAllThreeBars: r.horizons?.some((h) => h.passesAllThreeBars) ?? false } });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -88,21 +98,55 @@ export function OrbDetailTab({ defaultTicker = "AAPL" }: { defaultTicker?: strin
   return (
     <div className="jarvis">
       <p className="jv-lede">
-        Opening Range Breakout — the high/low of the first N minutes after the open defines the range; a
-        breakout fires the first time price closes beyond it. Backtested with the same FDR/bootstrap/
-        out-of-sample rigor as the equity Backtest tab, long and short breakouts kept separate since their
-        edge is expected to differ.
+        Opening Range Breakout — a range defines the level a real breakout has to close beyond. Clock mode
+        uses the high/low of the first N minutes after the open; ATR mode uses the instrument&apos;s own
+        recent volatility instead of a fixed window, which fits an instrument (FX pairs especially) with no
+        single clean session open better than a clock-time range does. Backtested with the same
+        FDR/bootstrap/out-of-sample rigor as the equity Backtest tab either way, long and short breakouts
+        kept separate since their edge is expected to differ.
       </p>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        {(
+          [
+            ["clock", "Clock Window"],
+            ["atr", "ATR-Sized"],
+          ] as [RangeMode, string][]
+        ).map(([m, label]) => (
+          <button key={m} type="button" onClick={() => setRangeMode(m)} className={rangeMode === m ? "jv-btn" : "jv-btn-outline"}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       <form onSubmit={runBacktest} className="flex flex-wrap gap-3 mb-6">
         <input value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="Ticker, e.g. AAPL" className="jv-input w-32" />
-        <select value={openingRangeMinutes} onChange={(e) => setOpeningRangeMinutes(Number(e.target.value) as 5 | 15 | 30)} className="jv-select">
-          {RANGE_OPTIONS.map((m) => (
-            <option key={m} value={m}>
-              {m}min range
-            </option>
-          ))}
-        </select>
+        {rangeMode === "clock" ? (
+          <select value={openingRangeMinutes} onChange={(e) => setOpeningRangeMinutes(Number(e.target.value) as 5 | 15 | 30)} className="jv-select">
+            {RANGE_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {m}min range
+              </option>
+            ))}
+          </select>
+        ) : (
+          <>
+            <select value={atrMultiplier} onChange={(e) => setAtrMultiplier(Number(e.target.value))} className="jv-select">
+              {ATR_MULTIPLIER_OPTIONS.map((m) => (
+                <option key={m} value={m}>
+                  {m}x ATR
+                </option>
+              ))}
+            </select>
+            <select value={atrPeriodDays} onChange={(e) => setAtrPeriodDays(Number(e.target.value))} className="jv-select">
+              {ATR_PERIOD_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  ATR({p})
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <select value={lookbackMonths} onChange={(e) => setLookbackMonths(Number(e.target.value))} className="jv-select">
           {ORB_LOOKBACK_MONTH_OPTIONS.map((m) => (
             <option key={m} value={m}>
@@ -125,15 +169,23 @@ export function OrbDetailTab({ defaultTicker = "AAPL" }: { defaultTicker?: strin
         <div className="flex flex-col gap-6">
           {result.ticker.includes("/") && (
             <div className="jv-card text-xs" style={{ borderColor: "var(--verdict-dim)", color: "var(--verdict)" }}>
-              The opening range is built around a single NYSE/Nasdaq session open (9:30am ET). Spot forex
-              trades 24/5 with no single daily open, so this concept doesn&apos;t map cleanly onto currency
-              pairs — read these results as an approximation using 9:30am ET as an arbitrary anchor time,
-              not a true session-open breakout the way it is for equities.
+              {result.rangeMode === "clock"
+                ? <>The opening range is built around a single NYSE/Nasdaq session open (9:30am ET). Spot forex
+                  trades 24/5 with no single daily open, so this concept doesn&apos;t map cleanly onto currency
+                  pairs — read these results as an approximation using 9:30am ET as an arbitrary anchor time,
+                  not a true session-open breakout the way it is for equities. ATR-Sized mode (above) is the
+                  better fit for FX — it sizes the range off the pair&apos;s own volatility instead of a clock window.</>
+                : <>The range here is sized off {result.ticker}&apos;s own volatility, not a fixed clock window — a
+                  better fit for a 24/5 pair than the Clock Window mode, though the day-open anchor (9:30am ET
+                  bar grouping) is still a convention borrowed from equities, not a true FX session reset.</>}
             </div>
           )}
           <div className="text-sm" style={{ color: "var(--text-2)" }}>
-            {result.ticker} — {result.openingRangeMinutes}min range over {result.lookbackMonths} month(s):{" "}
-            {result.tradingDaysScanned} trading days scanned ({result.longOccurrences} long breakouts,{" "}
+            {result.ticker} —{" "}
+            {result.rangeMode === "clock"
+              ? `${(result as OrbTickerResult).openingRangeMinutes}min range`
+              : `${(result as AtrOrbTickerResult).atrMultiplier}x ATR(${(result as AtrOrbTickerResult).atrPeriodDays})`}{" "}
+            over {result.lookbackMonths} month(s): {result.tradingDaysScanned} trading days scanned ({result.longOccurrences} long breakouts,{" "}
             {result.shortOccurrences} short breakouts).
           </div>
 

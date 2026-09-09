@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { PaperOrderForm } from "./PaperOrderForm";
+import { OptionScenarioPanel } from "./OptionScenarioPanel";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import type { GuidedTradeSignal } from "@/lib/agents/trading-agent/types";
 
@@ -98,10 +99,19 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
       </p>
 
       {signal.suggestedOption && (
-        <p className="text-sm mb-3" style={{ color: "var(--text-1)" }}>
-          Suggested option trade: <strong>{formatOptionLine(signal.suggestedOption)}</strong> — defined risk (max loss
-          is the premium paid), expiring past this setup&apos;s own {signal.horizonLabel} horizon.
-        </p>
+        <>
+          <p className="text-sm mb-2" style={{ color: "var(--text-1)" }}>
+            Suggested option trade: <strong>{formatOptionLine(signal.suggestedOption)}</strong> — defined risk (max loss
+            is the premium paid), expiring past this setup&apos;s own {signal.horizonLabel} horizon.
+          </p>
+          <OptionScenarioPanel
+            ticker={signal.suggestedOption.underlyingSymbol}
+            expirationDate={signal.suggestedOption.expirationDate}
+            optionRight={signal.suggestedOption.optionRight}
+            longStrike={signal.suggestedOption.strikePrice}
+            horizonDays={Number(signal.horizonLabel.match(/(\d+)/)?.[1] ?? 20)}
+          />
+        </>
       )}
 
       {!expanded ? (

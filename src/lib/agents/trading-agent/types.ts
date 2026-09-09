@@ -1246,6 +1246,31 @@ export interface OrbTickerResult {
   dataLimitations: string[];
 }
 
+/**
+ * Same event (a real breakout) and same statistical pipeline as
+ * OrbTickerResult, but the range isn't a fixed clock window — it's the
+ * underlying's own recent volatility (atrMultiplier x a trailing
+ * atrPeriodDays-day Average True Range on daily bars, computed only from
+ * days strictly before the trading day being evaluated — no lookahead)
+ * applied around that day's open. Built for instruments (FX pairs
+ * especially) where a fixed N-minute opening range is a less natural
+ * concept than for a single-exchange equity open.
+ */
+export interface AtrOrbTickerResult {
+  ticker: string;
+  atrMultiplier: number;
+  atrPeriodDays: number;
+  lookbackMonths: number;
+  tradingDaysScanned: number;
+  daysSkippedNoAtr: number;
+  longOccurrences: number;
+  shortOccurrences: number;
+  todaySnapshot: OrbTodaySnapshot | null;
+  horizons: OrbHorizonResult[];
+  tradeLog: OrbTradeLogRow[];
+  dataLimitations: string[];
+}
+
 export interface OrbScanResult {
   symbol: string;
   assetClass: AssetClass;
