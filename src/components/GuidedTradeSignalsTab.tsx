@@ -68,6 +68,13 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
           {signal.exitType === "time" && " — this is a fixed-holding-period exit, not a stop-loss, so this is the only downside protection this setup has."}
         </p>
       )}
+      {signal.exitType === "time" && (
+        <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+          Want to know if a stop-loss would actually help here? Run {signal.ticker} / {signal.strategyType} in the
+          Backtest tab — it now shows a real stop-loss overlay (tested at -1%/-2%/-3%/-5%) against this exact same
+          historical sample, not a guess.
+        </p>
+      )}
       <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
         Exit: {signal.exitType === "time" ? "fixed holding period" : "price target/stop"} — {signal.exitRule}
       </p>

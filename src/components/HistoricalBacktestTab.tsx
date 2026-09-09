@@ -210,6 +210,53 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
             AND has a bootstrap CI that excludes zero — all three, not one.
           </p>
 
+          {result.stopLossOverlay.length > 0 && (
+            <div className="jv-card">
+              <div className="jv-br-b" />
+              <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
+                Stop-Loss Overlay — Does a Stop Help or Hurt?
+              </div>
+              <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+                Same real occurrences as the table above, re-exited early wherever a hypothetical resting stop at
+                each level would have triggered first. Compare a horizon&apos;s row here against its baseline row
+                above — a stop that raises win rate but tanks mean return (or vice versa) is telling you something
+                real about this setup&apos;s actual risk shape, not just its headline win rate.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }} className="text-left">
+                      <th className={TH_CLASS}>Stop</th>
+                      <th className={TH_CLASS}>Horizon</th>
+                      <th className={TH_CLASS}>N</th>
+                      <th className={TH_CLASS}>Stopped Out</th>
+                      <th className={TH_CLASS}>Win Rate</th>
+                      <th className={TH_CLASS}>Mean Return</th>
+                      <th className={TH_CLASS}>Largest Loss</th>
+                      <th className={TH_CLASS}>Max Drawdown</th>
+                    </tr>
+                  </thead>
+                  <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {result.stopLossOverlay.map((s) => (
+                      <tr key={`${s.stopPct}-${s.horizonDays}`} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                        <td className={`${TD_CLASS} font-medium font-mono`} style={{ color: "var(--text-0)" }}>-{s.stopPct}%</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{s.horizonDays}d</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{s.sampleSize}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>
+                          {s.sampleSize > 0 ? `${s.stoppedOutCount} (${((s.stoppedOutCount / s.sampleSize) * 100).toFixed(0)}%)` : "N/A"}
+                        </td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{s.winRate !== null ? `${s.winRate.toFixed(1)}%` : "N/A"}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(s.expectancy)}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--danger)" }}>{fmtPct(s.largestLossPct)}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--danger)" }}>{s.maxDrawdownPct !== null ? `${s.maxDrawdownPct.toFixed(2)}%` : "N/A"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {result.reversionStats && (
             <div className="jv-card">
               <div className="jv-br-b" />

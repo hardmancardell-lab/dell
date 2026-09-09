@@ -11,7 +11,22 @@ import type {
   EquityBacktestSignalType,
   EquityTradeLogRow,
   ReversionStats,
+  StopLossHorizonResult,
 } from "../types";
+
+// Adverse-move percentages tested as a hypothetical resting stop, applied on
+// top of every already-validated signal — diagnostic, not a new engine.
+const STOP_LOSS_LEVELS_PCT = [1, 2, 3, 5];
+
+// meanReversionOverbought is this backtest's only short-side signal (see
+// entryRuleFor in hypothesis-sweep.ts: "Enter short when...") — every other
+// signal type here is a long entry.
+const STRATEGY_DIRECTION: Record<EquityBacktestSignalType, "long" | "short"> = {
+  volumeDisplacement: "long",
+  momentum: "long",
+  meanReversionOversold: "long",
+  meanReversionOverbought: "short",
+};
 
 /**
  * Real historical backtesting — unlike the options GEX signal (blocked on
@@ -44,6 +59,7 @@ function signalFired(barsSoFar: DailyBar[], signalType: EquityBacktestSignalType
 
 interface Occurrence {
   dateKey: string;
+  entryIndex: number; // index into `bars` — needed to walk forward day-by-day for the stop-loss overlay
   entryClose: number;
   forwardReturns: (number | null)[]; // indexed same as HORIZONS_TRADING_DAYS
   overnightGapPct: number | null;
@@ -92,6 +108,90 @@ function trackReversion(
   return { daysToRevert: null, maxAdverseExcursionPct: worstExcursionPct };
 }
 
+interface StopWalk {
+  stoppedDayOffset: number | null; // trading days after entry the stop triggered, or null if never within maxHorizonDays
+  stopExitReturnPct: number | null;
+}
+
+/**
+ * Walks forward from an entry, day by day, checking whether a hypothetical
+ * resting stop order at `stopPct` adverse would have triggered before
+ * `maxHorizonDays` — a gap through the stop (the open itself already past
+ * it) fills at that day's open, same as a real stop order would (worse than
+ * the stop price); an intraday-only touch fills at the stop price itself.
+ * Stops at the first day either condition is true — a stop, once hit,
+ * closes the position; it doesn't matter what a longer horizon would have
+ * done afterward.
+ */
+function walkForStop(
+  bars: DailyBar[],
+  entryIndex: number,
+  entryClose: number,
+  direction: "long" | "short",
+  stopPct: number,
+  maxHorizonDays: number
+): StopWalk {
+  const stopPrice = direction === "long" ? entryClose * (1 - stopPct / 100) : entryClose * (1 + stopPct / 100);
+  const end = Math.min(bars.length - 1, entryIndex + maxHorizonDays);
+  for (let day = entryIndex + 1; day <= end; day++) {
+    const bar = bars[day];
+    const offset = day - entryIndex;
+    if (direction === "long") {
+      if (bar.open <= stopPrice) return { stoppedDayOffset: offset, stopExitReturnPct: ((bar.open - entryClose) / entryClose) * 100 };
+      if (bar.low <= stopPrice) return { stoppedDayOffset: offset, stopExitReturnPct: ((stopPrice - entryClose) / entryClose) * 100 };
+    } else {
+      if (bar.open >= stopPrice) return { stoppedDayOffset: offset, stopExitReturnPct: ((entryClose - bar.open) / entryClose) * 100 };
+      if (bar.high >= stopPrice) return { stoppedDayOffset: offset, stopExitReturnPct: ((entryClose - stopPrice) / entryClose) * 100 };
+    }
+  }
+  return { stoppedDayOffset: null, stopExitReturnPct: null };
+}
+
+/**
+ * For every stop level x horizon combination, replaces each occurrence's
+ * baseline forward return with its stop-exit return wherever the stop would
+ * have triggered at or before that horizon, then runs the exact same
+ * computeWinLossMetrics used on the unstopped baseline — a direct,
+ * apples-to-apples comparison, not a new statistical test.
+ */
+function computeStopLossOverlay(
+  bars: DailyBar[],
+  occurrences: Occurrence[],
+  direction: "long" | "short",
+  horizonsTradingDays: number[]
+): StopLossHorizonResult[] {
+  const maxHorizonDays = Math.max(...horizonsTradingDays);
+  const results: StopLossHorizonResult[] = [];
+
+  for (const stopPct of STOP_LOSS_LEVELS_PCT) {
+    const walks = occurrences.map((o) => walkForStop(bars, o.entryIndex, o.entryClose, direction, stopPct, maxHorizonDays));
+
+    horizonsTradingDays.forEach((horizonDays, h) => {
+      const withStopReturns: number[] = [];
+      let stoppedOutCount = 0;
+      occurrences.forEach((o, idx) => {
+        const walk = walks[idx];
+        if (walk.stoppedDayOffset !== null && walk.stoppedDayOffset <= horizonDays) {
+          withStopReturns.push(walk.stopExitReturnPct as number);
+          stoppedOutCount++;
+        } else if (o.forwardReturns[h] !== null) {
+          withStopReturns.push(o.forwardReturns[h] as number);
+        }
+      });
+
+      results.push({
+        stopPct,
+        horizonDays,
+        sampleSize: withStopReturns.length,
+        stoppedOutCount,
+        ...computeWinLossMetrics(withStopReturns),
+      });
+    });
+  }
+
+  return results;
+}
+
 export async function runBacktest(
   ticker: string,
   signalType: EquityBacktestSignalType,
@@ -121,6 +221,7 @@ export async function runBacktest(
       : { daysToRevert: null, maxAdverseExcursionPct: null };
     occurrences.push({
       dateKey: bars[i].dateKey,
+      entryIndex: i,
       entryClose,
       forwardReturns,
       overnightGapPct,
@@ -222,6 +323,11 @@ export async function runBacktest(
     );
   }
 
+  const stopLossOverlay = computeStopLossOverlay(bars, occurrences, STRATEGY_DIRECTION[signalType], HORIZONS_TRADING_DAYS);
+  dataLimitations.push(
+    "The stop-loss overlay tests a hypothetical resting stop at each level against this same real historical sample — it reuses the baseline's win/loss math, but does NOT re-run the FDR/bootstrap/out-of-sample validation, since the question is whether a stop helps or hurts the already-validated edge, not a new hypothesis test. A gap through the stop fills at that day's real open (worse than the stop price, same as a real order); an intraday-only touch fills at the stop price itself."
+  );
+
   // Exit prices are intentionally not stored — algebraically recoverable as
   // entryClose * (1 + returnPct/100) if ever needed, avoiding a redundant field.
   const tradeLog: EquityTradeLogRow[] = occurrences.map((o) => {
@@ -249,6 +355,7 @@ export async function runBacktest(
     tradingDaysScanned: bars.length,
     signalOccurrences: occurrences.length,
     horizons,
+    stopLossOverlay,
     reversionStats,
     tradeLog,
     dataLimitations,

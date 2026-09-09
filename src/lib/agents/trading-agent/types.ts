@@ -552,6 +552,23 @@ export interface ReversionStats {
   worstMaxAdverseExcursionPct: number | null;
 }
 
+/**
+ * Same real occurrences as `horizons` above, but re-exited early wherever a
+ * hypothetical resting stop-loss order would have triggered first — a gap
+ * through the stop fills at that day's open (worse than the stop price,
+ * same as a real stop order would), an intraday touch fills at the stop
+ * price itself. Diagnostic/comparative only: reuses computeWinLossMetrics
+ * for the same descriptive stats as the baseline, but does NOT re-run the
+ * FDR/bootstrap/out-of-sample validation — the question here is "does a
+ * stop help or hurt the already-validated edge," not a new hypothesis test.
+ */
+export interface StopLossHorizonResult extends WinLossMetrics {
+  stopPct: number; // adverse move from entry that triggers the stop, e.g. 2 = 2%
+  horizonDays: number;
+  sampleSize: number;
+  stoppedOutCount: number; // of sampleSize, how many exited early via the stop rather than reaching the horizon
+}
+
 export interface EquityBacktestResult {
   ticker: string;
   signalType: EquityBacktestSignalType;
@@ -559,6 +576,7 @@ export interface EquityBacktestResult {
   tradingDaysScanned: number;
   signalOccurrences: number;
   horizons: BacktestHorizonResult[];
+  stopLossOverlay: StopLossHorizonResult[];
   reversionStats: ReversionStats | null;
   tradeLog: EquityTradeLogRow[];
   dataLimitations: string[];
