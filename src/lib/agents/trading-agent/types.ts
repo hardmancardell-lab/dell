@@ -1647,7 +1647,16 @@ export interface StrategyHypothesis {
   // this field existed (a ledger row is never backfilled after the fact).
   largestLossPct: number | null;
   maxDrawdownPct: number | null;
+  // Derived from the stop-loss overlay (historical-backtest.ts only — null
+  // for every other source engine, and for meanReversionOverbought until its
+  // known return-sign bug is fixed): does adding a hypothetical stop at any
+  // tested level meaningfully help this specific edge, or does it just
+  // shake out trades before the setup's own premise plays out? Never
+  // computed from a negative-expectancy baseline.
+  stopLossVerdict: StopLossVerdict | null;
 }
+
+export type StopLossVerdict = "stops_hurt" | "stops_help" | "inconclusive";
 
 // --- Treasury Buyback / GLD Event-Study Regression ---
 
@@ -1811,6 +1820,7 @@ export interface GuidedTradeSignal {
   // so this is the only downside context a fixed-holding-period signal has.
   largestLossPct: number | null;
   maxDrawdownPct: number | null;
+  stopLossVerdict: StopLossVerdict | null;
   // Populated only when the request comes from an authenticated user with a
   // linked advisor_clients portfolio — null/false for the general public.
   ownedByUser: boolean;

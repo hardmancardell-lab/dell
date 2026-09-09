@@ -65,14 +65,27 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
           {signal.largestLossPct !== null && <>largest single loss <strong>{signal.largestLossPct.toFixed(2)}%</strong></>}
           {signal.largestLossPct !== null && signal.maxDrawdownPct !== null && ", "}
           {signal.maxDrawdownPct !== null && <>max drawdown <strong>{signal.maxDrawdownPct.toFixed(2)}%</strong></>}
-          {signal.exitType === "time" && " — this is a fixed-holding-period exit, not a stop-loss, so this is the only downside protection this setup has."}
         </p>
       )}
-      {signal.exitType === "time" && (
+      {signal.exitType === "time" && signal.stopLossVerdict === "stops_hurt" && (
+        <p className="text-sm mb-3 font-medium" style={{ color: "var(--danger)" }}>
+          Tested against real data: a stop-loss makes this setup worse, not safer — every level tested destroys most
+          of the edge without meaningfully cutting the drawdown above. Size your position assuming that full
+          worst-case loss is possible; don&apos;t rely on a stop to cap it.
+        </p>
+      )}
+      {signal.exitType === "time" && signal.stopLossVerdict === "stops_help" && (
+        <p className="text-sm mb-3 font-medium" style={{ color: "var(--signal)" }}>
+          Tested against real data: a stop-loss at some level meaningfully cuts the drawdown above while keeping most
+          of this setup&apos;s edge — check the Backtest tab for {signal.ticker} / {signal.strategyType} to see the
+          exact level.
+        </p>
+      )}
+      {signal.exitType === "time" && (signal.stopLossVerdict === "inconclusive" || signal.stopLossVerdict === null) && (
         <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
-          Want to know if a stop-loss would actually help here? Run {signal.ticker} / {signal.strategyType} in the
-          Backtest tab — it now shows a real stop-loss overlay (tested at -1%/-2%/-3%/-5%) against this exact same
-          historical sample, not a guess.
+          {signal.stopLossVerdict === "inconclusive"
+            ? "Tested against real data: no stop level tested clearly helps or hurts this setup — see the Backtest tab for the full comparison before assuming one either way."
+            : "Want to know if a stop-loss would actually help here? Run this ticker/signal in the Backtest tab — it now shows a real stop-loss overlay (tested at -1%/-2%/-3%/-5%) against this exact same historical sample, not a guess."}
         </p>
       )}
       <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>

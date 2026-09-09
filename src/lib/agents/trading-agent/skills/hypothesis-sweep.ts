@@ -11,6 +11,8 @@ import type {
   EquityBacktestSignalType,
   HypothesisExitType,
   OrbHorizonResult,
+  StopLossHorizonResult,
+  StopLossVerdict,
   StrategyHypothesis,
   TimeOfDayEffectResult,
 } from "../types";
@@ -94,6 +96,35 @@ function rejectionReasonFor(h: {
   return "Did not pass all three statistical bars.";
 }
 
+/**
+ * Only meaningful when the baseline itself has a positive expectancy (a
+ * validated long edge should) — never called for meanReversionOverbought
+ * (see StopLossVerdict's own comment: its return sign is currently
+ * inverted, so any verdict computed from it would be unreliable). "Best"
+ * stop = whichever tested level has the highest expectancy; if even the
+ * best one keeps less than 70% of the baseline's edge, the stop is doing
+ * more harm than good regardless of its drawdown effect. Otherwise, a stop
+ * only counts as "helping" if it also meaningfully cuts max drawdown (at
+ * least 20% lower than baseline) — preserving the edge without reducing
+ * real risk isn't a case for using one.
+ */
+function deriveStopLossVerdict(baseline: BacktestHorizonResult, stopRows: StopLossHorizonResult[]): StopLossVerdict | null {
+  if (stopRows.length === 0 || baseline.meanForwardReturnPct === null || baseline.meanForwardReturnPct <= 0) return null;
+  let best: StopLossHorizonResult | null = null;
+  for (const s of stopRows) {
+    if (s.expectancy === null) continue;
+    if (best === null || s.expectancy > (best.expectancy as number)) best = s;
+  }
+  if (!best || best.expectancy === null) return null;
+
+  const expectancyRetainedRatio = best.expectancy / baseline.meanForwardReturnPct;
+  if (expectancyRetainedRatio < 0.7) return "stops_hurt";
+
+  const drawdownImproved =
+    baseline.maxDrawdownPct !== null && best.maxDrawdownPct !== null && best.maxDrawdownPct < baseline.maxDrawdownPct * 0.8;
+  return drawdownImproved ? "stops_help" : "inconclusive";
+}
+
 async function logHorizonResult(params: {
   ticker: string;
   assetClass: AssetClass;
@@ -104,6 +135,7 @@ async function logHorizonResult(params: {
   exitRule: string;
   sourceEngine: string;
   entropyScore: number | null;
+  stopLossVerdict?: StopLossVerdict | null;
   horizon: BacktestHorizonResult | OrbHorizonResult | DayOfWeekEffectResult | TimeOfDayEffectResult;
 }): Promise<void> {
   const { horizon } = params;
@@ -130,6 +162,7 @@ async function logHorizonResult(params: {
     entropyScore: params.entropyScore,
     largestLossPct: horizon.largestLossPct,
     maxDrawdownPct: horizon.maxDrawdownPct,
+    stopLossVerdict: params.stopLossVerdict ?? null,
   };
   await insertHypothesis(hypothesis);
 }
@@ -180,6 +213,12 @@ async function sweepOneTicker(target: SweepTarget): Promise<TickerSweepResult> {
     try {
       const result = await runBacktest(target.ticker, signalType, 3);
       for (const h of result.horizons) {
+        // meanReversionOverbought's return sign is currently inverted (see
+        // StopLossVerdict's own comment) — never compute a verdict from it.
+        const stopLossVerdict =
+          signalType === "meanReversionOverbought"
+            ? null
+            : deriveStopLossVerdict(h, result.stopLossOverlay.filter((s) => s.horizonDays === h.horizonDays));
         await logHorizonResult({
           ticker: target.ticker,
           assetClass: target.assetClass,
@@ -190,6 +229,7 @@ async function sweepOneTicker(target: SweepTarget): Promise<TickerSweepResult> {
           exitRule: `Fixed ${h.horizonDays}-trading-day forward hold, then exit regardless of price.`,
           sourceEngine: "historical-backtest",
           entropyScore,
+          stopLossVerdict,
           horizon: h,
         });
         hypothesesLogged++;

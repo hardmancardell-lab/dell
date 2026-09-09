@@ -1,4 +1,4 @@
-import type { AssetClass, HypothesisExitType, HypothesisStatus, StrategyHypothesis } from "@/lib/agents/trading-agent/types";
+import type { AssetClass, HypothesisExitType, HypothesisStatus, StopLossVerdict, StrategyHypothesis } from "@/lib/agents/trading-agent/types";
 
 /**
  * Plain-fetch Supabase REST CRUD for strategy_hypotheses — same
@@ -67,6 +67,7 @@ interface HypothesisRow {
   entropy_score: number | null;
   largest_loss_pct: number | null;
   max_drawdown_pct: number | null;
+  stop_loss_verdict: StopLossVerdict | null;
 }
 
 function toHypothesis(row: HypothesisRow): StrategyHypothesis {
@@ -93,6 +94,7 @@ function toHypothesis(row: HypothesisRow): StrategyHypothesis {
     entropyScore: row.entropy_score,
     largestLossPct: row.largest_loss_pct,
     maxDrawdownPct: row.max_drawdown_pct,
+    stopLossVerdict: row.stop_loss_verdict,
   };
 }
 
@@ -120,6 +122,7 @@ export async function insertHypothesis(h: Omit<StrategyHypothesis, "id" | "creat
       entropy_score: h.entropyScore,
       largest_loss_pct: h.largestLossPct,
       max_drawdown_pct: h.maxDrawdownPct,
+      stop_loss_verdict: h.stopLossVerdict,
     },
   });
 }
