@@ -31,9 +31,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/gap-calendar-study",
   "/api/interaction-effects",
   "/api/correlation-matrix",
-  // TEMP: manually trigger this week's hypothesis sweep, then revert + delete route.
-  "/api/debug-run-sweep",
-  "/api/guided-trade-signals",
 ];
 
 function isPublicPath(pathname: string): boolean {
