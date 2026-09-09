@@ -72,6 +72,16 @@ export function PaperOrderForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitMsg, setSubmitMsg] = useState<string | null>(null);
 
+  // Manual option entry (assetClass === "option" with no prefillOption) —
+  // same underlying/expiration/strike/right shape prefillOption already
+  // sends; placeOptionOrder fetches its own live contract quote from these
+  // four fields, so this needs no reference price and no chain browsing.
+  const [manualUnderlying, setManualUnderlying] = useState(prefillSymbol ?? "");
+  const [manualExpiration, setManualExpiration] = useState("");
+  const [manualStrike, setManualStrike] = useState("");
+  const [manualRight, setManualRight] = useState<PaperOptionRight>("call");
+  const isManualOption = !isOption && assetClass === "option";
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -91,16 +101,28 @@ export function PaperOrderForm({
             optionRight: prefillOption!.optionRight,
             strikePrice: prefillOption!.strikePrice,
           }
-        : {
-            symbol: symbol.trim().toUpperCase(),
-            assetClass,
-            side,
-            orderType,
-            quantity: qty,
-            limitPrice: limitPrice ? Number(limitPrice) : null,
-            stopPrice: stopPrice ? Number(stopPrice) : null,
-            trailAmount: trailAmount ? Number(trailAmount) : null,
-          };
+        : isManualOption
+          ? {
+              symbol: manualUnderlying.trim().toUpperCase(),
+              assetClass: "option" as AssetClass,
+              side,
+              orderType: "market" as PaperOrderType,
+              quantity: qty,
+              underlyingSymbol: manualUnderlying.trim().toUpperCase(),
+              expirationDate: manualExpiration,
+              optionRight: manualRight,
+              strikePrice: Number(manualStrike),
+            }
+          : {
+              symbol: symbol.trim().toUpperCase(),
+              assetClass,
+              side,
+              orderType,
+              quantity: qty,
+              limitPrice: limitPrice ? Number(limitPrice) : null,
+              stopPrice: stopPrice ? Number(stopPrice) : null,
+              trailAmount: trailAmount ? Number(trailAmount) : null,
+            };
       const res = await fetch("/api/paper-trading/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -109,8 +131,16 @@ export function PaperOrderForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to place order.");
       track("paper_order_placed", { tab: "Paper Trading", symbol: order.symbol, metadata: { side, orderType: order.orderType, filled: data.filled } });
-      setSubmitMsg(data.filled ? `Filled ${qty} ${isOption ? "contract(s) of " : ""}${order.symbol} @ market.` : `Order placed — resting as pending (${order.orderType}).`);
+      setSubmitMsg(
+        data.filled
+          ? `Filled ${qty} ${isOption || isManualOption ? "contract(s) of " : ""}${order.symbol} @ market.`
+          : `Order placed — resting as pending (${order.orderType}).`
+      );
       if (!isOption) setSymbol("");
+      if (isManualOption) {
+        setManualExpiration("");
+        setManualStrike("");
+      }
       setLimitPrice("");
       setStopPrice("");
       setTrailAmount("");
@@ -136,12 +166,18 @@ export function PaperOrderForm({
           . Market order only.
         </p>
       )}
+      {isManualOption && (
+        <p className="text-sm mb-3" style={{ color: "var(--text-2)" }}>
+          Fills against the contract&apos;s real live quote — market order only (this app has no historical
+          intraday feed for individual option contracts to evaluate a resting limit/stop order against).
+        </p>
+      )}
       <form onSubmit={handleSubmit} className={compact ? "grid grid-cols-2 gap-3" : "grid grid-cols-2 sm:grid-cols-4 gap-3"}>
         {!isOption && (
           <input
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
-            placeholder="Ticker, e.g. AAPL"
+            value={isManualOption ? manualUnderlying : symbol}
+            onChange={(e) => (isManualOption ? setManualUnderlying(e.target.value) : setSymbol(e.target.value))}
+            placeholder={isManualOption ? "Underlying, e.g. AAPL" : "Ticker, e.g. AAPL"}
             required
             className="px-3 py-2 text-sm"
             style={inputStyle}
@@ -150,10 +186,39 @@ export function PaperOrderForm({
         {!isOption && (
           <select value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)} className="px-3 py-2 text-sm" style={selectStyle}>
             <option value="equity">Equity</option>
+            <option value="option">Option</option>
             <option value="commodity">Commodity</option>
             <option value="future">Future</option>
             <option value="forex">Forex</option>
           </select>
+        )}
+        {isManualOption && (
+          <select value={manualRight} onChange={(e) => setManualRight(e.target.value as PaperOptionRight)} className="px-3 py-2 text-sm" style={selectStyle}>
+            <option value="call">Call</option>
+            <option value="put">Put</option>
+          </select>
+        )}
+        {isManualOption && (
+          <input
+            value={manualStrike}
+            onChange={(e) => setManualStrike(e.target.value)}
+            type="number"
+            step="0.01"
+            placeholder="Strike"
+            required
+            className="px-3 py-2 text-sm"
+            style={inputStyle}
+          />
+        )}
+        {isManualOption && (
+          <input
+            value={manualExpiration}
+            onChange={(e) => setManualExpiration(e.target.value)}
+            type="date"
+            required
+            className="px-3 py-2 text-sm"
+            style={inputStyle}
+          />
         )}
         <select value={side} onChange={(e) => setSide(e.target.value as PaperOrderSide)} className="px-3 py-2 text-sm" style={selectStyle}>
           <option value="buy">Buy</option>
@@ -165,12 +230,12 @@ export function PaperOrderForm({
           type="number"
           min="1"
           step="1"
-          placeholder={isOption ? "Contracts" : "Quantity"}
+          placeholder={isOption || isManualOption ? "Contracts" : "Quantity"}
           required
           className="px-3 py-2 text-sm"
           style={inputStyle}
         />
-        {!isOption && (
+        {!isOption && !isManualOption && (
           <select value={orderType} onChange={(e) => setOrderType(e.target.value as PaperOrderType)} className="px-3 py-2 text-sm" style={selectStyle}>
             {ORDER_TYPES.map((t) => (
               <option key={t.value} value={t.value}>
@@ -179,13 +244,13 @@ export function PaperOrderForm({
             ))}
           </select>
         )}
-        {!isOption && (orderType === "limit" || orderType === "stop_limit") && (
+        {!isOption && !isManualOption && (orderType === "limit" || orderType === "stop_limit") && (
           <input value={limitPrice} onChange={(e) => setLimitPrice(e.target.value)} type="number" step="0.01" placeholder="Limit price" required className="px-3 py-2 text-sm" style={inputStyle} />
         )}
-        {!isOption && (orderType === "stop" || orderType === "stop_limit") && (
+        {!isOption && !isManualOption && (orderType === "stop" || orderType === "stop_limit") && (
           <input value={stopPrice} onChange={(e) => setStopPrice(e.target.value)} type="number" step="0.01" placeholder="Stop price" required className="px-3 py-2 text-sm" style={inputStyle} />
         )}
-        {!isOption && orderType === "trailing_stop" && (
+        {!isOption && !isManualOption && orderType === "trailing_stop" && (
           <input value={trailAmount} onChange={(e) => setTrailAmount(e.target.value)} type="number" step="0.01" placeholder="Trail amount ($)" required className="px-3 py-2 text-sm" style={inputStyle} />
         )}
         <button type="submit" disabled={submitting} className="px-4 py-2 text-sm font-medium disabled:opacity-50" style={{ background: "var(--signal)", color: "var(--ink-950)" }}>
