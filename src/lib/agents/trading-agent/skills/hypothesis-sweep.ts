@@ -37,7 +37,7 @@ import type {
 const SWEEP_EQUITIES_FULL = ["AAPL", "MSFT", "SPY"];
 const SWEEP_FX_FULL = ["EUR/USD", "USD/JPY"];
 const SWEEP_EQUITIES_SIGNALS_ONLY = ["NVDA", "GOOGL", "AMZN", "TSLA", "META", "QQQ"];
-const SWEEP_FX_SIGNALS_ONLY = ["GBP/USD", "USD/CAD"];
+const SWEEP_FX_SIGNALS_ONLY = ["GBP/USD", "USD/CAD", "EUR/JPY", "GBP/JPY"];
 
 interface SweepTarget {
   ticker: string;
