@@ -1648,11 +1648,13 @@ export interface StrategyHypothesis {
   largestLossPct: number | null;
   maxDrawdownPct: number | null;
   // Derived from the stop-loss overlay (historical-backtest.ts only — null
-  // for every other source engine, and for meanReversionOverbought until its
-  // known return-sign bug is fixed): does adding a hypothetical stop at any
+  // for every other source engine): does adding a hypothetical stop at any
   // tested level meaningfully help this specific edge, or does it just
   // shake out trades before the setup's own premise plays out? Never
-  // computed from a negative-expectancy baseline.
+  // computed from a negative-expectancy baseline. Rows logged before the
+  // meanReversionOverbought return-sign fix (see historical-backtest.ts)
+  // may carry a stale verdict computed from inverted returns — not
+  // backfilled, same as largestLossPct above.
   stopLossVerdict: StopLossVerdict | null;
 }
 

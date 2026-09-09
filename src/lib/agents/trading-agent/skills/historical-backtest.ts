@@ -209,10 +209,15 @@ export async function runBacktest(
     if (!signalFired(barsSoFar, signalType)) continue;
 
     const entryClose = bars[i].close;
+    // meanReversionOverbought is a short entry (STRATEGY_DIRECTION above) — a
+    // real win is price falling, so its raw price return is negated here,
+    // once, so every downstream consumer (win/loss metrics, significance
+    // tests, trade log) already sees direction-correct returns.
+    const directionMultiplier = STRATEGY_DIRECTION[signalType] === "short" ? -1 : 1;
     const forwardReturns = HORIZONS_TRADING_DAYS.map((h) => {
       const futureIndex = i + h;
       if (futureIndex >= bars.length) return null;
-      return ((bars[futureIndex].close - entryClose) / entryClose) * 100;
+      return ((bars[futureIndex].close - entryClose) / entryClose) * 100 * directionMultiplier;
     });
     const priorClose = bars[i - 1].close;
     const overnightGapPct = priorClose !== 0 ? ((bars[i].open - priorClose) / priorClose) * 100 : null;
