@@ -31,10 +31,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/gap-calendar-study",
   "/api/interaction-effects",
   "/api/correlation-matrix",
-  // TEMP: verifying option-scenario and ATR-mode orb-backtest, then reverting.
-  "/api/option-scenario",
-  "/api/orb-backtest",
-  "/api/guided-trade-signals",
 ];
 
 function isPublicPath(pathname: string): boolean {
