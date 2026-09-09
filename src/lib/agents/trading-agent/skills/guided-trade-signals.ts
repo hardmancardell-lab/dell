@@ -113,6 +113,8 @@ export async function getGuidedTradeSignals(ownedSymbols: string[] = []): Promis
         exitType: h.exitType,
         exitRule: h.exitRule,
         entryRule: h.entryRule,
+        largestLossPct: h.largestLossPct,
+        maxDrawdownPct: h.maxDrawdownPct,
         ownedByUser,
         relatedHoldingSymbol,
       });

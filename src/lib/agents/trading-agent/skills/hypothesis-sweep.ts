@@ -128,6 +128,8 @@ async function logHorizonResult(params: {
     rejectionReason: validated ? null : rejectionReasonFor(horizon),
     sourceEngine: params.sourceEngine,
     entropyScore: params.entropyScore,
+    largestLossPct: horizon.largestLossPct,
+    maxDrawdownPct: horizon.maxDrawdownPct,
   };
   await insertHypothesis(hypothesis);
 }

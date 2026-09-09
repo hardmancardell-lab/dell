@@ -59,6 +59,15 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
           Typical range of outcomes: <strong>{range}</strong>.
         </p>
       )}
+      {(signal.largestLossPct !== null || signal.maxDrawdownPct !== null) && (
+        <p className="text-sm mb-1" style={{ color: "var(--danger)" }}>
+          Worst case in this same sample:{" "}
+          {signal.largestLossPct !== null && <>largest single loss <strong>{signal.largestLossPct.toFixed(2)}%</strong></>}
+          {signal.largestLossPct !== null && signal.maxDrawdownPct !== null && ", "}
+          {signal.maxDrawdownPct !== null && <>max drawdown <strong>{signal.maxDrawdownPct.toFixed(2)}%</strong></>}
+          {signal.exitType === "time" && " — this is a fixed-holding-period exit, not a stop-loss, so this is the only downside protection this setup has."}
+        </p>
+      )}
       <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
         Exit: {signal.exitType === "time" ? "fixed holding period" : "price target/stop"} — {signal.exitRule}
       </p>

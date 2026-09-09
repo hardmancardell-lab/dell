@@ -65,6 +65,8 @@ interface HypothesisRow {
   rejection_reason: string | null;
   source_engine: string;
   entropy_score: number | null;
+  largest_loss_pct: number | null;
+  max_drawdown_pct: number | null;
 }
 
 function toHypothesis(row: HypothesisRow): StrategyHypothesis {
@@ -89,6 +91,8 @@ function toHypothesis(row: HypothesisRow): StrategyHypothesis {
     rejectionReason: row.rejection_reason,
     sourceEngine: row.source_engine,
     entropyScore: row.entropy_score,
+    largestLossPct: row.largest_loss_pct,
+    maxDrawdownPct: row.max_drawdown_pct,
   };
 }
 
@@ -114,6 +118,8 @@ export async function insertHypothesis(h: Omit<StrategyHypothesis, "id" | "creat
       rejection_reason: h.rejectionReason,
       source_engine: h.sourceEngine,
       entropy_score: h.entropyScore,
+      largest_loss_pct: h.largestLossPct,
+      max_drawdown_pct: h.maxDrawdownPct,
     },
   });
 }

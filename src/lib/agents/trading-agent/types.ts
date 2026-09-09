@@ -1623,6 +1623,12 @@ export interface StrategyHypothesis {
   // transparency — not used to filter results. Null if there wasn't enough
   // real bar history to compute a meaningful histogram.
   entropyScore: number | null;
+  // Worst-case framing, read straight off the same backtest horizon result
+  // as winRatePct/profitFactor — a win rate alone says nothing about how bad
+  // the losing trades in that same sample were. Null on rows logged before
+  // this field existed (a ledger row is never backfilled after the fact).
+  largestLossPct: number | null;
+  maxDrawdownPct: number | null;
 }
 
 // --- Treasury Buyback / GLD Event-Study Regression ---
@@ -1781,6 +1787,12 @@ export interface GuidedTradeSignal {
   exitType: HypothesisExitType;
   exitRule: string;
   entryRule: string;
+  // Worst-case framing from the same historical sample the win rate came
+  // from — null for signals logged before this field existed (see
+  // StrategyHypothesis). A "time" exitType has no stop-loss concept at all,
+  // so this is the only downside context a fixed-holding-period signal has.
+  largestLossPct: number | null;
+  maxDrawdownPct: number | null;
   // Populated only when the request comes from an authenticated user with a
   // linked advisor_clients portfolio — null/false for the general public.
   ownedByUser: boolean;
