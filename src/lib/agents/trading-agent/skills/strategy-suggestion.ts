@@ -144,16 +144,18 @@ export async function recordSuggestionsForSignal(signal: GuidedTradeSignal, toda
   }
 }
 
-/** The client-facing, always-placeable suggestion — single-leg, matches the exact structure just recorded (or a fresh lookup if the ledger write failed/is unconfigured). */
-export async function getSuggestedOptionContract(signal: GuidedTradeSignal, todayDateKey: string): Promise<SuggestedOptionContract | null> {
-  const direction = directionFor(signal.strategyType);
-  const horizonMatch = signal.horizonLabel.match(/(\d+)/);
-  const horizonDays = horizonMatch ? Number(horizonMatch[1]) : 20;
+/** Single-leg, ATM, expiring past the given horizon — the same real chain-based pick used for both the client-facing card and the internal ledger, exposed directly for callers that already know ticker/horizon/direction (e.g. the High-Conviction Strategy Playbook) rather than holding a full GuidedTradeSignal. */
+export async function getOptionStructureForHypothesis(
+  ticker: string,
+  horizonDays: number,
+  direction: "long" | "short",
+  todayDateKey: string
+): Promise<SuggestedOptionContract | null> {
   try {
-    const picked = await pickStructure(signal.ticker, horizonDays, direction, "long_option", todayDateKey);
+    const picked = await pickStructure(ticker, horizonDays, direction, "long_option", todayDateKey);
     if (!picked) return null;
     return {
-      underlyingSymbol: signal.ticker,
+      underlyingSymbol: ticker,
       expirationDate: picked.expirationDate,
       optionRight: picked.optionRight,
       strikePrice: picked.longContract.strikePrice,
@@ -161,6 +163,14 @@ export async function getSuggestedOptionContract(signal: GuidedTradeSignal, toda
   } catch {
     return null;
   }
+}
+
+/** The client-facing, always-placeable suggestion — single-leg, matches the exact structure just recorded (or a fresh lookup if the ledger write failed/is unconfigured). */
+export async function getSuggestedOptionContract(signal: GuidedTradeSignal, todayDateKey: string): Promise<SuggestedOptionContract | null> {
+  const direction = directionFor(signal.strategyType);
+  const horizonMatch = signal.horizonLabel.match(/(\d+)/);
+  const horizonDays = horizonMatch ? Number(horizonMatch[1]) : 20;
+  return getOptionStructureForHypothesis(signal.ticker, horizonDays, direction, todayDateKey);
 }
 
 /**

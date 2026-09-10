@@ -47,6 +47,8 @@ function Dashboard({ rows }: { rows: StrategySuggestion[] }) {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="max-w-5xl mx-auto px-6 py-10">
         <a href="/admin/book-risk" className="text-xs text-teal-400 hover:underline">→ Book Risk</a>
+        {" · "}
+        <a href="/admin/high-conviction-strategies" className="text-xs text-teal-400 hover:underline">→ High-Conviction Playbook</a>
         <h1 className="text-2xl font-bold text-zinc-50 mt-1">Strategy Suggestion Ledger</h1>
         <p className="text-sm text-zinc-400 mt-1">
           Every real Guided Trade Signal occurrence, recorded automatically under both option-strategy variants —

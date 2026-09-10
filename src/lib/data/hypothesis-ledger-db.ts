@@ -134,3 +134,12 @@ export async function getRecentHypotheses(limit = 100): Promise<StrategyHypothes
   });
   return rows.map(toHypothesis);
 }
+
+/** Every real hypothesis at/above minWinRate, regardless of whether it separately passed the three-bar significance gate — validation status is returned per-row (passesThreeBars) so the caller shows both signals rather than one masking the other. Most-recent sweep per (ticker, strategyType, horizon) combo is deduped by the caller, same as guided-trade-signals.ts already does for the live-signal feed. */
+export async function getHighWinRateHypotheses(minWinRatePct: number, limit = 300): Promise<StrategyHypothesis[]> {
+  const rows = await supabaseRequest<HypothesisRow[]>(
+    `strategy_hypotheses?win_rate_pct=gte.${minWinRatePct}&order=win_rate_pct.desc&limit=${limit}`,
+    { method: "GET", prefer: "return=representation" }
+  );
+  return rows.map(toHypothesis);
+}

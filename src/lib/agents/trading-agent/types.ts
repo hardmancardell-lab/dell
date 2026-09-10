@@ -1737,6 +1737,39 @@ export interface StrategySuggestionPair {
   dataLimitations: string[];
 }
 
+// --- High-Conviction Strategy Playbook ---
+
+/**
+ * A full entry/exit/stop/option writeup for one real hypothesis-ledger row
+ * at or above the win-rate bar — not a new statistical claim, just every
+ * already-computed piece (entry rule, exit rule, stop-loss verdict, real
+ * option structure) assembled into one place. suggestedOption/stopLoss
+ * guidance are only ever populated for sourceEngine "historical-backtest"
+ * (the only engine with both a real direction convention and a stop-loss
+ * overlay built) — every other engine still shows real entry/exit/win-rate
+ * data, just without those two pieces, disclosed via optionStructureNote.
+ */
+export interface HighConvictionStrategy {
+  hypothesisId: string;
+  ticker: string;
+  assetClass: AssetClass;
+  strategyType: string;
+  sourceEngine: string;
+  horizonLabel: string;
+  winRatePct: number;
+  sampleSize: number;
+  profitFactor: number | null;
+  passesThreeBars: boolean;
+  entryRule: string;
+  exitType: HypothesisExitType;
+  exitRule: string;
+  largestLossPct: number | null;
+  maxDrawdownPct: number | null;
+  stopLossVerdict: StopLossVerdict | null;
+  suggestedOption: SuggestedOptionContract | null;
+  optionStructureNote: string | null; // set (non-null) exactly when suggestedOption is null, explaining why
+}
+
 // --- Treasury Buyback / GLD Event-Study Regression ---
 
 /** One real Treasury buyback operation (U.S. Treasury Fiscal Data API — verified live endpoint, not guessed). */
