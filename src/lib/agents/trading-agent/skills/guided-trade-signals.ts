@@ -66,11 +66,19 @@ export async function getGuidedTradeSignals(ownedSymbols: string[] = []): Promis
     (h) => h.status === "validated" && LIVE_CHECKABLE_STRATEGY_TYPES.has(h.strategyType)
   );
 
-  // One card per ticker+strategyType — the most recently-swept result if the
-  // ledger has logged that combination more than once.
+  // One card per ticker+strategyType+horizon — the most recently-swept
+  // result if the ledger has logged that exact combination more than once.
+  // Each horizon (1d/3d/5d/10d/20d) is independently backtested and
+  // independently validated (its own p-value, bootstrap CI, OOS check) —
+  // a real 1-day-forward edge is not the same claim as a real 20-day one,
+  // so a ticker+strategy pair can legitimately surface more than one card
+  // here when more than one of its horizons clears the bar. (Previously
+  // deduped by ticker+strategyType alone, which silently kept only
+  // whichever horizon happened to sort last — an arbitrary, undisclosed
+  // pick, not a deliberate one.)
   const bestByKey = new Map<string, StrategyHypothesis>();
   for (const h of validated) {
-    const key = `${h.ticker}|${h.strategyType}`;
+    const key = `${h.ticker}|${h.strategyType}|${h.horizonLabel}`;
     const existing = bestByKey.get(key);
     if (!existing || new Date(h.createdAt) > new Date(existing.createdAt)) bestByKey.set(key, h);
   }

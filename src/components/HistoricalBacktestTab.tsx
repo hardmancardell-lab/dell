@@ -7,6 +7,7 @@ import { PriceChart } from "./PriceChart";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { getCurrencyPeg } from "@/lib/agents/trading-agent/skills/currency-pegs";
 import type { AssetClass, EquityBacktestResult, EquityBacktestSignalType } from "@/lib/agents/trading-agent/types";
+import type { OvernightCheckpointBacktestResult } from "@/lib/agents/trading-agent/skills/overnight-checkpoint-backtest";
 
 const SIGNAL_OPTIONS: { value: EquityBacktestSignalType; label: string }[] = [
   { value: "volumeDisplacement", label: "Volume Displacement" },
@@ -60,7 +61,32 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [focusedDate, setFocusedDate] = useState<string | null>(null);
+  const [overnightResult, setOvernightResult] = useState<OvernightCheckpointBacktestResult | null>(null);
+  const [overnightError, setOvernightError] = useState<string | null>(null);
+  const [overnightLoading, setOvernightLoading] = useState(false);
   const { track } = useTrackEvent();
+
+  async function runOvernightCheckpoints() {
+    if (!ticker.trim()) return;
+    setOvernightLoading(true);
+    setOvernightError(null);
+    setOvernightResult(null);
+    try {
+      const res = await fetch(`/api/overnight-checkpoint-backtest?ticker=${encodeURIComponent(ticker)}&signal=${signal}&years=${years}`);
+      const json = await res.json();
+      if (!res.ok) {
+        setOvernightError(json.error ?? "Unknown error");
+        track("api_error", { tab: "Backtest", symbol: ticker, metadata: { endpoint: "overnight-checkpoint-backtest", status: res.status } });
+      } else {
+        setOvernightResult(json as OvernightCheckpointBacktestResult);
+        track("backtest_run", { tab: "Backtest", symbol: ticker, metadata: { study: "overnight-checkpoint", signal, years } });
+      }
+    } catch (err) {
+      setOvernightError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setOvernightLoading(false);
+    }
+  }
 
   const isMeanReversionSignal = signal === "meanReversionOversold" || signal === "meanReversionOverbought";
   const registeredPeg = assetClass === "forex" ? getCurrencyPeg(ticker) : undefined;
@@ -256,6 +282,74 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
               </div>
             </div>
           )}
+
+          <div className="jv-card">
+            <div className="jv-br-b" />
+            <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
+              Overnight / Premarket Checkpoint — Buy at the Close, Sell Before the Open
+            </div>
+            <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+              A different, real question than the horizons above: instead of entering when the signal fires and
+              holding to a later close, this buys at the real close of the signal day (last 3 minutes of the
+              regular session) and sells at a specific time the next morning — three premarket checkpoints
+              (8:30am / 8:45am / 9:29am ET) plus two regular-session cutoffs (10:30am ET and 11:30am ET / 10:30am
+              CT), computed side by side. Same signal, same statistical pipeline, genuinely different entry/exit.
+            </p>
+            <button onClick={runOvernightCheckpoints} disabled={overnightLoading} className="jv-btn" style={{ padding: "8px 16px" }}>
+              {overnightLoading ? "Running…" : "Run Overnight/Premarket Analysis"}
+            </button>
+
+            {overnightError && (
+              <div className="text-sm mt-3" style={{ color: "var(--danger)" }}>{overnightError}</div>
+            )}
+
+            {overnightResult && (
+              <div className="flex flex-col gap-3 mt-4">
+                <div className="text-xs" style={{ color: "var(--text-2)" }}>
+                  {overnightResult.signalDaysFound} real signal-day occurrence(s) found over {overnightResult.lookbackYears} year(s).
+                </div>
+                {overnightResult.checkpoints.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }} className="text-left">
+                          <th className={TH_CLASS}>Sell At</th>
+                          <th className={TH_CLASS}>N</th>
+                          <th className={TH_CLASS}>Mean Return</th>
+                          <th className={TH_CLASS}><GlossaryTerm term="bootstrapCi">Bootstrap 95% CI</GlossaryTerm></th>
+                          <th className={TH_CLASS}><GlossaryTerm term="passesAllThreeBars">Passes All 3 Bars</GlossaryTerm></th>
+                          <th className={TH_CLASS}><GlossaryTerm term="winRate">Win Rate</GlossaryTerm></th>
+                          <th className={TH_CLASS}><GlossaryTerm term="maxDrawdown">Max Drawdown</GlossaryTerm></th>
+                        </tr>
+                      </thead>
+                      <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
+                        {overnightResult.checkpoints.map((c) => (
+                          <tr key={c.label} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                            <td className={`${TD_CLASS} font-medium`} style={{ color: "var(--text-0)" }}>{c.label}</td>
+                            <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{c.sampleSize}</td>
+                            <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(c.meanReturnPct)}</td>
+                            <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>
+                              {c.bootstrapCiLower !== null && c.bootstrapCiUpper !== null
+                                ? `[${c.bootstrapCiLower.toFixed(2)}, ${c.bootstrapCiUpper.toFixed(2)}]`
+                                : "N/A"}
+                            </td>
+                            <td className={TD_CLASS}>
+                              <span className={`jv-badge ${c.passesAllThreeBars ? "c-signal" : "c-neutral"}`}>{c.passesAllThreeBars ? "yes" : "no"}</span>
+                            </td>
+                            <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{c.winRate !== null ? `${c.winRate.toFixed(1)}%` : "N/A"}</td>
+                            <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{c.maxDrawdownPct !== null ? `${c.maxDrawdownPct.toFixed(2)}%` : "N/A"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {overnightResult.dataLimitations.map((d) => (
+                  <div key={d.slice(0, 30)} className="text-xs" style={{ color: "var(--verdict)" }}>{d}</div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {result.reversionStats && (
             <div className="jv-card">
