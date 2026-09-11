@@ -31,10 +31,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/gap-calendar-study",
   "/api/interaction-effects",
   "/api/correlation-matrix",
-  // TEMP: verifying overnight-checkpoint-backtest + guided-signals horizon fix, then reverting.
-  "/api/overnight-checkpoint-backtest",
-  "/api/guided-trade-signals",
-  "/api/debug-bars-timing",
 ];
 
 function isPublicPath(pathname: string): boolean {
