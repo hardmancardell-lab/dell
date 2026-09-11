@@ -3,6 +3,7 @@ import { computeMomentum, computeVolumeDisplacement } from "./scan-signals";
 import { computeMeanReversion } from "./mean-reversion";
 import { benjaminiHochberg, bootstrapCi, zTestPValue } from "./stats-tests";
 import { buildReversionStats, computeWinLossMetrics, mean, median, stdDev } from "../stats";
+import { computeVolumeProfile, findNearestLiquidityZone } from "./volume-profile";
 import type {
   BacktestHorizonResult,
   DailyBar,
@@ -10,6 +11,7 @@ import type {
   EquityBacktestResult,
   EquityBacktestSignalType,
   EquityTradeLogRow,
+  LiquidityZoneStopResult,
   ReversionStats,
   StopLossHorizonResult,
 } from "../types";
@@ -17,6 +19,12 @@ import type {
 // Adverse-move percentages tested as a hypothetical resting stop, applied on
 // top of every already-validated signal — diagnostic, not a new engine.
 const STOP_LOSS_LEVELS_PCT = [1, 2, 3, 5];
+
+// Trailing daily bars used to build each occurrence's own volume profile,
+// as of that occurrence's entry day (no lookahead) — a real, standard
+// volume-profile window (roughly one trading quarter), not tuned/curve-fit.
+const VOLUME_PROFILE_LOOKBACK_DAYS = 60;
+const MIN_VOLUME_PROFILE_BARS = 20;
 
 // meanReversionOverbought is this backtest's only short-side signal (see
 // entryRuleFor in hypothesis-sweep.ts: "Enter short when...") — every other
@@ -192,6 +200,96 @@ function computeStopLossOverlay(
   return results;
 }
 
+/** Same exit mechanics as walkForStop, but the stop is a fixed price level (a real liquidity zone) rather than an entry-relative percentage. */
+function walkForZoneStop(
+  bars: DailyBar[],
+  entryIndex: number,
+  entryClose: number,
+  direction: "long" | "short",
+  stopPrice: number,
+  maxHorizonDays: number
+): StopWalk {
+  const end = Math.min(bars.length - 1, entryIndex + maxHorizonDays);
+  for (let day = entryIndex + 1; day <= end; day++) {
+    const bar = bars[day];
+    const offset = day - entryIndex;
+    if (direction === "long") {
+      if (bar.open <= stopPrice) return { stoppedDayOffset: offset, stopExitReturnPct: ((bar.open - entryClose) / entryClose) * 100 };
+      if (bar.low <= stopPrice) return { stoppedDayOffset: offset, stopExitReturnPct: ((stopPrice - entryClose) / entryClose) * 100 };
+    } else {
+      if (bar.open >= stopPrice) return { stoppedDayOffset: offset, stopExitReturnPct: ((entryClose - bar.open) / entryClose) * 100 };
+      if (bar.high >= stopPrice) return { stoppedDayOffset: offset, stopExitReturnPct: ((entryClose - stopPrice) / entryClose) * 100 };
+    }
+  }
+  return { stoppedDayOffset: null, stopExitReturnPct: null };
+}
+
+/**
+ * For each occurrence, builds a real volume profile from the trailing
+ * VOLUME_PROFILE_LOOKBACK_DAYS daily bars strictly up to and including the
+ * entry day (no lookahead — the profile at occurrence #50 is never built
+ * using bars occurrence #50 hasn't reached yet), finds the nearest real
+ * high-volume node on the stop-relevant side, and walks forward exactly
+ * like the fixed-percentage overlay. Occurrences with too little trailing
+ * history or no high-volume node on the required side are excluded and
+ * counted, not silently dropped or padded with a guessed level.
+ */
+function computeLiquidityZoneStopOverlay(
+  bars: DailyBar[],
+  occurrences: Occurrence[],
+  direction: "long" | "short",
+  horizonsTradingDays: number[]
+): LiquidityZoneStopResult[] {
+  const maxHorizonDays = Math.max(...horizonsTradingDays);
+
+  interface ZonePick {
+    walk: StopWalk | null; // null if no zone was found for this occurrence
+    zoneDistancePct: number | null;
+  }
+
+  const zonePicks: ZonePick[] = occurrences.map((o) => {
+    const windowStart = Math.max(0, o.entryIndex - VOLUME_PROFILE_LOOKBACK_DAYS + 1);
+    const profileBars = bars.slice(windowStart, o.entryIndex + 1);
+    if (profileBars.length < MIN_VOLUME_PROFILE_BARS) return { walk: null, zoneDistancePct: null };
+
+    const profile = computeVolumeProfile(profileBars);
+    const zonePrice = findNearestLiquidityZone(profile, o.entryClose, direction);
+    if (zonePrice === null) return { walk: null, zoneDistancePct: null };
+
+    const walk = walkForZoneStop(bars, o.entryIndex, o.entryClose, direction, zonePrice, maxHorizonDays);
+    const zoneDistancePct = (Math.abs(zonePrice - o.entryClose) / o.entryClose) * 100;
+    return { walk, zoneDistancePct };
+  });
+
+  const occurrencesWithNoZoneFound = zonePicks.filter((z) => z.walk === null).length;
+  const foundDistances = zonePicks.map((z) => z.zoneDistancePct).filter((v): v is number => v !== null);
+  const avgZoneDistancePct = mean(foundDistances);
+
+  return horizonsTradingDays.map((horizonDays) => {
+    const withZoneStopReturns: number[] = [];
+    let stoppedOutCount = 0;
+    occurrences.forEach((o, idx) => {
+      const pick = zonePicks[idx];
+      if (!pick.walk) return; // no real zone found for this occurrence — excluded, not guessed
+      if (pick.walk.stoppedDayOffset !== null && pick.walk.stoppedDayOffset <= horizonDays) {
+        withZoneStopReturns.push(pick.walk.stopExitReturnPct as number);
+        stoppedOutCount++;
+      } else if (o.forwardReturns[horizonsTradingDays.indexOf(horizonDays)] !== null) {
+        withZoneStopReturns.push(o.forwardReturns[horizonsTradingDays.indexOf(horizonDays)] as number);
+      }
+    });
+
+    return {
+      horizonDays,
+      sampleSize: withZoneStopReturns.length,
+      stoppedOutCount,
+      occurrencesWithNoZoneFound,
+      avgZoneDistancePct,
+      ...computeWinLossMetrics(withZoneStopReturns),
+    };
+  });
+}
+
 export async function runBacktest(
   ticker: string,
   signalType: EquityBacktestSignalType,
@@ -328,6 +426,11 @@ export async function runBacktest(
     "The stop-loss overlay tests a hypothetical resting stop at each level against this same real historical sample — it reuses the baseline's win/loss math, but does NOT re-run the FDR/bootstrap/out-of-sample validation, since the question is whether a stop helps or hurts the already-validated edge, not a new hypothesis test. A gap through the stop fills at that day's real open (worse than the stop price, same as a real order); an intraday-only touch fills at the stop price itself."
   );
 
+  const liquidityZoneStopOverlay = computeLiquidityZoneStopOverlay(bars, occurrences, STRATEGY_DIRECTION[signalType], HORIZONS_TRADING_DAYS);
+  dataLimitations.push(
+    `The liquidity-zone stop uses a real volume profile built from each occurrence's own trailing ${VOLUME_PROFILE_LOOKBACK_DAYS} daily bars (no lookahead) — since only daily OHLCV is available (no tick data), each day's real volume is distributed evenly across that day's own high-low range, the same disclosed approximation any charting platform without tick data makes. Occurrences with no high-volume node on the required side, or too little trailing history, are excluded (occurrencesWithNoZoneFound) rather than assigned a guessed level.`
+  );
+
   // Exit prices are intentionally not stored — algebraically recoverable as
   // entryClose * (1 + returnPct/100) if ever needed, avoiding a redundant field.
   const tradeLog: EquityTradeLogRow[] = occurrences.map((o) => {
@@ -356,6 +459,7 @@ export async function runBacktest(
     signalOccurrences: occurrences.length,
     horizons,
     stopLossOverlay,
+    liquidityZoneStopOverlay,
     reversionStats,
     tradeLog,
     dataLimitations,

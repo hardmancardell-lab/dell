@@ -283,6 +283,56 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
             </div>
           )}
 
+          {result.liquidityZoneStopOverlay.length > 0 && (
+            <div className="jv-card">
+              <div className="jv-br-b" />
+              <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
+                Liquidity Zone Stop — Volume Profile, Not a Guessed Percentage
+              </div>
+              <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+                Instead of a fixed % below entry, this stop is the nearest real high-volume node from a volume
+                profile built off each occurrence&apos;s own trailing 60 daily bars — a real, objective support/
+                resistance level, not a round-number guess. Compare against the fixed-% table above: a real
+                liquidity zone that beats every tested percentage is a genuinely different, better-grounded answer
+                than "try 2% and see."
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }} className="text-left">
+                      <th className={TH_CLASS}>Horizon</th>
+                      <th className={TH_CLASS}>N</th>
+                      <th className={TH_CLASS}>Avg Zone Distance</th>
+                      <th className={TH_CLASS}>No Zone Found</th>
+                      <th className={TH_CLASS}>Stopped Out</th>
+                      <th className={TH_CLASS}>Win Rate</th>
+                      <th className={TH_CLASS}>Mean Return</th>
+                      <th className={TH_CLASS}>Largest Loss</th>
+                      <th className={TH_CLASS}>Max Drawdown</th>
+                    </tr>
+                  </thead>
+                  <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {result.liquidityZoneStopOverlay.map((z) => (
+                      <tr key={z.horizonDays} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                        <td className={`${TD_CLASS} font-medium font-mono`} style={{ color: "var(--text-0)" }}>{z.horizonDays}d</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{z.sampleSize}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{z.avgZoneDistancePct !== null ? `${z.avgZoneDistancePct.toFixed(2)}%` : "N/A"}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{z.occurrencesWithNoZoneFound}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>
+                          {z.sampleSize > 0 ? `${z.stoppedOutCount} (${((z.stoppedOutCount / z.sampleSize) * 100).toFixed(0)}%)` : "N/A"}
+                        </td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{z.winRate !== null ? `${z.winRate.toFixed(1)}%` : "N/A"}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(z.expectancy)}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--danger)" }}>{fmtPct(z.largestLossPct)}</td>
+                        <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--danger)" }}>{z.maxDrawdownPct !== null ? `${z.maxDrawdownPct.toFixed(2)}%` : "N/A"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="jv-card">
             <div className="jv-br-b" />
             <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>

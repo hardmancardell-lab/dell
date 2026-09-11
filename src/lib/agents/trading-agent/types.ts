@@ -569,6 +569,24 @@ export interface StopLossHorizonResult extends WinLossMetrics {
   stoppedOutCount: number; // of sampleSize, how many exited early via the stop rather than reaching the horizon
 }
 
+/**
+ * Same real exit mechanics as StopLossHorizonResult (gap-through fills at
+ * the open, intraday touch fills at the stop price), but the stop level
+ * isn't a fixed percentage — it's the nearest real high-volume node (from a
+ * volume profile built only from the trailing 60 daily bars as of that
+ * occurrence's own entry day, no lookahead) below the entry for a long, or
+ * above it for a short. A real, objective "nearest liquidity zone," not a
+ * guessed distance — and because that distance varies occurrence to
+ * occurrence, avgZoneDistancePct reports what it averaged out to.
+ */
+export interface LiquidityZoneStopResult extends WinLossMetrics {
+  horizonDays: number;
+  sampleSize: number; // occurrences where a zone was found AND a return exists at this horizon
+  stoppedOutCount: number;
+  occurrencesWithNoZoneFound: number; // real, disclosed: no high-volume node existed on the required side within the profile window
+  avgZoneDistancePct: number | null; // mean % distance from entry to the zone, across occurrences where one was found
+}
+
 export interface EquityBacktestResult {
   ticker: string;
   signalType: EquityBacktestSignalType;
@@ -577,6 +595,7 @@ export interface EquityBacktestResult {
   signalOccurrences: number;
   horizons: BacktestHorizonResult[];
   stopLossOverlay: StopLossHorizonResult[];
+  liquidityZoneStopOverlay: LiquidityZoneStopResult[];
   reversionStats: ReversionStats | null;
   tradeLog: EquityTradeLogRow[];
   dataLimitations: string[];
