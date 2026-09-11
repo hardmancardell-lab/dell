@@ -31,6 +31,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/gap-calendar-study",
   "/api/interaction-effects",
   "/api/correlation-matrix",
+  "/api/debug-chris-lookup", // TEMP: confirm real email before resending his link, then delete
 ];
 
 function isPublicPath(pathname: string): boolean {
