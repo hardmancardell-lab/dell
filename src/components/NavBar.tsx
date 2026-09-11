@@ -15,7 +15,9 @@ export function NavBar() {
       }}
     >
       <div className="mx-auto max-w-4xl px-6 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-baseline gap-2">
+        <Link href="/" className="flex items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icons/dellegate-192.png" alt="Dellegate" width={28} height={28} style={{ borderRadius: 6 }} />
           <span className="font-semibold tracking-tight" style={{ color: "var(--text-0)" }}>
             Dellegate
           </span>
