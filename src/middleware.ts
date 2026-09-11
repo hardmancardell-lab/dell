@@ -31,9 +31,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/gap-calendar-study",
   "/api/interaction-effects",
   "/api/correlation-matrix",
-  // TEMP: verifying liquidity-zone stop overlay + overnight-checkpoint fix, then reverting.
-  "/api/historical-backtest",
-  "/api/overnight-checkpoint-backtest",
 ];
 
 function isPublicPath(pathname: string): boolean {
