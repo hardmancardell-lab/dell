@@ -31,7 +31,7 @@ const FDR_ALPHA = 0.05;
 // only signal days that also fall within this shorter minute-bar window can
 // produce a real occurrence — older ones are counted in
 // daysSkippedNoUsableBars, not silently dropped.
-const MINUTE_BAR_LOOKBACK_MONTHS = 6;
+const MINUTE_BAR_LOOKBACK_MONTHS = 3;
 const DAYS_PER_MONTH = 30.44;
 
 export interface OvernightCheckpoint {

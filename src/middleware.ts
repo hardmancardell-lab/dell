@@ -34,6 +34,7 @@ const PUBLIC_PATH_PREFIXES = [
   // TEMP: verifying overnight-checkpoint-backtest + guided-signals horizon fix, then reverting.
   "/api/overnight-checkpoint-backtest",
   "/api/guided-trade-signals",
+  "/api/debug-bars-timing",
 ];
 
 function isPublicPath(pathname: string): boolean {
