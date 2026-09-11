@@ -23,6 +23,16 @@ import type { DailyBar, EquityBacktestSignalType } from "../types";
 const EOD_ENTRY_WINDOW = { start: 957, end: 960 }; // 3:57pm-4:00pm ET — the last 3 minutes of the regular session
 const MIN_LOOKBACK_BARS = 21;
 const FDR_ALPHA = 0.05;
+// A real, hard constraint confirmed live: requesting years of minute bars in
+// one call times out on Alpaca's own backend (504) — this is exactly why
+// opening-range-breakout.ts caps its own minute-bar fetch at
+// ORB_LOOKBACK_MONTH_OPTIONS (max 6 months), never years. Signal detection
+// still runs across the full requested lookbackYears using cheap daily bars;
+// only signal days that also fall within this shorter minute-bar window can
+// produce a real occurrence — older ones are counted in
+// daysSkippedNoUsableBars, not silently dropped.
+const MINUTE_BAR_LOOKBACK_MONTHS = 6;
+const DAYS_PER_MONTH = 30.44;
 
 export interface OvernightCheckpoint {
   label: string;
@@ -67,6 +77,12 @@ export interface OvernightCheckpointResult extends WinLossMetrics {
   sampleSize: number;
   meanReturnPct: number | null;
   medianReturnPct: number | null;
+  // Real dispersion of the move itself — not the same thing as
+  // largestLossPct/maxDrawdownPct (the single worst realized outcome).
+  // stdDevPct answers "how much does this checkpoint's return typically
+  // vary," which is the real input a stop/position-size decision needs,
+  // not just the single worst historical print.
+  stdDevPct: number | null;
   pValue: number | null;
   pValueFdrAdjusted: number | null;
   significantAfterFdr: boolean;
@@ -98,11 +114,12 @@ export async function runOvernightCheckpointBacktest(
   const symbol = ticker.trim().toUpperCase();
   const lookbackCalendarDays = Math.round(lookbackYears * 365.25) + 30;
   const now = Date.now();
-  const startMs = now - lookbackCalendarDays * 24 * 60 * 60 * 1000;
+  const minuteLookbackDays = Math.round(MINUTE_BAR_LOOKBACK_MONTHS * DAYS_PER_MONTH);
+  const minuteStartMs = now - minuteLookbackDays * 24 * 60 * 60 * 1000;
 
   const [dailyBars, minuteCandles] = await Promise.all([
     getDailyBars(symbol, lookbackCalendarDays),
-    fetchMinuteBars(symbol, startMs, now, 60 * 30),
+    fetchMinuteBars(symbol, minuteStartMs, now, 60 * 30),
   ]);
   if (minuteCandles.length === 0) {
     throw new Error(`No minute bar data returned for ${symbol} — check the ticker is valid.`);
@@ -117,6 +134,7 @@ export async function runOvernightCheckpointBacktest(
     "Each checkpoint exits at the first available minute bar at or after that clock time the next trading day — a real fill would typically be modestly worse (spread/slippage), especially in the thinner premarket checkpoints.",
     "Premarket minute-bar depth comes from Alpaca's free-tier IEX feed (single-exchange, not the consolidated tape) — the thinnest and least representative part of the session on this provider; isolated premarket prints can look disconnected from the instrument's real full-tape price.",
     "Significance uses a z-test approximation, not an exact Student's t-test (see stats-tests.ts).",
+    `Minute bars are only fetched for the trailing ${MINUTE_BAR_LOOKBACK_MONTHS} months regardless of lookbackYears — requesting years of minute bars in one call times out on the data provider's own backend (confirmed live). Signal detection still runs across the full ${lookbackYears}-year window using daily bars; only signal days within the last ${MINUTE_BAR_LOOKBACK_MONTHS} months can produce a real occurrence here — older ones are counted in daysSkippedNoUsableBars.`,
   ];
 
   interface Occurrence {
@@ -204,6 +222,7 @@ export async function runOvernightCheckpointBacktest(
       sampleSize: values.length,
       meanReturnPct: mean(values),
       medianReturnPct: median(values),
+      stdDevPct: stdDev(values),
       pValue,
       pValueFdrAdjusted,
       significantAfterFdr,

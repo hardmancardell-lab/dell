@@ -316,9 +316,11 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
                           <th className={TH_CLASS}>Sell At</th>
                           <th className={TH_CLASS}>N</th>
                           <th className={TH_CLASS}>Mean Return</th>
+                          <th className={TH_CLASS}>Std Dev (variance)</th>
                           <th className={TH_CLASS}><GlossaryTerm term="bootstrapCi">Bootstrap 95% CI</GlossaryTerm></th>
                           <th className={TH_CLASS}><GlossaryTerm term="passesAllThreeBars">Passes All 3 Bars</GlossaryTerm></th>
                           <th className={TH_CLASS}><GlossaryTerm term="winRate">Win Rate</GlossaryTerm></th>
+                          <th className={TH_CLASS}>Worst Single Move</th>
                           <th className={TH_CLASS}><GlossaryTerm term="maxDrawdown">Max Drawdown</GlossaryTerm></th>
                         </tr>
                       </thead>
@@ -328,6 +330,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
                             <td className={`${TD_CLASS} font-medium`} style={{ color: "var(--text-0)" }}>{c.label}</td>
                             <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{c.sampleSize}</td>
                             <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(c.meanReturnPct)}</td>
+                            <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{c.stdDevPct !== null ? `${c.stdDevPct.toFixed(2)}%` : "N/A"}</td>
                             <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>
                               {c.bootstrapCiLower !== null && c.bootstrapCiUpper !== null
                                 ? `[${c.bootstrapCiLower.toFixed(2)}, ${c.bootstrapCiUpper.toFixed(2)}]`
@@ -337,7 +340,8 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
                               <span className={`jv-badge ${c.passesAllThreeBars ? "c-signal" : "c-neutral"}`}>{c.passesAllThreeBars ? "yes" : "no"}</span>
                             </td>
                             <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{c.winRate !== null ? `${c.winRate.toFixed(1)}%` : "N/A"}</td>
-                            <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{c.maxDrawdownPct !== null ? `${c.maxDrawdownPct.toFixed(2)}%` : "N/A"}</td>
+                            <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--danger)" }}>{c.largestLossPct !== null ? `${c.largestLossPct.toFixed(2)}%` : "N/A"}</td>
+                            <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--danger)" }}>{c.maxDrawdownPct !== null ? `${c.maxDrawdownPct.toFixed(2)}%` : "N/A"}</td>
                           </tr>
                         ))}
                       </tbody>
