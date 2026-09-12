@@ -8,6 +8,7 @@ import { MacroDashboardTab } from "@/components/MacroDashboardTab";
 import { IndustryImpactTab } from "@/components/IndustryImpactTab";
 import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
 import { EconomicOutlookTab, InternationalCentralBanksView } from "@/components/EconomicOutlookTab";
+import { FomcReactionStudyTab } from "@/components/FomcReactionStudyTab";
 import { SectorFundamentalsTab } from "@/components/SectorFundamentalsTab";
 import { SectorRecommendationsTab } from "@/components/SectorRecommendationsTab";
 import { SectorStockAnalysisTab } from "@/components/SectorStockAnalysisTab";
@@ -427,6 +428,7 @@ export default async function Home() {
                               { id: "industry", label: "Industry Impact", content: <IndustryImpactTab /> },
                               { id: "global-news", label: "Global News", content: <GlobalFinancialNewsTab /> },
                               { id: "economic-outlook", label: "Economic Outlook", content: <EconomicOutlookTab /> },
+                              { id: "fomc-reaction", label: "FOMC Reaction Study", content: <FomcReactionStudyTab /> },
                             ]}
                           />
                         </div>
