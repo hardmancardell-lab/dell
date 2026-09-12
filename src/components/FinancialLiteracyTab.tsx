@@ -11,6 +11,7 @@ import {
   LITERACY_MODULES,
   PLACEMENT_QUESTIONS,
 } from "@/lib/agents/financial-literacy/skills/curriculum-content";
+import { SIGNAL_CHECK_LEVELS } from "@/lib/agents/financial-literacy/skills/signal-check-content";
 import { LITERACY_TIER_ORDER } from "@/lib/agents/financial-literacy/types";
 import type {
   BadgeId,
@@ -40,6 +41,7 @@ const BADGE_LABEL: Record<BadgeId, string> = {
   "finished-intermediate": "Finished Intermediate",
   "finished-expert": "Finished Expert",
   "quiz-perfectionist": "Perfect Round",
+  "signal-sorter": "Signal Sorter",
 };
 
 // A tier's own questions must show real strength (5/6); every tier below it
@@ -67,6 +69,14 @@ const DeltaDefenderGame = dynamic(
   { ssr: false, loading: () => <div className="text-sm py-6" style={{ color: "var(--text-2)" }}>Loading game…</div> }
 );
 const DELTA_DEFENDER_MODULE_ID = "expert-game-delta-defender";
+
+// No canvas/window dependency, so this one doesn't need ssr:false — kept
+// dynamic anyway for the same code-splitting reason as the two games above
+// (its own card content shouldn't bloat the main bundle).
+const SignalCheckGame = dynamic(
+  () => import("@/components/literacy/SignalCheckGame").then((m) => m.SignalCheckGame),
+  { loading: () => <div className="text-sm py-6" style={{ color: "var(--text-2)" }}>Loading game…</div> }
+);
 
 function PlacementFlow({
   onComplete,
@@ -902,6 +912,24 @@ function CurriculumView({
                     </p>
                     <SaveSpendEarnGame
                       onComplete={(xp) => completeModule(SAVE_SPEND_EARN_MODULE_ID, xp)}
+                    />
+                  </div>
+                )}
+                {tier === "intermediate" && (
+                  <div className="jv-card mb-2">
+                    <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
+                      Signal Check
+                    </div>
+                    <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+                      A one-tap sorting game, not a quiz — decide Signal or Noise on real-world money
+                      claims. Four short rounds get more varied and less hand-held as you go, never
+                      longer or harder to read.
+                    </p>
+                    <SignalCheckGame
+                      completedLevelIds={progress.completedModuleIds.filter((id) =>
+                        SIGNAL_CHECK_LEVELS.some((lvl) => lvl.id === id)
+                      )}
+                      onLevelComplete={(levelId, xp) => completeModule(levelId, xp)}
                     />
                   </div>
                 )}
