@@ -98,9 +98,10 @@ function rejectionReasonFor(h: {
 
 /**
  * Only meaningful when the baseline itself has a positive expectancy (a
- * validated long edge should) — never called for meanReversionOverbought
- * (see StopLossVerdict's own comment: its return sign is currently
- * inverted, so any verdict computed from it would be unreliable). "Best"
+ * validated edge, long or short, should) — historical-backtest.ts's
+ * computeStopLossOverlay already sign-adjusts short returns to strategy
+ * P&L before this sees them, so meanReversionOverbought (the one short
+ * signal) is safe to call this for. "Best"
  * stop = whichever tested level has the highest expectancy; if even the
  * best one keeps less than 70% of the baseline's edge, the stop is doing
  * more harm than good regardless of its drawdown effect. Otherwise, a stop
@@ -213,12 +214,7 @@ async function sweepOneTicker(target: SweepTarget): Promise<TickerSweepResult> {
     try {
       const result = await runBacktest(target.ticker, signalType, 3);
       for (const h of result.horizons) {
-        // meanReversionOverbought's return sign is currently inverted (see
-        // StopLossVerdict's own comment) — never compute a verdict from it.
-        const stopLossVerdict =
-          signalType === "meanReversionOverbought"
-            ? null
-            : deriveStopLossVerdict(h, result.stopLossOverlay.filter((s) => s.horizonDays === h.horizonDays));
+        const stopLossVerdict = deriveStopLossVerdict(h, result.stopLossOverlay.filter((s) => s.horizonDays === h.horizonDays));
         await logHorizonResult({
           ticker: target.ticker,
           assetClass: target.assetClass,

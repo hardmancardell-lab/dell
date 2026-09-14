@@ -36,6 +36,18 @@ const STRATEGY_DIRECTION: Record<EquityBacktestSignalType, "long" | "short"> = {
   meanReversionOverbought: "short",
 };
 
+// occurrence.forwardReturns stores the RAW price return (close-to-close),
+// always positive when price rose. For a short signal that's the opposite
+// of the strategy's P&L — a short profits when price falls — so every
+// place that feeds forwardReturns into win/loss-style stats (win rate,
+// avg win/loss, profit factor, expectancy, bootstrap CI bounds) must flip
+// the sign for "short" first. The z-test p-value in runBacktest is exempt:
+// negating every value in a sample flips neither its standard deviation
+// nor a two-sided z-test's significance, so that one is left on raw values.
+function toStrategyReturnPct(rawReturnPct: number, direction: "long" | "short"): number {
+  return direction === "short" ? -rawReturnPct : rawReturnPct;
+}
+
 /**
  * Real historical backtesting — unlike the options GEX signal (blocked on
  * missing historical open interest, see paper-backtest-log.ts), equities has
@@ -180,10 +192,11 @@ function computeStopLossOverlay(
       occurrences.forEach((o, idx) => {
         const walk = walks[idx];
         if (walk.stoppedDayOffset !== null && walk.stoppedDayOffset <= horizonDays) {
+          // walkForStop's stopExitReturnPct is already strategy-P&L-signed for shorts.
           withStopReturns.push(walk.stopExitReturnPct as number);
           stoppedOutCount++;
         } else if (o.forwardReturns[h] !== null) {
-          withStopReturns.push(o.forwardReturns[h] as number);
+          withStopReturns.push(toStrategyReturnPct(o.forwardReturns[h] as number, direction));
         }
       });
 
@@ -272,10 +285,13 @@ function computeLiquidityZoneStopOverlay(
       const pick = zonePicks[idx];
       if (!pick.walk) return; // no real zone found for this occurrence — excluded, not guessed
       if (pick.walk.stoppedDayOffset !== null && pick.walk.stoppedDayOffset <= horizonDays) {
+        // walkForZoneStop's stopExitReturnPct is already strategy-P&L-signed for shorts.
         withZoneStopReturns.push(pick.walk.stopExitReturnPct as number);
         stoppedOutCount++;
       } else if (o.forwardReturns[horizonsTradingDays.indexOf(horizonDays)] !== null) {
-        withZoneStopReturns.push(o.forwardReturns[horizonsTradingDays.indexOf(horizonDays)] as number);
+        withZoneStopReturns.push(
+          toStrategyReturnPct(o.forwardReturns[horizonsTradingDays.indexOf(horizonDays)] as number, direction)
+        );
       }
     });
 
@@ -360,10 +376,21 @@ export async function runBacktest(
   const fdrByHorizonIndex = new Map<number, number>();
   validHorizonIndices.forEach((h, k) => fdrByHorizonIndex.set(h, adjustedValid[k]));
 
+  const strategyDirection = STRATEGY_DIRECTION[signalType];
+
   const horizons: BacktestHorizonResult[] = HORIZONS_TRADING_DAYS.map((horizonDays, h) => {
-    const values = occurrences.map((o) => o.forwardReturns[h]).filter((v): v is number => v !== null);
-    const trainValues = trainOccurrences.map((o) => o.forwardReturns[h]).filter((v): v is number => v !== null);
-    const testValues = testOccurrences.map((o) => o.forwardReturns[h]).filter((v): v is number => v !== null);
+    const values = occurrences
+      .map((o) => o.forwardReturns[h])
+      .filter((v): v is number => v !== null)
+      .map((v) => toStrategyReturnPct(v, strategyDirection));
+    const trainValues = trainOccurrences
+      .map((o) => o.forwardReturns[h])
+      .filter((v): v is number => v !== null)
+      .map((v) => toStrategyReturnPct(v, strategyDirection));
+    const testValues = testOccurrences
+      .map((o) => o.forwardReturns[h])
+      .filter((v): v is number => v !== null)
+      .map((v) => toStrategyReturnPct(v, strategyDirection));
 
     const pValue = rawPValues[h];
     const pValueFdrAdjusted = fdrByHorizonIndex.get(h) ?? null;
