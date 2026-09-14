@@ -33,7 +33,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/correlation-matrix",
   "/api/fomc-reaction-study",
   "/api/fomc-week-variance",
-  "/api/historical-backtest", // TEMP: live-verifying the meanReversionOverbought sign fix, reverting right after
 ];
 
 function isPublicPath(pathname: string): boolean {
