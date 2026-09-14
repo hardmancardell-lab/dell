@@ -33,7 +33,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/correlation-matrix",
   "/api/fomc-reaction-study",
   "/api/fomc-week-variance",
-  "/api/debug-resend-check", // TEMP: diagnosing RESEND_API_KEY on production, deleting after use
 ];
 
 function isPublicPath(pathname: string): boolean {
