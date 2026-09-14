@@ -11,6 +11,8 @@ import {
   LITERACY_MODULES,
   PLACEMENT_QUESTIONS,
 } from "@/lib/agents/financial-literacy/skills/curriculum-content";
+import { SIGNAL_CHECK_LEVELS } from "@/lib/agents/financial-literacy/skills/signal-check-content";
+import { LONG_HAUL_MODULE_ID } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import { LITERACY_TIER_ORDER } from "@/lib/agents/financial-literacy/types";
 import type {
   BadgeId,
@@ -40,6 +42,7 @@ const BADGE_LABEL: Record<BadgeId, string> = {
   "finished-intermediate": "Finished Intermediate",
   "finished-expert": "Finished Expert",
   "quiz-perfectionist": "Perfect Round",
+  "signal-sorter": "Signal Sorter",
 };
 
 // A tier's own questions must show real strength (5/6); every tier below it
@@ -67,6 +70,21 @@ const DeltaDefenderGame = dynamic(
   { ssr: false, loading: () => <div className="text-sm py-6" style={{ color: "var(--text-2)" }}>Loading game…</div> }
 );
 const DELTA_DEFENDER_MODULE_ID = "expert-game-delta-defender";
+
+// No canvas/window dependency, so this one doesn't need ssr:false — kept
+// dynamic anyway for the same code-splitting reason as the two games above
+// (its own card content shouldn't bloat the main bundle).
+const SignalCheckGame = dynamic(
+  () => import("@/components/literacy/SignalCheckGame").then((m) => m.SignalCheckGame),
+  { loading: () => <div className="text-sm py-6" style={{ color: "var(--text-2)" }}>Loading game…</div> }
+);
+
+// Three.js + Rapier (WebGL/WASM) touch window at module-eval time — ssr:false
+// same reason as the two Phaser games above.
+const LongHaulGame = dynamic(
+  () => import("@/components/literacy/long-haul/LongHaulGame").then((m) => m.LongHaulGame),
+  { ssr: false, loading: () => <div className="text-sm py-6" style={{ color: "var(--text-2)" }}>Loading game…</div> }
+);
 
 function PlacementFlow({
   onComplete,
@@ -902,6 +920,41 @@ function CurriculumView({
                     </p>
                     <SaveSpendEarnGame
                       onComplete={(xp) => completeModule(SAVE_SPEND_EARN_MODULE_ID, xp)}
+                    />
+                  </div>
+                )}
+                {tier === "beginner" && (
+                  <div className="jv-card mb-2">
+                    <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
+                      The Long Haul {progress.completedModuleIds.includes(LONG_HAUL_MODULE_ID) && (
+                        <span className="text-xs font-mono ml-2" style={{ color: "var(--text-2)" }}>completed</span>
+                      )}
+                    </div>
+                    <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+                      A real driving game, not a quiz — choose a route, manage your fuel, and decide whether a
+                      quick-cash loan is worth it. Taking one attaches a real trailer to your car: worse
+                      handling and a lower top speed until it&apos;s paid off.
+                    </p>
+                    <LongHaulGame
+                      onComplete={(xp) => completeModule(LONG_HAUL_MODULE_ID, xp)}
+                    />
+                  </div>
+                )}
+                {tier === "intermediate" && (
+                  <div className="jv-card mb-2">
+                    <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
+                      Signal Check
+                    </div>
+                    <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+                      A one-tap sorting game, not a quiz — decide Signal or Noise on real-world money
+                      claims. Four short rounds get more varied and less hand-held as you go, never
+                      longer or harder to read.
+                    </p>
+                    <SignalCheckGame
+                      completedLevelIds={progress.completedModuleIds.filter((id) =>
+                        SIGNAL_CHECK_LEVELS.some((lvl) => lvl.id === id)
+                      )}
+                      onLevelComplete={(levelId, xp) => completeModule(levelId, xp)}
                     />
                   </div>
                 )}

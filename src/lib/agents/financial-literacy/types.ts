@@ -83,4 +83,42 @@ export type BadgeId =
   | "finished-expert"
   | "first-module"
   | "five-day-streak"
-  | "quiz-perfectionist";
+  | "quiz-perfectionist"
+  | "signal-sorter";
+
+export type SignalCardDomain = "investing" | "credit-debt" | "budgeting" | "scams";
+
+/**
+ * One card in the Signal Check game (Intermediate tier) — a single, real-
+ * world money claim the player sorts into Signal (real, checkable,
+ * actionable) or Noise (hype, pressure, or a trap). Deliberately one binary
+ * decision per card, never a multi-part question — see SignalCheckLevel for
+ * why difficulty ramps through variety/pace/scaffolding instead of through
+ * per-card complexity.
+ */
+export interface SignalCard {
+  text: string;
+  isSignal: boolean;
+  domain: SignalCardDomain;
+  explanation: string; // one sentence; shown always at low levels, only on a miss at higher levels
+}
+
+/**
+ * A round of Signal Check. The four levels ramp in scenario variety (single
+ * domain -> all four mixed), phrasing pace (full sentence -> headline/text-
+ * snippet), and hand-holding (explanations always shown -> only on a miss) —
+ * never in how much has to be held in mind at once for any single card. This
+ * is the direct design response to the scarcity/cognitive-bandwidth research
+ * in beginner-18 ("The scarcity trap"): financial stress already consumes
+ * the bandwidth a harder *individual* decision would need, so the ramp has
+ * to come from somewhere else.
+ */
+export interface SignalCheckLevel {
+  id: string; // e.g. "intermediate-game-signal-check-1" — an XP-bearing pseudo-module id, same pattern as the other tier games' *_MODULE_ID constants
+  order: number;
+  title: string;
+  intro: string;
+  showExplanationsAlways: boolean;
+  xpBase: number;
+  cards: SignalCard[];
+}

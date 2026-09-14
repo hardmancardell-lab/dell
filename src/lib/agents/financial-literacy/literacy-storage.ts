@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { LITERACY_MODULES } from "./skills/curriculum-content";
+import { SIGNAL_CHECK_LEVELS } from "./skills/signal-check-content";
 import { LITERACY_TIER_ORDER } from "./types";
 import type { BadgeId, LearnerGoal, LiteracyProgress, LiteracyTier, PlacementResult } from "./types";
 
@@ -53,6 +54,9 @@ export function deriveBadges(progress: LiteracyProgress): BadgeId[] {
   if (progress.completedModuleIds.length >= 1) badges.push("first-module");
   if (progress.streakDays >= 5) badges.push("five-day-streak");
   if (progress.hasPerfectRound) badges.push("quiz-perfectionist");
+  if (SIGNAL_CHECK_LEVELS.every((lvl) => progress.completedModuleIds.includes(lvl.id))) {
+    badges.push("signal-sorter");
+  }
   for (const tier of LITERACY_TIER_ORDER) {
     const allDone = moduleIdsForTier(tier).every((id) => progress.completedModuleIds.includes(id));
     if (allDone) {
