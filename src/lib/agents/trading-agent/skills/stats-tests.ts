@@ -34,6 +34,17 @@ export interface BootstrapCiResult {
   ciExcludesZero: boolean;
 }
 
+// A percentile bootstrap resamples WITH REPLACEMENT from the sample itself —
+// with fewer than this many real points, every resample just reshuffles the
+// same handful of values, so the interval collapses toward a single point
+// rather than approximating a real sampling distribution. Below this floor,
+// ciExcludesZero is forced false regardless of what the (meaningless)
+// interval shows — real bug found live: an n=1 bucket's bootstrap always
+// resamples that one value, so lower===upper===that value, and
+// ciExcludesZero came out true whenever the value happened to be nonzero,
+// even though n=1 can say nothing about statistical significance.
+const MIN_BOOTSTRAP_SAMPLE_SIZE = 5;
+
 /**
  * Percentile bootstrap — direct port of backtest_engine.py's bootstrap_ci().
  * Not seeded (unlike the deterministic mock-data generators elsewhere in
@@ -59,8 +70,9 @@ export function bootstrapCi(values: number[], nBoot = 5000, ci = 0.95): Bootstra
   const mean = clean.reduce((s, v) => s + v, 0) / clean.length;
   const lower = bootMeans[lowerIdx];
   const upper = bootMeans[upperIdx];
+  const ciExcludesZero = clean.length >= MIN_BOOTSTRAP_SAMPLE_SIZE && (lower > 0 || upper < 0);
 
-  return { mean, lower, upper, ciExcludesZero: lower > 0 || upper < 0 };
+  return { mean, lower, upper, ciExcludesZero };
 }
 
 /**
