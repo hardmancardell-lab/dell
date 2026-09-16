@@ -16,6 +16,7 @@ interface WinLossMetrics {
 interface FomcMeetingReaction {
   decisionDate: string;
   regime: "hiking" | "cutting" | "holding" | null;
+  actualDecision: "hike" | "cut" | "hold" | null;
   day0ReturnPct: number | null;
   day1ReturnPct: number | null;
 }
@@ -26,6 +27,13 @@ interface FomcOutcomeBucket extends WinLossMetrics {
   day0BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
 }
 
+interface FomcBreakBucket extends WinLossMetrics {
+  label: "hawkishBreakFromHolding" | "dovishBreakFromHolding";
+  sampleSize: number;
+  day0BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
+  meetingDates: string[];
+}
+
 interface FomcTickerReactionResult {
   ticker: string;
   meetings: FomcMeetingReaction[];
@@ -34,8 +42,14 @@ interface FomcTickerReactionResult {
   overallDay1: WinLossMetrics;
   overallDay0BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
   byRegime: FomcOutcomeBucket[];
+  breaks: FomcBreakBucket[];
   error?: string;
 }
+
+const BREAK_LABELS: Record<FomcBreakBucket["label"], string> = {
+  hawkishBreakFromHolding: "Hawkish break (hike during a holding trend)",
+  dovishBreakFromHolding: "Dovish break (cut during a holding trend)",
+};
 
 interface FomcReactionStudyResult {
   tickers: FomcTickerReactionResult[];
@@ -79,7 +93,7 @@ export function FomcReactionStudyTab() {
   return (
     <div className="jarvis flex flex-col gap-6">
       <p className="jv-lede" style={{ marginBottom: 0 }}>
-        Real event study: how each ticker has actually reacted on every FOMC decision day since 2023 (day-of and
+        Real event study: how each ticker has actually reacted on every FOMC decision day since 2015 (day-of and
         next-day % move), broken down by the trailing Fed-rate regime active at the time. The upcoming{" "}
         {result?.upcomingMeeting.date ?? "next"} meeting is tracked separately below — it isn&apos;t in these stats
         since it hasn&apos;t happened yet.
@@ -161,6 +175,21 @@ export function FomcReactionStudyTab() {
                       </div>
                     )}
 
+                    {t.breaks?.some((b) => b.sampleSize > 0) && (
+                      <div className="mb-2">
+                        <div className="jv-label mb-1">Break-from-holding (real per-meeting decision vs. trailing trend)</div>
+                        {t.breaks.filter((b) => b.sampleSize > 0).map((b) => (
+                          <div key={b.label} className="flex justify-between text-xs font-mono" style={{ color: "var(--text-2)" }} title={b.meetingDates.join(", ")}>
+                            <span>{BREAK_LABELS[b.label]} (n={b.sampleSize})</span>
+                            <span style={{ color: "var(--text-1)" }}>
+                              {fmtPct(b.expectancy)} · win {b.winRate !== null ? `${b.winRate.toFixed(0)}%` : "N/A"}
+                              {b.day0BootstrapCi.ciExcludesZero ? " — significant" : ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <button
                       onClick={() => setExpandedTicker(expandedTicker === t.ticker ? null : t.ticker)}
                       className="text-xs underline"
@@ -176,19 +205,26 @@ export function FomcReactionStudyTab() {
                             <tr style={{ color: "var(--text-2)", borderBottom: "1px solid var(--line)" }} className="text-left">
                               <th className="py-1 pr-3 font-normal">Date</th>
                               <th className="py-1 pr-3 font-normal">Regime</th>
+                              <th className="py-1 pr-3 font-normal">Actual decision</th>
                               <th className="py-1 pr-3 font-normal text-right">Day 0</th>
                               <th className="py-1 pr-3 font-normal text-right">Day +1</th>
                             </tr>
                           </thead>
                           <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
-                            {t.meetings.map((m) => (
-                              <tr key={m.decisionDate} style={{ borderBottom: "1px solid var(--ink-800)" }}>
-                                <td className="py-1 pr-3 font-mono" style={{ color: "var(--text-0)" }}>{m.decisionDate}</td>
-                                <td className="py-1 pr-3 capitalize" style={{ color: "var(--text-2)" }}>{m.regime ?? "N/A"}</td>
-                                <td className="py-1 pr-3 text-right font-mono" style={{ color: (m.day0ReturnPct ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(m.day0ReturnPct)}</td>
-                                <td className="py-1 pr-3 text-right font-mono" style={{ color: (m.day1ReturnPct ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(m.day1ReturnPct)}</td>
-                              </tr>
-                            ))}
+                            {t.meetings.map((m) => {
+                              const isBreak = m.regime === "holding" && (m.actualDecision === "hike" || m.actualDecision === "cut");
+                              return (
+                                <tr key={m.decisionDate} style={{ borderBottom: "1px solid var(--ink-800)" }}>
+                                  <td className="py-1 pr-3 font-mono" style={{ color: "var(--text-0)" }}>{m.decisionDate}</td>
+                                  <td className="py-1 pr-3 capitalize" style={{ color: "var(--text-2)" }}>{m.regime ?? "N/A"}</td>
+                                  <td className="py-1 pr-3 capitalize" style={{ color: isBreak ? "var(--verdict)" : "var(--text-2)" }}>
+                                    {m.actualDecision ?? "N/A"}{isBreak ? " (break)" : ""}
+                                  </td>
+                                  <td className="py-1 pr-3 text-right font-mono" style={{ color: (m.day0ReturnPct ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(m.day0ReturnPct)}</td>
+                                  <td className="py-1 pr-3 text-right font-mono" style={{ color: (m.day1ReturnPct ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(m.day1ReturnPct)}</td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
