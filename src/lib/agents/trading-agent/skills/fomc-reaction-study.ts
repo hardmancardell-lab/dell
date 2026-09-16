@@ -10,9 +10,11 @@ import type { WinLossMetrics } from "../stats";
  * meeting, when the statement/rate decision is actually released at
  * 2:00pm ET) — sourced directly from federalreserve.gov's own
  * fomcpresconf/press-release pages, not memorized or approximated. 2026-09-16
- * is the upcoming meeting and is never included in the historical event
- * study below (it hasn't happened yet) — it's surfaced separately as
- * context only.
+ * (a confirmed real 25bp hike to 3.75%-4.00%, per live coverage) is
+ * deliberately left out of FOMC_DECISION_DATES/the historical event study
+ * below until enough time has passed for real day-0/day-1 price reaction
+ * data to exist — it's surfaced separately, in upcomingMeeting, as context
+ * only for now.
  */
 export const FOMC_DECISION_DATES: string[] = [
   // 2023
@@ -157,7 +159,7 @@ export async function runFomcReactionStudy(tickers: string[]): Promise<FomcReact
     tickers: results,
     upcomingMeeting: {
       date: UPCOMING_FOMC_DATE,
-      note: "Not included in the stats above — this meeting hasn't happened yet.",
+      note: "Real, confirmed outcome (not included in the stats above yet — too soon after the decision for day-0/day-1 price reaction data to exist): the Fed hiked 25bp to 3.75%-4.00% on 2026-09-16. The same meeting's dot plot (Summary of Economic Projections) showed 12 of 18 participants projecting one more 25bp hike by year-end 2026 (to ~4.125% average), 4 of 18 projecting two more hikes (50bp), and 2 of 18 projecting no further hikes this year — a real, still-divided committee leaning toward at least one additional hike, not a settled pause.",
     },
     dataLimitations,
   };
