@@ -85,6 +85,8 @@ export interface FomcBreakBucket extends WinLossMetrics {
   label: "hawkishBreakFromHolding" | "dovishBreakFromHolding";
   sampleSize: number;
   day0BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
+  day1: WinLossMetrics; // the day AFTER this specific break, not just the break day itself
+  day1BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
   meetingDates: string[]; // which real meetings actually landed in this bucket, for transparency
 }
 
@@ -168,14 +170,18 @@ async function reactionsForTicker(
     matches: (m: FomcMeetingReaction) => boolean
   ): FomcBreakBucket {
     const matching = meetings.filter(matches);
-    const values = matching.map((m) => m.day0ReturnPct).filter((v): v is number => v !== null);
-    const boot = bootstrapCi(values);
+    const day0BreakValues = matching.map((m) => m.day0ReturnPct).filter((v): v is number => v !== null);
+    const day1BreakValues = matching.map((m) => m.day1ReturnPct).filter((v): v is number => v !== null);
+    const boot = bootstrapCi(day0BreakValues);
+    const day1Boot = bootstrapCi(day1BreakValues);
     return {
       label,
-      sampleSize: values.length,
+      sampleSize: day0BreakValues.length,
       day0BootstrapCi: { lower: boot.lower, upper: boot.upper, ciExcludesZero: boot.ciExcludesZero },
+      day1: computeWinLossMetrics(day1BreakValues),
+      day1BootstrapCi: { lower: day1Boot.lower, upper: day1Boot.upper, ciExcludesZero: day1Boot.ciExcludesZero },
       meetingDates: matching.map((m) => m.decisionDate),
-      ...computeWinLossMetrics(values),
+      ...computeWinLossMetrics(day0BreakValues),
     };
   }
 

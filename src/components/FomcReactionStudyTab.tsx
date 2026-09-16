@@ -31,6 +31,8 @@ interface FomcBreakBucket extends WinLossMetrics {
   label: "hawkishBreakFromHolding" | "dovishBreakFromHolding";
   sampleSize: number;
   day0BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
+  day1: WinLossMetrics;
+  day1BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
   meetingDates: string[];
 }
 
@@ -182,7 +184,7 @@ export function FomcReactionStudyTab() {
                           <div key={b.label} className="flex justify-between text-xs font-mono" style={{ color: "var(--text-2)" }} title={b.meetingDates.join(", ")}>
                             <span>{BREAK_LABELS[b.label]} (n={b.sampleSize})</span>
                             <span style={{ color: "var(--text-1)" }}>
-                              {fmtPct(b.expectancy)} · win {b.winRate !== null ? `${b.winRate.toFixed(0)}%` : "N/A"}
+                              day0 {fmtPct(b.expectancy)} · day+1 {fmtPct(b.day1.expectancy)} · win {b.winRate !== null ? `${b.winRate.toFixed(0)}%` : "N/A"}
                               {b.day0BootstrapCi.ciExcludesZero ? " — significant" : ""}
                             </span>
                           </div>
