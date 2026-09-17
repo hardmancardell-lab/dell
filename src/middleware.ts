@@ -33,6 +33,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/correlation-matrix",
   "/api/fomc-reaction-study",
   "/api/fomc-week-variance",
+  "/api/temp-volume-streak", // TEMP: checking watchlist volume streaks, deleting right after
 ];
 
 function isPublicPath(pathname: string): boolean {
