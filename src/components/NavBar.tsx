@@ -1,7 +1,18 @@
 import Link from "next/link";
 import { LogoutButton } from "./LogoutButton";
+import { createClient } from "@/lib/supabase/server";
 
-export function NavBar() {
+export async function NavBar() {
+  // Real bug found live: this used to render LogoutButton unconditionally,
+  // so a brand-new visitor with no account at all (e.g. someone opening a
+  // /signup link for the first time) saw "Sign out" sitting right next to
+  // "Create account" — confusing enough that it read as the app being
+  // broken. Only show it when there's an actual logged-in Supabase session.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <header
       className="jarvis"
@@ -25,7 +36,7 @@ export function NavBar() {
             Delegate the research. Own the decision.
           </span>
         </Link>
-        <LogoutButton />
+        {user && <LogoutButton />}
       </div>
     </header>
   );
