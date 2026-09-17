@@ -69,10 +69,12 @@ function classifyActualDecision(decisionDate: string, timeline: TargetRateTimeli
 
 export interface FomcMeetingReaction {
   decisionDate: string;
+  decisionWeekday: string; // real weekday the decision fell on — almost always Wednesday, so day2 usually lands on Friday, but not guaranteed
   regime: FedRateRegime | null; // trailing-6-month FEDFUNDS trend as of this date — a regime label, not literally "this meeting hiked/cut"
   actualDecision: FomcActualDecision | null; // this specific meeting's real decision, from the DFEDTARU step function
   day0ReturnPct: number | null;
   day1ReturnPct: number | null;
+  day2ReturnPct: number | null; // 2 trading days after the decision — Friday for a Wednesday decision (the vast majority of meetings)
 }
 
 export interface FomcOutcomeBucket extends WinLossMetrics {
@@ -87,6 +89,8 @@ export interface FomcBreakBucket extends WinLossMetrics {
   day0BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
   day1: WinLossMetrics; // the day AFTER this specific break, not just the break day itself
   day1BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
+  day2: WinLossMetrics; // 2 trading days after — Friday, for the Wednesday-decision majority
+  day2BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
   meetingDates: string[]; // which real meetings actually landed in this bucket, for transparency
 }
 
@@ -96,6 +100,7 @@ export interface FomcTickerReactionResult {
   overallSampleSize: number;
   overallDay0: WinLossMetrics;
   overallDay1: WinLossMetrics;
+  overallDay2: WinLossMetrics;
   overallDay0BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
   byRegime: FomcOutcomeBucket[];
   breaks: FomcBreakBucket[];
@@ -124,29 +129,44 @@ async function reactionsForTicker(
     return null;
   }
 
+  const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
   const meetings: FomcMeetingReaction[] = [];
   for (const decisionDate of FOMC_DECISION_DATES) {
     const i = indexOnOrAfter(decisionDate);
     const regime = classifyRegimeForDate(decisionDate, regimeTimeline);
     const actualDecision = classifyActualDecision(decisionDate, targetRateTimeline);
-    if (i === null || i === 0 || i >= bars.length - 1) {
-      meetings.push({ decisionDate, regime, actualDecision, day0ReturnPct: null, day1ReturnPct: null });
+    const decisionWeekday = WEEKDAY_NAMES[new Date(`${decisionDate}T12:00:00Z`).getUTCDay()];
+    if (i === null || i === 0 || i >= bars.length - 2) {
+      meetings.push({
+        decisionDate,
+        decisionWeekday,
+        regime,
+        actualDecision,
+        day0ReturnPct: null,
+        day1ReturnPct: null,
+        day2ReturnPct: null,
+      });
       continue;
     }
     const priorClose = bars[i - 1].close;
     const dayClose = bars[i].close;
     const nextClose = bars[i + 1].close;
+    const day2Close = bars[i + 2].close;
     meetings.push({
       decisionDate,
+      decisionWeekday,
       regime,
       actualDecision,
       day0ReturnPct: priorClose > 0 ? ((dayClose - priorClose) / priorClose) * 100 : null,
       day1ReturnPct: dayClose > 0 ? ((nextClose - dayClose) / dayClose) * 100 : null,
+      day2ReturnPct: nextClose > 0 ? ((day2Close - nextClose) / nextClose) * 100 : null,
     });
   }
 
   const day0Values = meetings.map((m) => m.day0ReturnPct).filter((v): v is number => v !== null);
   const day1Values = meetings.map((m) => m.day1ReturnPct).filter((v): v is number => v !== null);
+  const day2Values = meetings.map((m) => m.day2ReturnPct).filter((v): v is number => v !== null);
   const day0Boot = bootstrapCi(day0Values);
 
   const regimesPresent = [...new Set(meetings.map((m) => m.regime).filter((r): r is FedRateRegime => r !== null))];
@@ -172,14 +192,18 @@ async function reactionsForTicker(
     const matching = meetings.filter(matches);
     const day0BreakValues = matching.map((m) => m.day0ReturnPct).filter((v): v is number => v !== null);
     const day1BreakValues = matching.map((m) => m.day1ReturnPct).filter((v): v is number => v !== null);
+    const day2BreakValues = matching.map((m) => m.day2ReturnPct).filter((v): v is number => v !== null);
     const boot = bootstrapCi(day0BreakValues);
     const day1Boot = bootstrapCi(day1BreakValues);
+    const day2Boot = bootstrapCi(day2BreakValues);
     return {
       label,
       sampleSize: day0BreakValues.length,
       day0BootstrapCi: { lower: boot.lower, upper: boot.upper, ciExcludesZero: boot.ciExcludesZero },
       day1: computeWinLossMetrics(day1BreakValues),
       day1BootstrapCi: { lower: day1Boot.lower, upper: day1Boot.upper, ciExcludesZero: day1Boot.ciExcludesZero },
+      day2: computeWinLossMetrics(day2BreakValues),
+      day2BootstrapCi: { lower: day2Boot.lower, upper: day2Boot.upper, ciExcludesZero: day2Boot.ciExcludesZero },
       meetingDates: matching.map((m) => m.decisionDate),
       ...computeWinLossMetrics(day0BreakValues),
     };
@@ -200,6 +224,7 @@ async function reactionsForTicker(
     overallSampleSize: day0Values.length,
     overallDay0: computeWinLossMetrics(day0Values),
     overallDay1: computeWinLossMetrics(day1Values),
+    overallDay2: computeWinLossMetrics(day2Values),
     overallDay0BootstrapCi: { lower: day0Boot.lower, upper: day0Boot.upper, ciExcludesZero: day0Boot.ciExcludesZero },
     byRegime,
     breaks: [hawkishBreakFromHolding, dovishBreakFromHolding],
@@ -231,6 +256,7 @@ export async function runFomcReactionStudy(tickers: string[]): Promise<FomcReact
           overallSampleSize: 0,
           overallDay0: computeWinLossMetrics([]),
           overallDay1: computeWinLossMetrics([]),
+          overallDay2: computeWinLossMetrics([]),
           overallDay0BootstrapCi: { lower: null, upper: null, ciExcludesZero: false },
           byRegime: [],
           breaks: [],
@@ -248,6 +274,7 @@ export async function runFomcReactionStudy(tickers: string[]): Promise<FomcReact
     "Sample sizes on the break buckets can be small — a hike or cut breaking out of a holding trend is, by definition, an uncommon event. Each bucket lists the exact meeting dates included (meetingDates) so the sample is auditable, not just a number, INCLUDING dates that end up excluded from the actual stats below for lacking usable price history (see the next point) — a short meetingDates list is a real signal the effect is rare; a bucket whose stats sample is smaller than its meetingDates list is a data-coverage gap, not a second rare event.",
     "Real, confirmed data-coverage limit: this app's daily-bar provider doesn't reliably return price history back to 2015 for these tickers despite the longer requested lookback — overallSampleSize typically comes back around 49 of the 95 real meetings, not the full list. This disproportionately affects the break buckets, since 2 of that bucket's 3-4 real candidate meetings often predate the data's usable start and get silently dropped rather than counted.",
     "Bootstrap 95% CIs require at least 5 real data points to ever report significant (ciExcludesZero) — below that, a percentile bootstrap just reshuffles the same handful of values and can look artificially decisive. A bucket with sampleSize under 5 will always show ciExcludesZero:false here, by design, even if its single or handful of data points all point the same direction.",
+    "day2ReturnPct is that day's OWN close-to-close return (day1's close to day2's close), not the cumulative move since the decision — and it lands on Friday only for the ~97% of meetings held on a Wednesday (decisionWeekday is included per meeting so this is checkable, not assumed). The 3 known Thursday-decision meetings would put day2 on Monday instead.",
   ];
 
   return {

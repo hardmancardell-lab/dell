@@ -15,10 +15,12 @@ interface WinLossMetrics {
 
 interface FomcMeetingReaction {
   decisionDate: string;
+  decisionWeekday: string;
   regime: "hiking" | "cutting" | "holding" | null;
   actualDecision: "hike" | "cut" | "hold" | null;
   day0ReturnPct: number | null;
   day1ReturnPct: number | null;
+  day2ReturnPct: number | null;
 }
 
 interface FomcOutcomeBucket extends WinLossMetrics {
@@ -33,6 +35,8 @@ interface FomcBreakBucket extends WinLossMetrics {
   day0BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
   day1: WinLossMetrics;
   day1BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
+  day2: WinLossMetrics;
+  day2BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
   meetingDates: string[];
 }
 
@@ -42,6 +46,7 @@ interface FomcTickerReactionResult {
   overallSampleSize: number;
   overallDay0: WinLossMetrics;
   overallDay1: WinLossMetrics;
+  overallDay2: WinLossMetrics;
   overallDay0BootstrapCi: { lower: number | null; upper: number | null; ciExcludesZero: boolean };
   byRegime: FomcOutcomeBucket[];
   breaks: FomcBreakBucket[];
@@ -184,7 +189,7 @@ export function FomcReactionStudyTab() {
                           <div key={b.label} className="flex justify-between text-xs font-mono" style={{ color: "var(--text-2)" }} title={b.meetingDates.join(", ")}>
                             <span>{BREAK_LABELS[b.label]} (n={b.sampleSize})</span>
                             <span style={{ color: "var(--text-1)" }}>
-                              day0 {fmtPct(b.expectancy)} · day+1 {fmtPct(b.day1.expectancy)} · win {b.winRate !== null ? `${b.winRate.toFixed(0)}%` : "N/A"}
+                              day0 {fmtPct(b.expectancy)} · day+1 {fmtPct(b.day1.expectancy)} · day+2/Fri {fmtPct(b.day2.expectancy)} · win {b.winRate !== null ? `${b.winRate.toFixed(0)}%` : "N/A"}
                               {b.day0BootstrapCi.ciExcludesZero ? " — significant" : ""}
                             </span>
                           </div>
@@ -210,6 +215,7 @@ export function FomcReactionStudyTab() {
                               <th className="py-1 pr-3 font-normal">Actual decision</th>
                               <th className="py-1 pr-3 font-normal text-right">Day 0</th>
                               <th className="py-1 pr-3 font-normal text-right">Day +1</th>
+                              <th className="py-1 pr-3 font-normal text-right">Day +2 (Fri*)</th>
                             </tr>
                           </thead>
                           <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -224,6 +230,9 @@ export function FomcReactionStudyTab() {
                                   </td>
                                   <td className="py-1 pr-3 text-right font-mono" style={{ color: (m.day0ReturnPct ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(m.day0ReturnPct)}</td>
                                   <td className="py-1 pr-3 text-right font-mono" style={{ color: (m.day1ReturnPct ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(m.day1ReturnPct)}</td>
+                                  <td className="py-1 pr-3 text-right font-mono" style={{ color: (m.day2ReturnPct ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }} title={m.decisionWeekday !== "Wednesday" ? `Decision fell on ${m.decisionWeekday}, so day+2 is not Friday` : undefined}>
+                                    {fmtPct(m.day2ReturnPct)}
+                                  </td>
                                 </tr>
                               );
                             })}
