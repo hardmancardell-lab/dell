@@ -10,6 +10,7 @@ import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
 import { EconomicOutlookTab, InternationalCentralBanksView } from "@/components/EconomicOutlookTab";
 import { FomcReactionStudyTab } from "@/components/FomcReactionStudyTab";
 import { FomcWeekVarianceTab } from "@/components/FomcWeekVarianceTab";
+import { QuadWitchingStudyTab } from "@/components/QuadWitchingStudyTab";
 import { SectorFundamentalsTab } from "@/components/SectorFundamentalsTab";
 import { SectorRecommendationsTab } from "@/components/SectorRecommendationsTab";
 import { SectorStockAnalysisTab } from "@/components/SectorStockAnalysisTab";
@@ -431,6 +432,7 @@ export default async function Home() {
                               { id: "economic-outlook", label: "Economic Outlook", content: <EconomicOutlookTab /> },
                               { id: "fomc-reaction", label: "FOMC Reaction Study", content: <FomcReactionStudyTab /> },
                               { id: "fomc-week-variance", label: "FOMC Week Variance", content: <FomcWeekVarianceTab /> },
+                              { id: "quad-witching", label: "Quad Witching Study", content: <QuadWitchingStudyTab /> },
                             ]}
                           />
                         </div>
