@@ -34,6 +34,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/fomc-reaction-study",
   "/api/fomc-week-variance",
   "/api/quad-witching-study",
+  "/api/temp-gex-batch", // TEMP: checking live GEX/pin levels, deleting right after
 ];
 
 function isPublicPath(pathname: string): boolean {
