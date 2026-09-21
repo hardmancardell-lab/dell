@@ -34,6 +34,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/fomc-reaction-study",
   "/api/fomc-week-variance",
   "/api/quad-witching-study",
+  "/api/week-start-momentum",
 ];
 
 function isPublicPath(pathname: string): boolean {
