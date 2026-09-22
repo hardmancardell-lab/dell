@@ -13,6 +13,7 @@ import { FomcWeekVarianceTab } from "@/components/FomcWeekVarianceTab";
 import { QuadWitchingStudyTab } from "@/components/QuadWitchingStudyTab";
 import { WeekStartMomentumTab } from "@/components/WeekStartMomentumTab";
 import { OvernightIntradayPatternTab } from "@/components/OvernightIntradayPatternTab";
+import { PostBigDayStudyTab } from "@/components/PostBigDayStudyTab";
 import { SectorFundamentalsTab } from "@/components/SectorFundamentalsTab";
 import { SectorRecommendationsTab } from "@/components/SectorRecommendationsTab";
 import { SectorStockAnalysisTab } from "@/components/SectorStockAnalysisTab";
@@ -437,6 +438,7 @@ export default async function Home() {
                               { id: "quad-witching", label: "Quad Witching Study", content: <QuadWitchingStudyTab /> },
                               { id: "week-start-momentum", label: "Week Start Momentum", content: <WeekStartMomentumTab /> },
                               { id: "overnight-intraday", label: "Overnight vs Intraday", content: <OvernightIntradayPatternTab /> },
+                              { id: "post-big-day", label: "Post-Big-Day Study", content: <PostBigDayStudyTab /> },
                             ]}
                           />
                         </div>
