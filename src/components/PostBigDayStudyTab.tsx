@@ -11,6 +11,30 @@ interface PostBigDayOccurrence {
   nextDayOvernightGapPct: number;
   nextDayRangePct: number;
   nextDayFullReturnPct: number;
+  nextDayFinishedGreen: boolean;
+  dayAfterNextDateKey: string;
+  dayAfterNextGapPct: number;
+  dayAfterNextRangePct: number;
+  dayAfterNextFullReturnPct: number;
+  dayAfterNextFinishedGreen: boolean;
+}
+
+interface DayAfterNextStats {
+  count: number;
+  pctFinishedGreen: number | null;
+  meanGapPct: number | null;
+  medianGapPct: number | null;
+  maxDropPct: number | null;
+  meanRangePct: number | null;
+  medianRangePct: number | null;
+}
+
+interface RedNextDayLowTiming {
+  eventCount: number;
+  outOfTotalOccurrences: number;
+  minuteBarEventsUsable: number;
+  lowOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
+  mostCommonLowBucket: string | null;
 }
 
 interface GapDownEventDayStats {
@@ -50,6 +74,8 @@ interface PostBigDayResult {
   minuteBarOccurrencesUsable: number;
   nextDayHighOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
   nextDayLowOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
+  dayAfterNextStats: DayAfterNextStats;
+  redNextDayLowTiming: RedNextDayLowTiming;
   gapDownEventDays: GapDownEventDayStats;
   dataLimitations: string[];
   error?: string;
@@ -191,12 +217,52 @@ export function PostBigDayStudyTab() {
                   )}
 
                   {t.minuteBarOccurrencesUsable > 0 && (
-                    <div className="mb-4 text-xs" style={{ color: "var(--text-2)" }}>
+                    <div className="mb-2 text-xs" style={{ color: "var(--text-2)" }}>
                       Real next-day high/low timing (n={t.minuteBarOccurrencesUsable}): most common high-of-day{" "}
                       <span style={{ color: "var(--text-0)" }}>{topBucket(t.nextDayHighOfDayTimeDistribution) ?? "N/A"}</span>, most common
                       low-of-day <span style={{ color: "var(--text-0)" }}>{topBucket(t.nextDayLowOfDayTimeDistribution) ?? "N/A"}</span>.
                     </div>
                   )}
+
+                  {t.redNextDayLowTiming.minuteBarEventsUsable > 0 && (
+                    <div className="mb-4 text-xs" style={{ color: "var(--danger)" }}>
+                      On next-days that started off red specifically ({t.redNextDayLowTiming.eventCount} of {t.redNextDayLowTiming.outOfTotalOccurrences}, n=
+                      {t.redNextDayLowTiming.minuteBarEventsUsable} with usable minute bars): low-of-day most commonly hit{" "}
+                      <span style={{ color: "var(--text-0)" }}>{t.redNextDayLowTiming.mostCommonLowBucket ?? "N/A"}</span>.
+                    </div>
+                  )}
+
+                  <div className="jv-card mb-4" style={{ borderColor: "var(--verdict)" }}>
+                    <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
+                      Day after next (one more real trading day out)
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <div className="jv-label">Finishes green</div>
+                        <div className="font-mono" style={{ color: "var(--signal)" }}>{t.dayAfterNextStats.pctFinishedGreen?.toFixed(0)}%</div>
+                      </div>
+                      <div>
+                        <div className="jv-label">Mean gap</div>
+                        <div className="font-mono" style={{ color: (t.dayAfterNextStats.meanGapPct ?? 0) >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(t.dayAfterNextStats.meanGapPct)}</div>
+                      </div>
+                      <div>
+                        <div className="jv-label">Median gap</div>
+                        <div className="font-mono" style={{ color: "var(--text-0)" }}>{fmtPct(t.dayAfterNextStats.medianGapPct)}</div>
+                      </div>
+                      <div>
+                        <div className="jv-label">Max drop ever</div>
+                        <div className="font-mono" style={{ color: "var(--danger)" }}>{fmtPct(t.dayAfterNextStats.maxDropPct)}</div>
+                      </div>
+                      <div>
+                        <div className="jv-label">Mean range</div>
+                        <div className="font-mono" style={{ color: "var(--text-0)" }}>{fmtPct(t.dayAfterNextStats.meanRangePct)}</div>
+                      </div>
+                      <div>
+                        <div className="jv-label">Median range</div>
+                        <div className="font-mono" style={{ color: "var(--text-0)" }}>{fmtPct(t.dayAfterNextStats.medianRangePct)}</div>
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="jv-card mb-4" style={{ borderColor: "var(--verdict)" }}>
                     <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
@@ -257,6 +323,9 @@ export function PostBigDayStudyTab() {
                           <th className="py-1 pr-3 font-normal text-right">Gap</th>
                           <th className="py-1 pr-3 font-normal text-right">Range</th>
                           <th className="py-1 pr-3 font-normal text-right">Full day</th>
+                          <th className="py-1 pr-3 font-normal">Day after next</th>
+                          <th className="py-1 pr-3 font-normal text-right">Gap</th>
+                          <th className="py-1 pr-3 font-normal text-right">Full day</th>
                         </tr>
                       </thead>
                       <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -281,6 +350,9 @@ export function PostBigDayStudyTab() {
                             <td className="py-1 pr-3 text-right font-mono" style={{ color: o.nextDayOvernightGapPct >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(o.nextDayOvernightGapPct)}</td>
                             <td className="py-1 pr-3 text-right font-mono" style={{ color: "var(--text-2)" }}>{fmtPct(o.nextDayRangePct)}</td>
                             <td className="py-1 pr-3 text-right font-mono" style={{ color: o.nextDayFullReturnPct >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(o.nextDayFullReturnPct)}</td>
+                            <td className="py-1 pr-3 font-mono" style={{ color: "var(--text-2)" }}>{o.dayAfterNextDateKey}</td>
+                            <td className="py-1 pr-3 text-right font-mono" style={{ color: o.dayAfterNextGapPct >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(o.dayAfterNextGapPct)}</td>
+                            <td className="py-1 pr-3 text-right font-mono" style={{ color: o.dayAfterNextFullReturnPct >= 0 ? "var(--signal)" : "var(--danger)" }}>{fmtPct(o.dayAfterNextFullReturnPct)}</td>
                           </tr>
                         ))}
                       </tbody>

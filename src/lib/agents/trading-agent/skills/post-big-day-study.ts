@@ -44,6 +44,14 @@ export interface PostBigDayOccurrence {
   nextDayRangePct: number; // (high-low) / trigger day's close
   nextDayFullReturnPct: number;
   nextDayFinishedGreen: boolean; // nextDayFullReturnPct >= 0 — explicit, so "green or red" doesn't require re-deriving it
+  // "Day after next" — one more real trading day out, each figure computed
+  // relative to the NEXT day's own close (same relative-to-prior-close
+  // convention as the next-day fields above, just one day further out).
+  dayAfterNextDateKey: string;
+  dayAfterNextGapPct: number;
+  dayAfterNextRangePct: number;
+  dayAfterNextFullReturnPct: number;
+  dayAfterNextFinishedGreen: boolean;
 }
 
 export interface GapDownEventDayStats {
@@ -61,6 +69,24 @@ export interface GapDownEventDayStats {
   highOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
   lowOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
   minuteBarEventsUsable: number;
+}
+
+export interface DayAfterNextStats {
+  count: number;
+  pctFinishedGreen: number | null;
+  meanGapPct: number | null;
+  medianGapPct: number | null;
+  maxDropPct: number | null;
+  meanRangePct: number | null;
+  medianRangePct: number | null;
+}
+
+export interface RedNextDayLowTiming {
+  eventCount: number; // how many next-days actually finished red, out of all occurrences
+  outOfTotalOccurrences: number;
+  minuteBarEventsUsable: number;
+  lowOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
+  mostCommonLowBucket: string | null;
 }
 
 export interface PostBigDayResult {
@@ -83,6 +109,8 @@ export interface PostBigDayResult {
   minuteBarOccurrencesUsable: number; // how many of `occurrences` actually had usable minute bars for the checkpoint section
   nextDayHighOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
   nextDayLowOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
+  dayAfterNextStats: DayAfterNextStats;
+  redNextDayLowTiming: RedNextDayLowTiming;
   gapDownEventDays: GapDownEventDayStats;
   dataLimitations: string[];
   error?: string;
@@ -96,7 +124,7 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
   const occurrences: PostBigDayOccurrence[] = [];
-  for (let i = 1; i < daily.length - 1; i++) {
+  for (let i = 1; i < daily.length - 2; i++) {
     const prior = daily[i - 1];
     const trigger = daily[i];
     if (prior.close <= 0 || trigger.close <= 0) continue;
@@ -108,6 +136,9 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
 
     const next = daily[i + 1];
     const nextDayFullReturnPct = ((next.close - trigger.close) / trigger.close) * 100;
+    if (next.close <= 0) continue;
+    const dayAfterNext = daily[i + 2];
+    const dayAfterNextFullReturnPct = ((dayAfterNext.close - next.close) / next.close) * 100;
     occurrences.push({
       triggerDateKey: trigger.dateKey,
       triggerDayReturnPct,
@@ -117,6 +148,11 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
       nextDayRangePct: ((next.high - next.low) / trigger.close) * 100,
       nextDayFullReturnPct,
       nextDayFinishedGreen: nextDayFullReturnPct >= 0,
+      dayAfterNextDateKey: dayAfterNext.dateKey,
+      dayAfterNextGapPct: ((dayAfterNext.open - next.close) / next.close) * 100,
+      dayAfterNextRangePct: ((dayAfterNext.high - dayAfterNext.low) / next.close) * 100,
+      dayAfterNextFullReturnPct,
+      dayAfterNextFinishedGreen: dayAfterNextFullReturnPct >= 0,
     });
   }
   occurrences.reverse(); // most recent first
@@ -136,6 +172,18 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
     maxDropPct: gaps.length > 0 ? Math.min(...gaps) : null,
     meanNextDayRangePct: mean(ranges),
     medianNextDayRangePct: median(ranges),
+  };
+
+  const dayAfterNextGaps = occurrences.map((o) => o.dayAfterNextGapPct);
+  const dayAfterNextRanges = occurrences.map((o) => o.dayAfterNextRangePct);
+  const dayAfterNextStats: DayAfterNextStats = {
+    count: occurrences.length,
+    pctFinishedGreen: occurrences.length > 0 ? (occurrences.filter((o) => o.dayAfterNextFinishedGreen).length / occurrences.length) * 100 : null,
+    meanGapPct: mean(dayAfterNextGaps),
+    medianGapPct: median(dayAfterNextGaps),
+    maxDropPct: dayAfterNextGaps.length > 0 ? Math.min(...dayAfterNextGaps) : null,
+    meanRangePct: mean(dayAfterNextRanges),
+    medianRangePct: median(dayAfterNextRanges),
   };
 
   // Real minute bars only reach back ~3 months, so only recent occurrences
@@ -186,6 +234,31 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
   const nextDayHighOfDayTimeDistribution = buildTimeOfDayFrequency(nextDayHighTimes, minuteBarOccurrencesUsable);
   const nextDayLowOfDayTimeDistribution = buildTimeOfDayFrequency(nextDayLowTimes, minuteBarOccurrencesUsable);
 
+  // Specifically asked about: on the next-days that started off red (closed
+  // red, not just gapped down), when did the low of that day actually get
+  // set? Reuses the same byDay map already fetched above — no second
+  // minute-bar request — just a different filter on the same recent
+  // occurrence set.
+  const redNextDayRecent = recentOccurrences.filter((o) => !o.nextDayFinishedGreen);
+  const redLowTimes: number[] = [];
+  let redMinuteBarEventsUsable = 0;
+  for (const occ of redNextDayRecent) {
+    const day = byDay.get(occ.nextDateKey);
+    if (!day) continue;
+    const session = highLowInWindow(day.bars, WINDOWS.REGULAR_SESSION);
+    if (session.lowTime === null) continue;
+    redMinuteBarEventsUsable++;
+    redLowTimes.push(session.lowTime);
+  }
+  const redLowDist = buildTimeOfDayFrequency(redLowTimes, redMinuteBarEventsUsable);
+  const redNextDayLowTiming: RedNextDayLowTiming = {
+    eventCount: occurrences.filter((o) => !o.nextDayFinishedGreen).length,
+    outOfTotalOccurrences: occurrences.length,
+    minuteBarEventsUsable: redMinuteBarEventsUsable,
+    lowOfDayTimeDistribution: redLowDist,
+    mostCommonLowBucket: redLowDist.length === 0 ? null : redLowDist.reduce((a, b) => (b.count > a.count ? b : a)).bucketLabel,
+  };
+
   // The specific population asked about: not every next-day, only the ones
   // that actually gapped down at least EVENT_GAP_THRESHOLD_PCT — and,
   // critically, this whole population is ALREADY conditioned on the prior
@@ -235,6 +308,8 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
     `Intraday checkpoint moves (9:45am/10:30am/1:30pm/3pm/close, as % from that day's own open) require real minute bars, which only reliably reach back about ${MINUTE_BAR_LOOKBACK_MONTHS} months on this app's data provider — so this section uses a smaller, separately-reported sample (minuteBarOccurrencesUsable) than the daily-bar stats above it, even though both are drawn from the same occurrence list.`,
     "maxDropPct is the single worst real next-day gap observed in this sample, not a theoretical worst case — a larger drop is always possible with more history or bad luck.",
     `gapDownEventDays is a further-filtered subset of the SAME occurrence list — only the next-days that actually gapped down at least ${Math.abs(EVENT_GAP_THRESHOLD_PCT)}%. It is not an unconditioned "how does this ticker behave on any gap-down day" study — every single row in it followed an abnormal (big gain or big loss) prior day by construction, and that conditioning should be read as part of the result, not a footnote.`,
+    "dayAfterNextStats looks one more real trading day past the next-day figures above — each of its numbers is computed relative to the NEXT day's own close, not the original trigger day's close, so it answers \"how did the day after the next day do, on its own terms\" rather than a compounded return from the trigger day.",
+    "redNextDayLowTiming is conditioned on the next day actually closing red (not just gapping down) — a real, further-filtered subset of the same recent-occurrence minute-bar sample used for the general HOD/LOD distributions above, so its own sample size is usually smaller.",
   ];
 
   return {
@@ -247,6 +322,8 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
     minuteBarOccurrencesUsable,
     nextDayHighOfDayTimeDistribution,
     nextDayLowOfDayTimeDistribution,
+    dayAfterNextStats,
+    redNextDayLowTiming,
     gapDownEventDays,
     dataLimitations,
   };
@@ -292,6 +369,22 @@ export async function runPostBigDayStudy(
           minuteBarOccurrencesUsable: 0,
           nextDayHighOfDayTimeDistribution: [],
           nextDayLowOfDayTimeDistribution: [],
+          dayAfterNextStats: {
+            count: 0,
+            pctFinishedGreen: null,
+            meanGapPct: null,
+            medianGapPct: null,
+            maxDropPct: null,
+            meanRangePct: null,
+            medianRangePct: null,
+          },
+          redNextDayLowTiming: {
+            eventCount: 0,
+            outOfTotalOccurrences: 0,
+            minuteBarEventsUsable: 0,
+            lowOfDayTimeDistribution: [],
+            mostCommonLowBucket: null,
+          },
           gapDownEventDays: {
             eventGapThresholdPct: EVENT_GAP_THRESHOLD_PCT,
             eventCount: 0,
