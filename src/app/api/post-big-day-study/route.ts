@@ -11,9 +11,12 @@ export async function GET(request: Request) {
   const tickers = tickersParam
     ? tickersParam.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean)
     : DEFAULT_TICKERS;
+  const thresholdParam = searchParams.get("threshold");
+  const parsedThreshold = thresholdParam ? Number(thresholdParam) : undefined;
+  const threshold = parsedThreshold !== undefined && Number.isFinite(parsedThreshold) ? parsedThreshold : undefined;
 
   try {
-    const results = await runPostBigDayStudy(tickers);
+    const results = await runPostBigDayStudy(tickers, threshold);
     return NextResponse.json({ tickers: results });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
