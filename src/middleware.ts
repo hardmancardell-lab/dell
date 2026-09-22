@@ -36,7 +36,6 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/quad-witching-study",
   "/api/week-start-momentum",
   "/api/overnight-intraday-pattern",
-  "/api/temp-webull-check", // TEMP: cross-checking Alpaca IEX vs Webull data, deleting right after
 ];
 
 function isPublicPath(pathname: string): boolean {
