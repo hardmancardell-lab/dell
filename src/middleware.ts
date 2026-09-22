@@ -37,6 +37,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/week-start-momentum",
   "/api/overnight-intraday-pattern",
   "/api/post-big-day-study",
+  "/api/low-of-day-timing",
 ];
 
 function isPublicPath(pathname: string): boolean {
