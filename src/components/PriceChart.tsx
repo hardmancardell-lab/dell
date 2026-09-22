@@ -151,16 +151,29 @@ export function PriceChart({
   assetClassRef.current = assetClass;
   const readOnlyRef = useRef(readOnly);
   readOnlyRef.current = readOnly;
+  const dataRef = useRef<ChartBarsResult | null>(null);
+  const timeframeRef = useRef("1yr");
+  const [hoverInfo, setHoverInfo] = useState<{
+    dateKey: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    changePct: number | null;
+    volume: number;
+  } | null>(null);
 
   // 1mo (1-day candles, ~1 month lookback) gives useful before/after context
   // around a single occurrence date without pulling a whole year of noise.
   const [timeframe, setTimeframe] = useState(focusDate ? "1mo" : "1yr");
+  timeframeRef.current = timeframe;
   const [showSma20, setShowSma20] = useState(true);
   const [showSma50, setShowSma50] = useState(true);
   const [enabledOverlays, setEnabledOverlays] = useState<Set<string>>(new Set());
   const [enabledOscillators, setEnabledOscillators] = useState<Set<string>>(new Set());
   const [volumeProfileSummary, setVolumeProfileSummary] = useState<VolumeProfileResult | null>(null);
   const [data, setData] = useState<ChartBarsResult | null>(null);
+  dataRef.current = data;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -244,6 +257,33 @@ export function PriceChart({
       setClickedPrice(price);
       setFloatingTab("trade");
       setFloatingPanelOpen(true);
+    });
+
+    // Hover detail: real O/H/L/C/change%/volume for whatever candle the
+    // cursor is over, found by matching the crosshair's time back to the
+    // real candle list (not just whatever lightweight-charts' own
+    // seriesData snapshot exposes, since that doesn't include volume or a
+    // prior-close-based change%).
+    chart.subscribeCrosshairMove((param) => {
+      const candles = dataRef.current?.candles;
+      if (!param.time || !candles || candles.length === 0) {
+        setHoverInfo(null);
+        return;
+      }
+      const targetSeconds = param.time as number;
+      const index = candles.findIndex((c) => toSeconds(c.datetime) === targetSeconds);
+      if (index === -1) {
+        setHoverInfo(null);
+        return;
+      }
+      const c = candles[index];
+      const prior = index > 0 ? candles[index - 1] : null;
+      const changePct = prior && prior.close > 0 ? ((c.close - prior.close) / prior.close) * 100 : null;
+      const preset = TIMEFRAME_PRESETS.find((p) => p.id === timeframeRef.current);
+      const isIntraday = !(preset?.alpacaTimeframe === "1Day" || preset?.alpacaTimeframe === "1Week");
+      const d = new Date(c.datetime);
+      const dateKey = isIntraday ? d.toLocaleString() : d.toISOString().slice(0, 10);
+      setHoverInfo({ dateKey, open: c.open, high: c.high, low: c.low, close: c.close, changePct, volume: c.volume });
     });
 
     const resizeObserver = new ResizeObserver((entries) => {
@@ -691,6 +731,66 @@ export function PriceChart({
 
       <div style={{ position: "relative" }}>
         <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)" }} />
+
+        {(() => {
+          const info =
+            hoverInfo ??
+            (data && data.candles.length > 0
+              ? (() => {
+                  const last = data.candles[data.candles.length - 1];
+                  const prior = data.candles.length > 1 ? data.candles[data.candles.length - 2] : null;
+                  const preset = TIMEFRAME_PRESETS.find((p) => p.id === timeframe);
+                  const isIntraday = !(preset?.alpacaTimeframe === "1Day" || preset?.alpacaTimeframe === "1Week");
+                  const d = new Date(last.datetime);
+                  return {
+                    dateKey: isIntraday ? d.toLocaleString() : d.toISOString().slice(0, 10),
+                    open: last.open,
+                    high: last.high,
+                    low: last.low,
+                    close: last.close,
+                    changePct: prior && prior.close > 0 ? ((last.close - prior.close) / prior.close) * 100 : null,
+                    volume: last.volume,
+                  };
+                })()
+              : null);
+          if (!info) return null;
+          const changeColor = info.changePct === null ? "var(--text-2)" : info.changePct >= 0 ? "var(--signal)" : "var(--danger)";
+          return (
+            <div
+              style={{
+                position: "absolute",
+                top: 12,
+                left: 12,
+                zIndex: 5,
+                background: "rgba(8, 11, 16, 0.75)",
+                border: "1px solid var(--line)",
+                borderRadius: 4,
+                padding: "6px 10px",
+                fontSize: 11,
+                fontFamily: "monospace",
+                color: "var(--text-1)",
+                pointerEvents: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span style={{ color: "var(--text-0)" }}>{info.dateKey}</span>
+              {"  O "}
+              {info.open.toFixed(2)}
+              {"  H "}
+              {info.high.toFixed(2)}
+              {"  L "}
+              {info.low.toFixed(2)}
+              {"  C "}
+              {info.close.toFixed(2)}
+              {"  "}
+              <span style={{ color: changeColor }}>
+                {info.changePct !== null ? `${info.changePct >= 0 ? "+" : ""}${info.changePct.toFixed(2)}%` : "N/A"}
+              </span>
+              {"  Vol "}
+              {info.volume.toLocaleString()}
+            </div>
+          );
+        })()}
 
         {assetClass !== "option" && !readOnly && (
           <div style={{ position: "absolute", top: 12, right: 12, zIndex: 5 }}>
