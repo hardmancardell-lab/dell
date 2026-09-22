@@ -12,6 +12,7 @@ import { FomcReactionStudyTab } from "@/components/FomcReactionStudyTab";
 import { FomcWeekVarianceTab } from "@/components/FomcWeekVarianceTab";
 import { QuadWitchingStudyTab } from "@/components/QuadWitchingStudyTab";
 import { WeekStartMomentumTab } from "@/components/WeekStartMomentumTab";
+import { OvernightIntradayPatternTab } from "@/components/OvernightIntradayPatternTab";
 import { SectorFundamentalsTab } from "@/components/SectorFundamentalsTab";
 import { SectorRecommendationsTab } from "@/components/SectorRecommendationsTab";
 import { SectorStockAnalysisTab } from "@/components/SectorStockAnalysisTab";
@@ -435,6 +436,7 @@ export default async function Home() {
                               { id: "fomc-week-variance", label: "FOMC Week Variance", content: <FomcWeekVarianceTab /> },
                               { id: "quad-witching", label: "Quad Witching Study", content: <QuadWitchingStudyTab /> },
                               { id: "week-start-momentum", label: "Week Start Momentum", content: <WeekStartMomentumTab /> },
+                              { id: "overnight-intraday", label: "Overnight vs Intraday", content: <OvernightIntradayPatternTab /> },
                             ]}
                           />
                         </div>
