@@ -37,6 +37,7 @@ interface PostBigDayResult {
   occurrences: PostBigDayOccurrence[];
   stats: {
     count: number;
+    pctFinishedGreen: number | null;
     pctGapDownAtAll: number | null;
     pctGapDownAtLeastThreshold: number | null;
     meanNextDayGapPct: number | null;
@@ -47,9 +48,15 @@ interface PostBigDayResult {
   };
   intradayCheckpoints: { label: string; avgPctMoveFromOpen: number | null; sampleSize: number }[];
   minuteBarOccurrencesUsable: number;
+  nextDayHighOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
+  nextDayLowOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
   gapDownEventDays: GapDownEventDayStats;
   dataLimitations: string[];
   error?: string;
+}
+
+function topBucket(dist: { bucketLabel: string; count: number; pctOfTotal: number }[]): string | null {
+  return dist.length === 0 ? null : dist.reduce((a, b) => (b.count > a.count ? b : a)).bucketLabel;
 }
 
 function fmtPct(v: number | null, digits = 2): string {
@@ -125,7 +132,7 @@ export function PostBigDayStudyTab() {
               <div className="flex items-center justify-between mb-2">
                 <div className="text-lg font-semibold" style={{ color: "var(--text-0)" }}>{t.ticker}</div>
                 <div className="text-xs" style={{ color: "var(--text-2)" }}>
-                  n={t.stats.count} real days ≥{t.bigDayThresholdPct}% gain
+                  n={t.stats.count} real days with an abnormal (≥{t.bigDayThresholdPct}%) move
                 </div>
               </div>
               {t.error ? (
@@ -133,6 +140,10 @@ export function PostBigDayStudyTab() {
               ) : (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4">
+                    <div>
+                      <div className="jv-label">Next day finishes green</div>
+                      <div className="font-mono" style={{ color: "var(--signal)" }}>{t.stats.pctFinishedGreen?.toFixed(0)}%</div>
+                    </div>
                     <div>
                       <div className="jv-label">Gaps down at all</div>
                       <div className="font-mono" style={{ color: "var(--text-0)" }}>{t.stats.pctGapDownAtAll?.toFixed(0)}%</div>
@@ -176,6 +187,14 @@ export function PostBigDayStudyTab() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {t.minuteBarOccurrencesUsable > 0 && (
+                    <div className="mb-4 text-xs" style={{ color: "var(--text-2)" }}>
+                      Real next-day high/low timing (n={t.minuteBarOccurrencesUsable}): most common high-of-day{" "}
+                      <span style={{ color: "var(--text-0)" }}>{topBucket(t.nextDayHighOfDayTimeDistribution) ?? "N/A"}</span>, most common
+                      low-of-day <span style={{ color: "var(--text-0)" }}>{topBucket(t.nextDayLowOfDayTimeDistribution) ?? "N/A"}</span>.
                     </div>
                   )}
 

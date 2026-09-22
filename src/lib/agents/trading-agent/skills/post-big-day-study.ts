@@ -43,6 +43,7 @@ export interface PostBigDayOccurrence {
   nextDayOvernightGapPct: number;
   nextDayRangePct: number; // (high-low) / trigger day's close
   nextDayFullReturnPct: number;
+  nextDayFinishedGreen: boolean; // nextDayFullReturnPct >= 0 — explicit, so "green or red" doesn't require re-deriving it
 }
 
 export interface GapDownEventDayStats {
@@ -69,6 +70,7 @@ export interface PostBigDayResult {
   occurrences: PostBigDayOccurrence[]; // most recent first
   stats: {
     count: number;
+    pctFinishedGreen: number | null; // straight answer to "next day green or red, how often"
     pctGapDownAtAll: number | null;
     pctGapDownAtLeastThreshold: number | null;
     meanNextDayGapPct: number | null;
@@ -79,6 +81,8 @@ export interface PostBigDayResult {
   };
   intradayCheckpoints: { label: string; avgPctMoveFromOpen: number | null; sampleSize: number }[];
   minuteBarOccurrencesUsable: number; // how many of `occurrences` actually had usable minute bars for the checkpoint section
+  nextDayHighOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
+  nextDayLowOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
   gapDownEventDays: GapDownEventDayStats;
   dataLimitations: string[];
   error?: string;
@@ -103,6 +107,7 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
     const triggerDirection: "gain" | "loss" = triggerDayReturnPct >= 0 ? "gain" : "loss";
 
     const next = daily[i + 1];
+    const nextDayFullReturnPct = ((next.close - trigger.close) / trigger.close) * 100;
     occurrences.push({
       triggerDateKey: trigger.dateKey,
       triggerDayReturnPct,
@@ -110,7 +115,8 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
       nextDateKey: next.dateKey,
       nextDayOvernightGapPct: ((next.open - trigger.close) / trigger.close) * 100,
       nextDayRangePct: ((next.high - next.low) / trigger.close) * 100,
-      nextDayFullReturnPct: ((next.close - trigger.close) / trigger.close) * 100,
+      nextDayFullReturnPct,
+      nextDayFinishedGreen: nextDayFullReturnPct >= 0,
     });
   }
   occurrences.reverse(); // most recent first
@@ -122,6 +128,7 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
 
   const stats = {
     count: occurrences.length,
+    pctFinishedGreen: occurrences.length > 0 ? (occurrences.filter((o) => o.nextDayFinishedGreen).length / occurrences.length) * 100 : null,
     pctGapDownAtAll: occurrences.length > 0 ? (gapDowns.length / occurrences.length) * 100 : null,
     pctGapDownAtLeastThreshold: occurrences.length > 0 ? (bigGapDowns.length / occurrences.length) * 100 : null,
     meanNextDayGapPct: mean(gaps),
@@ -142,6 +149,8 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
   const checkpointValues: number[][] = CHECKPOINTS.map(() => []);
   let minuteBarOccurrencesUsable = 0;
   let byDay = new Map<string, DayBars>();
+  const nextDayHighTimes: number[] = [];
+  const nextDayLowTimes: number[] = [];
 
   if (recentOccurrences.length > 0) {
     const earliestMs = Math.min(...recentOccurrences.map((o) => new Date(`${o.nextDateKey}T00:00:00Z`).getTime())) - 2 * 24 * 60 * 60 * 1000;
@@ -159,6 +168,9 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
         const priceAtCp = priceAtOrAfterMinute(day.bars, cp.minutesSinceMidnight);
         if (priceAtCp !== null) checkpointValues[idx].push(((priceAtCp - openPrice) / openPrice) * 100);
       });
+      const session = highLowInWindow(day.bars, WINDOWS.REGULAR_SESSION);
+      if (session.highTime !== null) nextDayHighTimes.push(session.highTime);
+      if (session.lowTime !== null) nextDayLowTimes.push(session.lowTime);
     }
   }
 
@@ -167,6 +179,12 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
     avgPctMoveFromOpen: mean(checkpointValues[idx]),
     sampleSize: checkpointValues[idx].length,
   }));
+
+  // General "when does the high/low of the next day actually happen" —
+  // across ALL recent occurrences (gain- and loss-triggered, any next-day
+  // gap direction), not just the narrower gap-down-event subset below.
+  const nextDayHighOfDayTimeDistribution = buildTimeOfDayFrequency(nextDayHighTimes, minuteBarOccurrencesUsable);
+  const nextDayLowOfDayTimeDistribution = buildTimeOfDayFrequency(nextDayLowTimes, minuteBarOccurrencesUsable);
 
   // The specific population asked about: not every next-day, only the ones
   // that actually gapped down at least EVENT_GAP_THRESHOLD_PCT — and,
@@ -227,6 +245,8 @@ async function studyOneTicker(ticker: string, bigDayThresholdPct: number): Promi
     stats,
     intradayCheckpoints,
     minuteBarOccurrencesUsable,
+    nextDayHighOfDayTimeDistribution,
+    nextDayLowOfDayTimeDistribution,
     gapDownEventDays,
     dataLimitations,
   };
@@ -259,6 +279,7 @@ export async function runPostBigDayStudy(
           occurrences: [],
           stats: {
             count: 0,
+            pctFinishedGreen: null,
             pctGapDownAtAll: null,
             pctGapDownAtLeastThreshold: null,
             meanNextDayGapPct: null,
@@ -269,6 +290,8 @@ export async function runPostBigDayStudy(
           },
           intradayCheckpoints: [],
           minuteBarOccurrencesUsable: 0,
+          nextDayHighOfDayTimeDistribution: [],
+          nextDayLowOfDayTimeDistribution: [],
           gapDownEventDays: {
             eventGapThresholdPct: EVENT_GAP_THRESHOLD_PCT,
             eventCount: 0,
