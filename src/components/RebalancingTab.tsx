@@ -2,13 +2,13 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
-import { computeRebalancing } from "@/lib/agents/trading-agent/skills/portfolio-rebalancing";
+import { computeAssetClassRebalancing, computeRebalancing } from "@/lib/agents/trading-agent/skills/portfolio-rebalancing";
 import { computeHedge } from "@/lib/agents/trading-agent/skills/hedge-calculator";
 import { computeTaxLotImpact } from "@/lib/agents/trading-agent/skills/tax-lot-impact";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { StatCard } from "./StatCard";
 import type { OptionType } from "@/lib/agents/trading-agent/black-scholes";
-import type { PortfolioSummary } from "@/lib/agents/trading-agent/types";
+import type { AssetClass, PortfolioSummary } from "@/lib/agents/trading-agent/types";
 
 function fmtUsd(v: number): string {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -66,6 +66,102 @@ function TaxLotImpactPanel({ symbol, dollarAmount, summary }: { symbol: string; 
   );
 }
 
+function AssetClassRebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
+  const { holdings } = usePortfolio();
+  const uniqueAssetClasses = useMemo(() => [...new Set(holdings.map((h) => h.assetClass))], [holdings]);
+  const [targets, setTargets] = useState<Record<string, string>>({});
+  const { track } = useTrackEvent();
+
+  const currentValuesByClass = useMemo(() => {
+    const byClass = new Map<AssetClass, number>();
+    for (const v of summary?.valuations ?? []) {
+      const cls = v.holding.assetClass;
+      byClass.set(cls, (byClass.get(cls) ?? 0) + (v.currentValue ?? 0));
+    }
+    return uniqueAssetClasses.map((assetClass) => ({ assetClass, currentValue: byClass.get(assetClass) ?? 0 }));
+  }, [summary, uniqueAssetClasses]);
+
+  const totalTargetPercent = uniqueAssetClasses.reduce((s, cls) => s + (Number(targets[cls]) || 0), 0);
+
+  const rows = useMemo(
+    () =>
+      computeAssetClassRebalancing(
+        currentValuesByClass,
+        uniqueAssetClasses.map((assetClass) => ({ assetClass, targetPercent: Number(targets[assetClass]) || 0 }))
+      ),
+    [currentValuesByClass, uniqueAssetClasses, targets]
+  );
+
+  if (!summary || uniqueAssetClasses.length < 2) {
+    return null; // needs holdings across more than one asset class for a "mix" target to mean anything
+  }
+
+  return (
+    <div className="mb-8">
+      <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-0)" }}>Asset-Class Allocation Targets</h3>
+      <p className="text-sm mb-4" style={{ color: "var(--text-1)" }}>
+        Set the target mix for the whole portfolio first — e.g. 60% bonds — then use the per-symbol table below to
+        split each class across specific holdings. Sizes the aggregate buy/sell needed per class; doesn&apos;t place
+        any trades.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="jv-table">
+          <thead>
+            <tr>
+              <th className="text-left">Asset Class</th>
+              <th className="text-right">Current %</th>
+              <th className="text-right">Target %</th>
+              <th className="text-right">Delta $</th>
+              <th className="text-left">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.assetClass}>
+                <td className="font-medium">{r.label}</td>
+                <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.currentPercent.toFixed(1)}%</td>
+                <td className="jv-num">
+                  <input
+                    type="number"
+                    step="any"
+                    value={targets[r.assetClass] ?? ""}
+                    onChange={(e) => setTargets((prev) => ({ ...prev, [r.assetClass]: e.target.value }))}
+                    onBlur={() =>
+                      track("asset_class_rebalancing_computed", { tab: "Rebalancing", metadata: { classCount: uniqueAssetClasses.length } })
+                    }
+                    placeholder="0"
+                    className="jv-input w-20 text-right"
+                  />
+                </td>
+                <td className={`jv-num ${r.deltaValue > 0 ? "jv-pnl-up" : r.deltaValue < 0 ? "jv-pnl-down" : "jv-pnl-flat"}`}>
+                  {fmtUsd(r.deltaValue)}
+                </td>
+                <td>
+                  <span
+                    className="jv-badge"
+                    style={
+                      r.action === "buy"
+                        ? { color: "var(--signal)", borderColor: "var(--signal-dim)", background: "rgba(79, 232, 208, 0.06)" }
+                        : r.action === "sell"
+                          ? { color: "var(--danger)", borderColor: "var(--danger)", background: "rgba(232, 99, 122, 0.08)" }
+                          : { color: "var(--text-1)", borderColor: "var(--line-bright)" }
+                    }
+                  >
+                    {r.action}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs mt-3" style={{ color: Math.abs(totalTargetPercent - 100) < 0.5 ? "var(--text-2)" : "var(--verdict)" }}>
+        Targets sum to {totalTargetPercent.toFixed(1)}% (should total 100% for a fully-allocated target mix).
+      </p>
+    </div>
+  );
+}
+
 function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
   const { holdings } = usePortfolio();
   const uniqueSymbols = useMemo(() => [...new Set(holdings.map((h) => h.symbol))], [holdings]);
@@ -99,6 +195,7 @@ function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
 
   return (
     <div>
+      <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-0)" }}>Per-Symbol Allocation Targets</h3>
       <p className="text-sm mb-4" style={{ color: "var(--text-1)" }}>
         Set a target allocation per holding — this sizes the buy/sell needed to get there, it doesn&apos;t place any
         trades (this app has no order-execution code anywhere).
@@ -317,6 +414,7 @@ export function RebalancingTab() {
             {loading ? "Loading…" : "Refresh"}
           </button>
         </div>
+        <AssetClassRebalancingSection summary={summary} />
         <RebalancingSection summary={summary} />
       </section>
 

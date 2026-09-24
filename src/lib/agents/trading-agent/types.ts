@@ -817,6 +817,22 @@ export interface RebalancingRow {
   action: "buy" | "sell" | "hold";
 }
 
+export interface AssetClassRebalancingTarget {
+  assetClass: AssetClass;
+  targetPercent: number;
+}
+
+export interface AssetClassRebalancingRow {
+  assetClass: AssetClass;
+  label: string; // human-readable, e.g. "Bond" — same convention as allocationByAssetClass's AllocationSlice.label
+  currentValue: number;
+  currentPercent: number;
+  targetPercent: number;
+  targetValue: number;
+  deltaValue: number; // positive = buy, negative = sell, aggregated across the whole class
+  action: "buy" | "sell" | "hold";
+}
+
 export interface TaxLotConsumption {
   holdingId: string;
   acquiredDate: string;
