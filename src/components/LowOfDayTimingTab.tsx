@@ -15,6 +15,11 @@ interface LowOfDayTimingResult {
   pctLowBeforeCutoff: number | null;
   pctLowAtOrAfterCutoff: number | null;
   overallLowOfDayTimeDistribution: Bucket[];
+  overallMostCommonLowBucket: string | null;
+  overallMedianLowClock: string | null;
+  overallHighOfDayTimeDistribution: Bucket[];
+  overallMostCommonHighBucket: string | null;
+  overallMedianHighClock: string | null;
   lateLowDays: {
     count: number;
     timeDistribution: Bucket[];
@@ -54,7 +59,8 @@ export function LowOfDayTimingTab() {
   return (
     <div className="jarvis flex flex-col gap-6">
       <p className="jv-lede" style={{ marginBottom: 0 }}>
-        Real conditional check: on the days the session low did NOT form before 10:30am ET, when does it actually
+        When does the high and low of the regular session (9:30am-4:00pm ET) typically happen? Plus a real
+        conditional check: on the days the session low did NOT form before 10:30am ET, when does it actually
         happen instead? All times ET.
       </p>
 
@@ -88,6 +94,25 @@ export function LowOfDayTimingTab() {
                 <p className="text-xs" style={{ color: "var(--danger)" }}>{t.error}</p>
               ) : (
                 <>
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                    <div>
+                      <div className="jv-label">Avg High of Day</div>
+                      <div className="font-mono" style={{ color: "var(--text-0)" }}>
+                        {t.overallMedianHighClock ?? "N/A"}{" "}
+                        <span className="text-xs" style={{ color: "var(--text-2)" }}>(median)</span>
+                      </div>
+                      <div className="text-xs" style={{ color: "var(--text-2)" }}>Most common: {t.overallMostCommonHighBucket ?? "N/A"}</div>
+                    </div>
+                    <div>
+                      <div className="jv-label">Avg Low of Day</div>
+                      <div className="font-mono" style={{ color: "var(--text-0)" }}>
+                        {t.overallMedianLowClock ?? "N/A"}{" "}
+                        <span className="text-xs" style={{ color: "var(--text-2)" }}>(median)</span>
+                      </div>
+                      <div className="text-xs" style={{ color: "var(--text-2)" }}>Most common: {t.overallMostCommonLowBucket ?? "N/A"}</div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                     <div>
                       <div className="jv-label">Low before {t.lateLowCutoffClock}</div>

@@ -23,6 +23,15 @@ export interface LowOfDayTimingResult {
   pctLowBeforeCutoff: number | null;
   pctLowAtOrAfterCutoff: number | null;
   overallLowOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
+  overallMostCommonLowBucket: string | null;
+  overallMedianLowClock: string | null;
+  // Unconditioned high-of-day counterpart to the low-of-day distribution
+  // above — same regular-session-only, same bucketing — for a plain
+  // "when does HOD/LOD usually happen" question, not just the late-low
+  // conditional case this skill was originally built for.
+  overallHighOfDayTimeDistribution: { bucketLabel: string; count: number; pctOfTotal: number }[];
+  overallMostCommonHighBucket: string | null;
+  overallMedianHighClock: string | null;
   // The actual question asked: among the days where the low did NOT come
   // before the cutoff, when does it usually happen instead?
   lateLowDays: {
@@ -42,19 +51,27 @@ async function studyOneTicker(ticker: string): Promise<LowOfDayTimingResult> {
   const days = groupCandlesByEasternDay(minuteBars);
 
   const allLowTimes: number[] = [];
+  const allHighTimes: number[] = [];
   const lateLowTimes: number[] = [];
 
   for (const day of days) {
     const session = highLowInWindow(day.bars, WINDOWS.REGULAR_SESSION);
-    if (session.lowTime === null) continue;
-    allLowTimes.push(session.lowTime);
-    if (session.lowTime >= LATE_LOW_CUTOFF_MINUTES) lateLowTimes.push(session.lowTime);
+    if (session.lowTime !== null) {
+      allLowTimes.push(session.lowTime);
+      if (session.lowTime >= LATE_LOW_CUTOFF_MINUTES) lateLowTimes.push(session.lowTime);
+    }
+    if (session.highTime !== null) allHighTimes.push(session.highTime);
   }
 
   const overallLowOfDayTimeDistribution = buildTimeOfDayFrequency(allLowTimes, allLowTimes.length);
+  const overallHighOfDayTimeDistribution = buildTimeOfDayFrequency(allHighTimes, allHighTimes.length);
   const lateLowDistribution = buildTimeOfDayFrequency(lateLowTimes, lateLowTimes.length);
   const sortedLateLows = [...lateLowTimes].sort((a, b) => a - b);
   const medianLateLow = sortedLateLows.length > 0 ? sortedLateLows[Math.floor(sortedLateLows.length / 2)] : null;
+  const sortedAllLows = [...allLowTimes].sort((a, b) => a - b);
+  const medianAllLow = sortedAllLows.length > 0 ? sortedAllLows[Math.floor(sortedAllLows.length / 2)] : null;
+  const sortedAllHighs = [...allHighTimes].sort((a, b) => a - b);
+  const medianAllHigh = sortedAllHighs.length > 0 ? sortedAllHighs[Math.floor(sortedAllHighs.length / 2)] : null;
 
   const dataLimitations: string[] = [
     `Real minute bars only reliably reach back about ${MINUTE_BAR_LOOKBACK_MONTHS} months on this app's data provider — this is a recent-pattern check over that window, not a multi-year backtest.`,
@@ -69,6 +86,13 @@ async function studyOneTicker(ticker: string): Promise<LowOfDayTimingResult> {
     pctLowBeforeCutoff: allLowTimes.length > 0 ? ((allLowTimes.length - lateLowTimes.length) / allLowTimes.length) * 100 : null,
     pctLowAtOrAfterCutoff: allLowTimes.length > 0 ? (lateLowTimes.length / allLowTimes.length) * 100 : null,
     overallLowOfDayTimeDistribution,
+    overallMostCommonLowBucket:
+      overallLowOfDayTimeDistribution.length === 0 ? null : overallLowOfDayTimeDistribution.reduce((a, b) => (b.count > a.count ? b : a)).bucketLabel,
+    overallMedianLowClock: medianAllLow !== null ? formatMinutesAsClock(medianAllLow) : null,
+    overallHighOfDayTimeDistribution,
+    overallMostCommonHighBucket:
+      overallHighOfDayTimeDistribution.length === 0 ? null : overallHighOfDayTimeDistribution.reduce((a, b) => (b.count > a.count ? b : a)).bucketLabel,
+    overallMedianHighClock: medianAllHigh !== null ? formatMinutesAsClock(medianAllHigh) : null,
     lateLowDays: {
       count: lateLowTimes.length,
       timeDistribution: lateLowDistribution,
@@ -100,6 +124,11 @@ export async function runLowOfDayTimingStudy(tickers: string[]): Promise<LowOfDa
           pctLowBeforeCutoff: null,
           pctLowAtOrAfterCutoff: null,
           overallLowOfDayTimeDistribution: [],
+          overallMostCommonLowBucket: null,
+          overallMedianLowClock: null,
+          overallHighOfDayTimeDistribution: [],
+          overallMostCommonHighBucket: null,
+          overallMedianHighClock: null,
           lateLowDays: { count: 0, timeDistribution: [], mostCommonBucket: null, medianLowClock: null },
           dataLimitations: [],
           error: err instanceof Error ? err.message : "unknown error",

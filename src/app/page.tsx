@@ -626,6 +626,11 @@ export default async function Home() {
                             size="tertiary"
                             tabs={[
                               { id: "overview", label: "Overview", content: <BondDashboardTab /> },
+                              {
+                                id: "charts",
+                                label: "Charts",
+                                content: <AssetChartsTab assetClass="bond" defaultTicker="TLT" placeholder="Ticker, e.g. TLT" watchlistLabel="Bonds" />,
+                              },
                               { id: "yield-curve", label: "Yield Curve", content: <YieldCurveTab /> },
                               {
                                 id: "backtest",
