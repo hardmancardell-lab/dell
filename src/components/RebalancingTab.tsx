@@ -7,6 +7,7 @@ import { computeHedge } from "@/lib/agents/trading-agent/skills/hedge-calculator
 import { computeTaxLotImpact } from "@/lib/agents/trading-agent/skills/tax-lot-impact";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { StatCard } from "./StatCard";
+import { AllocationPieChart } from "./AllocationPieChart";
 import type { OptionType } from "@/lib/agents/trading-agent/black-scholes";
 import type { AssetClass, PortfolioSummary } from "@/lib/agents/trading-agent/types";
 
@@ -92,6 +93,15 @@ function AssetClassRebalancingSection({ summary }: { summary: PortfolioSummary |
     [currentValuesByClass, uniqueAssetClasses, targets]
   );
 
+  const currentSlices = useMemo(
+    () => rows.filter((r) => r.currentValue > 0).map((r) => ({ label: r.label, value: r.currentValue, percent: r.currentPercent })),
+    [rows]
+  );
+  const targetSlices = useMemo(
+    () => rows.filter((r) => r.targetPercent > 0).map((r) => ({ label: r.label, value: r.targetValue, percent: r.targetPercent })),
+    [rows]
+  );
+
   if (!summary || uniqueAssetClasses.length < 2) {
     return null; // needs holdings across more than one asset class for a "mix" target to mean anything
   }
@@ -104,6 +114,16 @@ function AssetClassRebalancingSection({ summary }: { summary: PortfolioSummary |
         split each class across specific holdings. Sizes the aggregate buy/sell needed per class; doesn&apos;t place
         any trades.
       </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <AllocationPieChart title="Current Allocation" slices={currentSlices} />
+        {targetSlices.length > 0 ? (
+          <AllocationPieChart title="Target Allocation" slices={targetSlices} />
+        ) : (
+          <div className="flex items-center justify-center text-xs" style={{ color: "var(--text-2)", minHeight: 240 }}>
+            Set a target % above to see the target mix here.
+          </div>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className="jv-table">
           <thead>
