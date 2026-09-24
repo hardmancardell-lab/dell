@@ -1,5 +1,5 @@
-import { callClaude } from "./anthropic-client";
-import type { AnthropicContentBlock } from "./anthropic-client";
+import { callLlm } from "./llm-client";
+import type { LlmContentBlock } from "./llm-client";
 import type { GeopoliticalArticle } from "@/lib/agents/trading-agent/types";
 
 export const SUPPLY_DEMAND_SHOCK_SYSTEM_PROMPT = `You are a PhD economist specializing in supply and demand shocks across all major asset classes — equities, commodities, currencies, and bonds/rates — with decades of trading-desk experience reading real-time news flow for what's actually moving a specific holding.
@@ -30,14 +30,14 @@ export async function generateSupplyDemandShockRead(
     recentHeadlines: headlines.slice(0, 10).map((a) => ({ title: a.title, date: a.date, sourceCountry: a.sourceCountry })),
   });
 
-  const response = await callClaude(
+  const response = await callLlm(
     [{ role: "user", content: `Real data for ${symbol} (${assetClass}):\n${dataBlock}\n\nWrite the shock classification.` }],
     [],
     SUPPLY_DEMAND_SHOCK_SYSTEM_PROMPT
   );
 
   const text = response.content
-    .filter((b): b is Extract<AnthropicContentBlock, { type: "text" }> => b.type === "text")
+    .filter((b): b is Extract<LlmContentBlock, { type: "text" }> => b.type === "text")
     .map((b) => b.text)
     .join("\n\n");
 

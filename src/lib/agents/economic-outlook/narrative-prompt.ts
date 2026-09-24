@@ -1,5 +1,5 @@
-import { callClaude } from "@/lib/agents/assistant/anthropic-client";
-import type { AnthropicContentBlock, AnthropicToolSchema } from "@/lib/agents/assistant/anthropic-client";
+import { callLlm } from "@/lib/agents/assistant/llm-client";
+import type { LlmContentBlock, LlmToolSchema } from "@/lib/agents/assistant/llm-client";
 import type { EconomicOutlookInputs } from "./inputs";
 import type {
   CyclePhase,
@@ -23,7 +23,7 @@ Hard rules:
 
 Call the submit_economic_outlook_narrative tool exactly once with your complete output.`;
 
-const submitTool: AnthropicToolSchema = {
+const submitTool: LlmToolSchema = {
   name: "submit_economic_outlook_narrative",
   description: "Submit the complete analytical layer of the Economic Outlook.",
   input_schema: {
@@ -157,13 +157,13 @@ export async function generateEconomicOutlookNarrative(
     priorVersion: priorVersionSummary,
   });
 
-  const response = await callClaude(
+  const response = await callLlm(
     [{ role: "user", content: `Real economic data for this refresh:\n${dataBlock}\n\nSubmit the narrative.` }],
     [submitTool],
     ECONOMIC_OUTLOOK_SYSTEM_PROMPT
   );
 
-  const toolUse = response.content.find((b): b is Extract<AnthropicContentBlock, { type: "tool_use" }> => b.type === "tool_use");
+  const toolUse = response.content.find((b): b is Extract<LlmContentBlock, { type: "tool_use" }> => b.type === "tool_use");
   if (!toolUse) {
     throw new Error("Claude did not return a structured narrative (no tool_use block in the response).");
   }

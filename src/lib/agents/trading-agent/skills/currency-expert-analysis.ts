@@ -1,6 +1,6 @@
 import { fetchFredSeries, latest } from "@/lib/data/fred";
 import { getGeopoliticalNews, MAJOR_PAIR_KEYWORDS } from "./geopolitical-news";
-import { isAnthropicConfigured } from "@/lib/agents/assistant/anthropic-client";
+import { isLlmConfigured } from "@/lib/agents/assistant/llm-client";
 import { generateCurrencyExpertRead } from "@/lib/agents/assistant/currency-analysis-prompt";
 import type { CurrencyExpertAnalysisResult, FredSeriesPoint } from "../types";
 
@@ -64,7 +64,7 @@ export async function getCurrencyExpertAnalysis(pair: string): Promise<CurrencyE
   );
 
   let expertRead: string | null = null;
-  if (!isAnthropicConfigured()) {
+  if (!isLlmConfigured()) {
     dataLimitations.push(
       "Expert narrative synthesis requires a real ANTHROPIC_API_KEY in .env.local — showing the real underlying news and rate data without it."
     );

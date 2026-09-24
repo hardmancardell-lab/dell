@@ -18,7 +18,7 @@ import { getRollingMoveStats } from "../trading-agent/skills/rolling-move-stats"
 import { getRecentHypotheses, isHypothesisLedgerConfigured } from "@/lib/data/hypothesis-ledger-db";
 import { fetchQuote } from "@/lib/data/market-data";
 import { submitFeedback, type FeedbackCategory } from "@/lib/analytics/feedback";
-import type { AnthropicToolSchema } from "./anthropic-client";
+import type { LlmToolSchema } from "./llm-client";
 import type { AssetClass } from "../trading-agent/types";
 
 // Defensive cap on any single tool result serialized back to the model —
@@ -26,7 +26,7 @@ import type { AssetClass } from "../trading-agent/types";
 // backstop against an unexpectedly large payload blowing the context.
 const MAX_RESULT_CHARS = 15000;
 
-export const ASSISTANT_TOOLS: AnthropicToolSchema[] = [
+export const ASSISTANT_TOOLS: LlmToolSchema[] = [
   {
     name: "get_macro_overview",
     description:

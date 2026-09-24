@@ -1,6 +1,6 @@
 import { SECTOR_CONSTITUENTS, UNAVAILABLE_SECTOR_NOTE, getSectorFundamentals } from "./sector-fundamentals";
 import { getSecurityAnalysis } from "./security-analysis";
-import { isAnthropicConfigured } from "@/lib/agents/assistant/anthropic-client";
+import { isLlmConfigured } from "@/lib/agents/assistant/llm-client";
 import { generateSecurityForecast } from "@/lib/agents/assistant/security-forecast-prompt";
 import type { BusinessCycleTag, MacroMarginMatrix, SectorStockAnalysisResult, SectorStockCandidate } from "../types";
 
@@ -76,7 +76,7 @@ export async function getSectorStockAnalysis(
       sector,
       candidates: [],
       sampleNote: "0 companies available",
-      forecastEnabled: forecast && isAnthropicConfigured(),
+      forecastEnabled: forecast && isLlmConfigured(),
       dataLimitations,
     };
   }
@@ -89,8 +89,8 @@ export async function getSectorStockAnalysis(
   );
   if (fundamentals) dataLimitations.push(...fundamentals.dataLimitations);
 
-  const forecastEnabled = forecast && isAnthropicConfigured();
-  if (forecast && !isAnthropicConfigured()) {
+  const forecastEnabled = forecast && isLlmConfigured();
+  if (forecast && !isLlmConfigured()) {
     dataLimitations.push(
       "Forecast mode requires a real ANTHROPIC_API_KEY in .env.local — showing real checklist/cycle data without generated narratives."
     );

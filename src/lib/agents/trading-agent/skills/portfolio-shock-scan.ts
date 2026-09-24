@@ -1,7 +1,7 @@
 import { fetchProfile } from "@/lib/data/fmp";
 import { getGeopoliticalNews, computeCoverageSpike, MAJOR_PAIR_KEYWORDS } from "./geopolitical-news";
 import { SECTOR_NEWS_KEYWORDS, FALLBACK_SECTOR_KEYWORDS, COMMODITY_FUTURES_NEWS_KEYWORDS } from "./sector-news-keywords";
-import { isAnthropicConfigured } from "@/lib/agents/assistant/anthropic-client";
+import { isLlmConfigured } from "@/lib/agents/assistant/llm-client";
 import { generateSupplyDemandShockRead } from "@/lib/agents/assistant/supply-demand-shock-prompt";
 import type { AssetClass, PortfolioHolding, PortfolioShockScanEntry, PortfolioShockScanResult } from "../types";
 
@@ -83,7 +83,7 @@ export async function runPortfolioShockScan(holdings: PortfolioHolding[]): Promi
       const spike = computeCoverageSpike(news.coverageVolume);
 
       let narrative: string | null = null;
-      if (spike.triggered && isAnthropicConfigured()) {
+      if (spike.triggered && isLlmConfigured()) {
         try {
           narrative = await generateSupplyDemandShockRead(target.symbols.join("/"), target.assetClass, news.articles, target.mechanismNote, spike.multiple);
         } catch (err) {
@@ -108,7 +108,7 @@ export async function runPortfolioShockScan(holdings: PortfolioHolding[]): Promi
     }
   }
 
-  if (!isAnthropicConfigured()) {
+  if (!isLlmConfigured()) {
     dataLimitations.push("ANTHROPIC_API_KEY is not set — real coverage-spike flags and headlines still show below, but no persona narrative is generated.");
   }
 

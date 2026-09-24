@@ -1,5 +1,5 @@
-import { callClaude } from "./anthropic-client";
-import type { AnthropicContentBlock } from "./anthropic-client";
+import { callLlm } from "./llm-client";
+import type { LlmContentBlock } from "./llm-client";
 import type { FredSeriesPoint, GeopoliticalNewsResult } from "@/lib/agents/trading-agent/types";
 
 export const CURRENCY_EXPERT_SYSTEM_PROMPT = `You are a PhD in international finance and macroeconomics, specializing in the events that move currency valuations — interest rate differentials and central bank policy, balance of payments, fiscal policy, geopolitical risk and safe-haven flows, macro data surprises, and cross-border events between two specific economies.
@@ -29,14 +29,14 @@ export async function generateCurrencyExpertRead(
     usRateContext,
   });
 
-  const response = await callClaude(
+  const response = await callLlm(
     [{ role: "user", content: `Real data for ${pair}:\n${dataBlock}\n\nWrite the expert read.` }],
     [],
     CURRENCY_EXPERT_SYSTEM_PROMPT
   );
 
   const text = response.content
-    .filter((b): b is Extract<AnthropicContentBlock, { type: "text" }> => b.type === "text")
+    .filter((b): b is Extract<LlmContentBlock, { type: "text" }> => b.type === "text")
     .map((b) => b.text)
     .join("\n\n");
 

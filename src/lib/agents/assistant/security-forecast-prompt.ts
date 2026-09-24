@@ -1,5 +1,5 @@
-import { callClaude } from "./anthropic-client";
-import type { AnthropicContentBlock } from "./anthropic-client";
+import { callLlm } from "./llm-client";
+import type { LlmContentBlock } from "./llm-client";
 import type { BusinessCycleTag, MacroMarginMatrix, SecurityAnalysis } from "@/lib/agents/research-agent/types";
 
 export const SECURITY_FORECAST_SYSTEM_PROMPT = `You are a PhD finance professor specializing in security analysis, writing a forward-looking narrative assessment of one company for a student audience.
@@ -34,14 +34,14 @@ export async function generateSecurityForecast(
     macroStance: matrix.stance.label,
   });
 
-  const response = await callClaude(
+  const response = await callLlm(
     [{ role: "user", content: `Real data for ${analysis.ticker}:\n${dataBlock}\n\nWrite the forecast.` }],
     [],
     SECURITY_FORECAST_SYSTEM_PROMPT
   );
 
   const text = response.content
-    .filter((b): b is Extract<AnthropicContentBlock, { type: "text" }> => b.type === "text")
+    .filter((b): b is Extract<LlmContentBlock, { type: "text" }> => b.type === "text")
     .map((b) => b.text)
     .join("\n\n");
 

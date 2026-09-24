@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { callClaude, isAnthropicConfigured } from "@/lib/agents/assistant/anthropic-client";
-import type { AnthropicApiMessage, AnthropicContentBlock } from "@/lib/agents/assistant/anthropic-client";
+import { callLlm, isLlmConfigured } from "@/lib/agents/assistant/llm-client";
+import type { LlmMessage, LlmContentBlock } from "@/lib/agents/assistant/llm-client";
 import { ASSISTANT_TOOLS, dispatchTool } from "@/lib/agents/assistant/tools";
 import { ASSISTANT_SYSTEM_PROMPT } from "@/lib/agents/assistant/system-prompt";
 import type { AssistantMessage } from "@/lib/agents/assistant/types";
@@ -16,18 +16,20 @@ interface PaperTradingNavigationTarget {
   };
 }
 
-// Server-side tool-use loop against the Anthropic Messages API. Capped so a
-// pathological back-and-forth (or a model that never settles) can't hang a
-// request indefinitely — same defensive-cap instinct as this app's other
-// bounded loops (Monte Carlo simulation counts, retry limits).
+// Server-side tool-use loop against whichever LLM provider is configured
+// (Anthropic by default, or a self-hosted model once LLM_PROVIDER=local is
+// set — see llm-client.ts). Capped so a pathological back-and-forth (or a
+// model that never settles) can't hang a request indefinitely — same
+// defensive-cap instinct as this app's other bounded loops (Monte Carlo
+// simulation counts, retry limits).
 const MAX_TOOL_ITERATIONS = 6;
 
 export async function POST(request: Request) {
-  if (!isAnthropicConfigured()) {
+  if (!isLlmConfigured()) {
     return NextResponse.json(
       {
         error:
-          "The assistant isn't configured yet — add a real ANTHROPIC_API_KEY to .env.local (get one at console.anthropic.com). This is the only key in this app with real per-message cost.",
+          "The assistant isn't configured yet — add a real ANTHROPIC_API_KEY to .env.local (get one at console.anthropic.com), or set LLM_PROVIDER=local plus LOCAL_MODEL_URL to point at a self-hosted server instead. Anthropic is the only path with real per-message cost.",
       },
       { status: 503 }
     );
@@ -40,7 +42,7 @@ export async function POST(request: Request) {
     }
     const sessionId = body.sessionId;
 
-    const workingMessages: AnthropicApiMessage[] = body.messages.map((m) => ({ role: m.role, content: m.content }));
+    const workingMessages: LlmMessage[] = body.messages.map((m) => ({ role: m.role, content: m.content }));
     const toolsUsed = new Set<string>();
     const dataLimitations = new Set<string>();
     let finalText = "";
@@ -48,12 +50,12 @@ export async function POST(request: Request) {
     let navigationTarget: PaperTradingNavigationTarget | null = null;
 
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-      const response = await callClaude(workingMessages, ASSISTANT_TOOLS, ASSISTANT_SYSTEM_PROMPT);
+      const response = await callLlm(workingMessages, ASSISTANT_TOOLS, ASSISTANT_SYSTEM_PROMPT);
       workingMessages.push({ role: "assistant", content: response.content });
 
       if (response.stop_reason !== "tool_use") {
         finalText = response.content
-          .filter((b): b is Extract<AnthropicContentBlock, { type: "text" }> => b.type === "text")
+          .filter((b): b is Extract<LlmContentBlock, { type: "text" }> => b.type === "text")
           .map((b) => b.text)
           .join("\n\n");
         hitIterationCap = false;
@@ -61,9 +63,9 @@ export async function POST(request: Request) {
       }
 
       const toolUseBlocks = response.content.filter(
-        (b): b is Extract<AnthropicContentBlock, { type: "tool_use" }> => b.type === "tool_use"
+        (b): b is Extract<LlmContentBlock, { type: "tool_use" }> => b.type === "tool_use"
       );
-      const toolResults: AnthropicContentBlock[] = [];
+      const toolResults: LlmContentBlock[] = [];
       for (const block of toolUseBlocks) {
         toolsUsed.add(block.name);
         const result = await dispatchTool(block.name, block.input, sessionId);
