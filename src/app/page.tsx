@@ -4,6 +4,7 @@ import { ResearchGlossaryTerm } from "@/components/ResearchGlossaryTerm";
 import { getSectorOverview } from "@/lib/agents/research-agent/skills/sector-overview";
 import { Tabs } from "@/components/Tabs";
 import { AppNavigationProvider } from "@/lib/navigation/app-navigation";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
 import { IndustryImpactTab } from "@/components/IndustryImpactTab";
 import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
@@ -386,6 +387,7 @@ export default async function Home() {
 
   return (
     <AppNavigationProvider>
+    <OnboardingWizard />
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <main className="mx-auto max-w-4xl px-6 py-12">
         <Tabs
