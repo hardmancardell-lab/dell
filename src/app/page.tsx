@@ -432,11 +432,6 @@ export default async function Home() {
                               { id: "economic-outlook", label: "Economic Outlook", content: <EconomicOutlookTab /> },
                               { id: "fomc-reaction", label: "FOMC Reaction Study", content: <FomcReactionStudyTab /> },
                               { id: "fomc-week-variance", label: "FOMC Week Variance", content: <FomcWeekVarianceTab /> },
-                              { id: "quad-witching", label: "Quad Witching Study", content: <QuadWitchingStudyTab /> },
-                              { id: "week-start-momentum", label: "Week Start Momentum", content: <WeekStartMomentumTab /> },
-                              { id: "overnight-intraday", label: "Overnight vs Intraday", content: <OvernightIntradayPatternTab /> },
-                              { id: "post-big-day", label: "Post-Big-Day Study", content: <PostBigDayStudyTab /> },
-                              { id: "low-of-day-timing", label: "Low-of-Day Timing", content: <LowOfDayTimingTab /> },
                             ]}
                           />
                         </div>
@@ -582,6 +577,51 @@ export default async function Home() {
                                 content: (
                                   <RequiresPlacementTier minTier="intermediate">
                                     <OrbStrategyTab />
+                                  </RequiresPlacementTier>
+                                ),
+                              },
+                              {
+                                id: "quad-witching",
+                                label: "Quad Witching Study",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <QuadWitchingStudyTab />
+                                  </RequiresPlacementTier>
+                                ),
+                              },
+                              {
+                                id: "week-start-momentum",
+                                label: "Week Start Momentum",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <WeekStartMomentumTab />
+                                  </RequiresPlacementTier>
+                                ),
+                              },
+                              {
+                                id: "overnight-intraday",
+                                label: "Overnight vs Intraday",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <OvernightIntradayPatternTab />
+                                  </RequiresPlacementTier>
+                                ),
+                              },
+                              {
+                                id: "post-big-day",
+                                label: "Post-Big-Day Study",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <PostBigDayStudyTab />
+                                  </RequiresPlacementTier>
+                                ),
+                              },
+                              {
+                                id: "low-of-day-timing",
+                                label: "Low-of-Day Timing",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <LowOfDayTimingTab />
                                   </RequiresPlacementTier>
                                 ),
                               },
