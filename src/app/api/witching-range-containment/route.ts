@@ -13,6 +13,9 @@ export async function GET(request: Request) {
   const lowerLongPct = Number(searchParams.get("lowerLongPct") ?? "95");
   const upperLongPct = Number(searchParams.get("upperLongPct") ?? "105");
   const shortContracts = Number(searchParams.get("shortContracts") ?? "2");
+  const lowerLongPremium = Number(searchParams.get("lowerLongPremium") ?? "7");
+  const shortPremium = Number(searchParams.get("shortPremium") ?? "4");
+  const upperLongPremium = Number(searchParams.get("upperLongPremium") ?? "2");
 
   try {
     const result = await runWitchingRangeContainmentStudy(
@@ -23,7 +26,10 @@ export async function GET(request: Request) {
       shortStrikePct,
       lowerLongPct,
       upperLongPct,
-      shortContracts
+      shortContracts,
+      lowerLongPremium,
+      shortPremium,
+      upperLongPremium
     );
     return NextResponse.json(result);
   } catch (error) {

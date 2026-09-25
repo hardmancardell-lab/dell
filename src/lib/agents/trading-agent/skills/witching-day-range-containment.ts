@@ -11,6 +11,9 @@ export interface WitchingRangeOccurrence {
   zoneLabel: string;
   intrinsicPayoffPct: number;
   intrinsicPayoffPerShare: number;
+  netPLPerShare: number;
+  netPLPct: number;
+  isWin: boolean;
 }
 
 export interface WitchingRangeContainmentResult {
@@ -26,11 +29,17 @@ export interface WitchingRangeContainmentResult {
   maxProfitPayoffPct: number;
   maxLossCondition: string;
   maxLossPayoffPct: number;
+  lowerLongPremium: number;
+  shortPremium: number;
+  upperLongPremium: number;
+  netDebitPerShare: number;
   occurrences: WitchingRangeOccurrence[];
   withinRangeCount: number;
   droppedBelowCount: number;
   exceededAboveCount: number;
   pctWithinRange: number | null;
+  winCount: number;
+  totalNetPLPerShare: number;
   dataLimitations: string[];
   error?: string;
 }
@@ -132,10 +141,14 @@ export async function runWitchingRangeContainmentStudy(
   shortStrikePct: number = 100,
   lowerLongPct: number = 95,
   upperLongPct: number = 105,
-  shortContracts: number = 2
+  shortContracts: number = 2,
+  lowerLongPremium: number = 7,
+  shortPremium: number = 4,
+  upperLongPremium: number = 2
 ): Promise<WitchingRangeContainmentResult> {
   const symbol = ticker.trim().toUpperCase();
   const sortedStrikes = [shortStrikePct, lowerLongPct, upperLongPct].sort((a, b) => a - b);
+  const netDebitPerShare = lowerLongPremium + upperLongPremium - shortContracts * shortPremium;
 
   const { maxProfit, maxLoss } = findExtrema(shortStrikePct, lowerLongPct, upperLongPct, shortContracts);
   const maxProfitCondition = describeCondition(maxProfit);
@@ -143,8 +156,9 @@ export async function runWitchingRangeContainmentStudy(
 
   const dataLimitations: string[] = [
     "Entry is modeled at the prior real trading day's close, exit at the witching day's own close (open the day before, close on witching day) — the closing print, not a specific intraday \"last hour\" price, since minute bars don't reliably reach back this many years on this app's data provider (only ~3 months) while daily closes do.",
-    "intrinsicPayoffPct/intrinsicPayoffPerShare are the payoff-at-expiration diagram value only (in percentage points of entry price, and priced in real dollars off that date's real entry close) — they exclude the premium paid/received at entry. No historical options-pricing data exists anywhere this app could source for free (see TRADIER_INTEGRATION_NOTES.md), so real net P&L isn't modeled here.",
-    `Strikes: sell ${shortContracts}C @ ${shortStrikePct}%, buy 1C @ ${lowerLongPct}%, buy 1C @ ${upperLongPct}% of entry. Max profit condition: ${maxProfitCondition} (${maxProfit.payoffPct.toFixed(2)} pts). Max loss condition: ${maxLossCondition} (${maxLoss.payoffPct.toFixed(2)} pts).`,
+    "intrinsicPayoffPct/intrinsicPayoffPerShare are the payoff-at-expiration diagram value only (in percentage points of entry price, and priced in real dollars off that date's real entry close) — they exclude the premium paid/received at entry.",
+    `netPLPerShare/netPLPct apply the SAME fixed premiums (buy 1C @ $${lowerLongPremium.toFixed(2)}, sell ${shortContracts}C @ $${shortPremium.toFixed(2)} each, buy 1C @ $${upperLongPremium.toFixed(2)} — net debit $${netDebitPerShare.toFixed(2)}/share) to every historical date, regardless of that date's real stock price or implied volatility. No historical options-pricing data exists anywhere this app could source for free (see TRADIER_INTEGRATION_NOTES.md), so real premiums from those actual dates aren't recoverable — this is a fixed, user-specified assumption applied uniformly, not what the spread would really have cost each time. A $${netDebitPerShare.toFixed(2)} debit is trivial against a $880 stock (2024-03-15) but meaningful against a $118 one (2025-03-21) — netPLPct normalizes for that by expressing the result as a % of that date's own entry price.`,
+    `Strikes: sell ${shortContracts}C @ ${shortStrikePct}%, buy 1C @ ${lowerLongPct}%, buy 1C @ ${upperLongPct}% of entry. Max profit condition (intrinsic): ${maxProfitCondition} (${maxProfit.payoffPct.toFixed(2)} pts). Max loss condition (intrinsic): ${maxLossCondition} (${maxLoss.payoffPct.toFixed(2)} pts).`,
   ];
 
   try {
@@ -195,6 +209,8 @@ export async function runWitchingRangeContainmentStudy(
       const zoneLabel = zoneLabelFor(exitPct, sortedStrikes);
       const intrinsicPayoffPct = computeIntrinsicPayoffPct(exitPct, shortStrikePct, lowerLongPct, upperLongPct, shortContracts);
       const intrinsicPayoffPerShare = (intrinsicPayoffPct / 100) * priorBar.close;
+      const netPLPerShare = intrinsicPayoffPerShare - netDebitPerShare;
+      const netPLPct = (netPLPerShare / priorBar.close) * 100;
 
       occurrences.push({
         witchingDate: eventDate,
@@ -206,6 +222,9 @@ export async function runWitchingRangeContainmentStudy(
         zoneLabel,
         intrinsicPayoffPct,
         intrinsicPayoffPerShare,
+        netPLPerShare,
+        netPLPct,
+        isWin: netPLPerShare > 0,
       });
     }
 
@@ -216,6 +235,8 @@ export async function runWitchingRangeContainmentStudy(
     const withinRangeCount = occurrences.filter((o) => o.outcome === "within-range").length;
     const droppedBelowCount = occurrences.filter((o) => o.outcome === "dropped-below-entry").length;
     const exceededAboveCount = occurrences.filter((o) => o.outcome === "exceeded-upper-wing").length;
+    const winCount = occurrences.filter((o) => o.isWin).length;
+    const totalNetPLPerShare = occurrences.reduce((s, o) => s + o.netPLPerShare, 0);
 
     return {
       ticker: symbol,
@@ -230,11 +251,17 @@ export async function runWitchingRangeContainmentStudy(
       maxProfitPayoffPct: maxProfit.payoffPct,
       maxLossCondition,
       maxLossPayoffPct: maxLoss.payoffPct,
+      lowerLongPremium,
+      shortPremium,
+      upperLongPremium,
+      netDebitPerShare,
       occurrences,
       withinRangeCount,
       droppedBelowCount,
       exceededAboveCount,
       pctWithinRange: occurrences.length > 0 ? (withinRangeCount / occurrences.length) * 100 : null,
+      winCount,
+      totalNetPLPerShare,
       dataLimitations,
     };
   } catch (err) {
@@ -251,11 +278,17 @@ export async function runWitchingRangeContainmentStudy(
       maxProfitPayoffPct: maxProfit.payoffPct,
       maxLossCondition,
       maxLossPayoffPct: maxLoss.payoffPct,
+      lowerLongPremium,
+      shortPremium,
+      upperLongPremium,
+      netDebitPerShare,
       occurrences: [],
       withinRangeCount: 0,
       droppedBelowCount: 0,
       exceededAboveCount: 0,
       pctWithinRange: null,
+      winCount: 0,
+      totalNetPLPerShare: 0,
       dataLimitations,
       error: err instanceof Error ? err.message : "Unknown error",
     };

@@ -12,6 +12,9 @@ interface Occurrence {
   zoneLabel: string;
   intrinsicPayoffPct: number;
   intrinsicPayoffPerShare: number;
+  netPLPerShare: number;
+  netPLPct: number;
+  isWin: boolean;
 }
 
 interface Result {
@@ -27,19 +30,25 @@ interface Result {
   maxProfitPayoffPct: number;
   maxLossCondition: string;
   maxLossPayoffPct: number;
+  lowerLongPremium: number;
+  shortPremium: number;
+  upperLongPremium: number;
+  netDebitPerShare: number;
   occurrences: Occurrence[];
   withinRangeCount: number;
   droppedBelowCount: number;
   exceededAboveCount: number;
   pctWithinRange: number | null;
+  winCount: number;
+  totalNetPLPerShare: number;
   dataLimitations: string[];
   error?: string;
 }
 
-/** Colored by real intrinsic economics (0 = breakeven, positive = profit, negative = loss) rather than the raw "within range" label, since which zone is favorable depends on the strike shape. */
-function payoffClass(payoffPct: number): string {
-  if (payoffPct > 0) return "c-signal";
-  if (payoffPct === 0) return "c-neutral";
+/** Colored by real net-of-premium economics (fixed assumption applied to every date), not the raw "within range" label. */
+function plClass(pl: number): string {
+  if (pl > 0) return "c-signal";
+  if (pl === 0) return "c-neutral";
   return "c-danger";
 }
 
@@ -48,6 +57,9 @@ export function WitchingRangeContainmentTab() {
   const [lowerBoundPct, setLowerBoundPct] = useState(-5);
   const [upperBoundPct, setUpperBoundPct] = useState(5);
   const [lookbackYears, setLookbackYears] = useState(3);
+  const [lowerLongPremium, setLowerLongPremium] = useState(7);
+  const [shortPremium, setShortPremium] = useState(4);
+  const [upperLongPremium, setUpperLongPremium] = useState(2);
   const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +69,10 @@ export function WitchingRangeContainmentTab() {
     setLoading(true);
     setError(null);
     try {
-      const url = `/api/witching-range-containment?ticker=${encodeURIComponent(ticker)}&lowerBoundPct=${lowerBoundPct}&upperBoundPct=${upperBoundPct}&lookbackYears=${lookbackYears}`;
+      const url =
+        `/api/witching-range-containment?ticker=${encodeURIComponent(ticker)}&lowerBoundPct=${lowerBoundPct}` +
+        `&upperBoundPct=${upperBoundPct}&lookbackYears=${lookbackYears}&lowerLongPremium=${lowerLongPremium}` +
+        `&shortPremium=${shortPremium}&upperLongPremium=${upperLongPremium}`;
       const res = await fetch(url);
       const json = await res.json();
       if (!res.ok || json.error) {
@@ -81,12 +96,12 @@ export function WitchingRangeContainmentTab() {
   return (
     <div className="jarvis flex flex-col gap-6">
       <p className="jv-lede" style={{ marginBottom: 0 }}>
-        Real per-occurrence payoff breakdown for a witching-day symmetric butterfly: buy 1 call @{" "}
-        {result?.lowerLongPct ?? 95}% of entry, sell {result?.shortContracts ?? 2} call(s) @ {result?.shortStrikePct ?? 100}%,
-        buy 1 call @ {result?.upperLongPct ?? 105}%. Entry at the prior trading day&apos;s close, exit at the witching
-        day&apos;s own close. Shows the intrinsic payoff-at-expiration only — real P&amp;L also depends on the premium
-        paid/received at entry, which no free historical options-pricing source can supply (see
-        TRADIER_INTEGRATION_NOTES.md).
+        Real per-occurrence P&amp;L for a witching-day symmetric butterfly: buy 1 call @ {result?.lowerLongPct ?? 95}% of
+        entry, sell {result?.shortContracts ?? 2} call(s) @ {result?.shortStrikePct ?? 100}%, buy 1 call @{" "}
+        {result?.upperLongPct ?? 105}%. Entry at the prior trading day&apos;s close, exit at the witching day&apos;s own
+        close. Applies the SAME fixed premiums below to every historical date — no free source for real historical
+        options premiums exists (see TRADIER_INTEGRATION_NOTES.md), so this is a stated assumption, not a real
+        historical fill.
       </p>
 
       <form onSubmit={run} className="flex flex-wrap items-end gap-3">
@@ -95,34 +110,20 @@ export function WitchingRangeContainmentTab() {
           <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} className="jv-input" style={{ width: 100 }} />
         </div>
         <div>
-          <label className="jv-label block mb-1">Lower bound %</label>
-          <input
-            type="number"
-            value={lowerBoundPct}
-            onChange={(e) => setLowerBoundPct(Number(e.target.value))}
-            className="jv-input"
-            style={{ width: 90 }}
-          />
+          <label className="jv-label block mb-1">Buy 95 premium $</label>
+          <input type="number" step="0.01" value={lowerLongPremium} onChange={(e) => setLowerLongPremium(Number(e.target.value))} className="jv-input" style={{ width: 100 }} />
         </div>
         <div>
-          <label className="jv-label block mb-1">Upper bound %</label>
-          <input
-            type="number"
-            value={upperBoundPct}
-            onChange={(e) => setUpperBoundPct(Number(e.target.value))}
-            className="jv-input"
-            style={{ width: 90 }}
-          />
+          <label className="jv-label block mb-1">Sell 100 premium $ (ea)</label>
+          <input type="number" step="0.01" value={shortPremium} onChange={(e) => setShortPremium(Number(e.target.value))} className="jv-input" style={{ width: 110 }} />
+        </div>
+        <div>
+          <label className="jv-label block mb-1">Buy 105 premium $</label>
+          <input type="number" step="0.01" value={upperLongPremium} onChange={(e) => setUpperLongPremium(Number(e.target.value))} className="jv-input" style={{ width: 100 }} />
         </div>
         <div>
           <label className="jv-label block mb-1">Lookback years</label>
-          <input
-            type="number"
-            value={lookbackYears}
-            onChange={(e) => setLookbackYears(Number(e.target.value))}
-            className="jv-input"
-            style={{ width: 90 }}
-          />
+          <input type="number" value={lookbackYears} onChange={(e) => setLookbackYears(Number(e.target.value))} className="jv-input" style={{ width: 90 }} />
         </div>
         <button type="submit" disabled={loading} className="jv-btn">
           {loading ? "Running…" : "Run Study"}
@@ -139,14 +140,17 @@ export function WitchingRangeContainmentTab() {
               <div className="text-sm mb-2" style={{ color: "var(--text-0)" }}>{result.maxProfitCondition}</div>
               <div className="font-mono text-lg" style={{ color: "var(--verdict)" }}>
                 {result.maxProfitPayoffPct >= 0 ? "+" : ""}
-                {result.maxProfitPayoffPct.toFixed(2)} pts (intrinsic)
+                {result.maxProfitPayoffPct.toFixed(2)}% of entry (intrinsic)
+              </div>
+              <div className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
+                Net of the ${result.netDebitPerShare.toFixed(2)}/sh debit — see the table for each date&apos;s real dollar figure (varies with that date&apos;s entry price).
               </div>
             </div>
             <div className="jv-card" style={{ borderColor: "var(--danger)" }}>
               <div className="jv-label mb-1">Max Loss Condition</div>
               <div className="text-sm mb-2" style={{ color: "var(--text-0)" }}>{result.maxLossCondition}</div>
               <div className="font-mono text-lg" style={{ color: "var(--danger)" }}>
-                {result.maxLossPayoffPct.toFixed(2)} pts (intrinsic)
+                -${result.netDebitPerShare.toFixed(2)}/sh (the fixed debit, worst case)
               </div>
             </div>
           </div>
@@ -154,22 +158,24 @@ export function WitchingRangeContainmentTab() {
           <div className="jv-card grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div className="jv-br-b" />
             <div>
+              <div className="jv-label">Net Debit</div>
+              <div className="font-mono" style={{ color: "var(--text-0)" }}>${result.netDebitPerShare.toFixed(2)}/sh</div>
+            </div>
+            <div>
               <div className="jv-label">Occurrences</div>
               <div className="font-mono" style={{ color: "var(--text-0)" }}>{result.occurrences.length}</div>
             </div>
             <div>
-              <div className="jv-label">Within Range</div>
-              <div className="font-mono" style={{ color: "var(--text-1)" }}>
-                {result.withinRangeCount} ({result.pctWithinRange !== null ? result.pctWithinRange.toFixed(0) : "N/A"}%)
+              <div className="jv-label">Wins (net P&amp;L &gt; 0)</div>
+              <div className="font-mono" style={{ color: "var(--verdict)" }}>
+                {result.winCount} ({result.occurrences.length > 0 ? ((result.winCount / result.occurrences.length) * 100).toFixed(0) : "N/A"}%)
               </div>
             </div>
             <div>
-              <div className="jv-label">Dropped Below Entry</div>
-              <div className="font-mono" style={{ color: "var(--text-1)" }}>{result.droppedBelowCount}</div>
-            </div>
-            <div>
-              <div className="jv-label">Exceeded Upper Wing</div>
-              <div className="font-mono" style={{ color: "var(--text-1)" }}>{result.exceededAboveCount}</div>
+              <div className="jv-label">Total Net P&amp;L</div>
+              <div className="font-mono" style={{ color: result.totalNetPLPerShare >= 0 ? "var(--verdict)" : "var(--text-1)" }}>
+                {result.totalNetPLPerShare >= 0 ? "+" : "-"}${Math.abs(result.totalNetPLPerShare).toFixed(2)}/sh
+              </div>
             </div>
           </div>
 
@@ -188,8 +194,9 @@ export function WitchingRangeContainmentTab() {
                   <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Exit Close</th>
                   <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Change</th>
                   <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Zone</th>
-                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Intrinsic Payoff</th>
-                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Payoff $/sh</th>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Intrinsic $/sh</th>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Net P&amp;L $/sh</th>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Net P&amp;L %</th>
                 </tr>
               </thead>
               <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -203,14 +210,17 @@ export function WitchingRangeContainmentTab() {
                       {o.changePct.toFixed(2)}%
                     </td>
                     <td className="py-2 pr-4 text-xs" style={{ color: "var(--text-2)" }}>{o.zoneLabel}</td>
+                    <td className="py-2 pr-4 font-mono" style={{ color: "var(--text-2)" }}>
+                      {o.intrinsicPayoffPerShare >= 0 ? "+" : "-"}${Math.abs(o.intrinsicPayoffPerShare).toFixed(2)}
+                    </td>
                     <td className="py-2 pr-4">
-                      <span className={`jv-badge ${payoffClass(o.intrinsicPayoffPct)}`}>
-                        {o.intrinsicPayoffPct >= 0 ? "+" : ""}
-                        {o.intrinsicPayoffPct.toFixed(2)} pts
+                      <span className={`jv-badge ${plClass(o.netPLPerShare)}`}>
+                        {o.netPLPerShare >= 0 ? "+" : "-"}${Math.abs(o.netPLPerShare).toFixed(2)}
                       </span>
                     </td>
-                    <td className="py-2 pr-4 font-mono" style={{ color: o.intrinsicPayoffPerShare >= 0 ? "var(--verdict)" : "var(--text-1)" }}>
-                      {o.intrinsicPayoffPerShare >= 0 ? "+" : "-"}${Math.abs(o.intrinsicPayoffPerShare).toFixed(2)}
+                    <td className="py-2 pr-4 font-mono" style={{ color: o.netPLPct >= 0 ? "var(--verdict)" : "var(--text-1)" }}>
+                      {o.netPLPct >= 0 ? "+" : ""}
+                      {o.netPLPct.toFixed(2)}%
                     </td>
                   </tr>
                 ))}
