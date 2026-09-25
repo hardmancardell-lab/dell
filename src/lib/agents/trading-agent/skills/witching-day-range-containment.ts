@@ -76,7 +76,8 @@ function zoneLabelFor(exitPct: number, sortedStrikes: number[]): string {
 
 interface Extremum {
   payoffPct: number;
-  atPct: number;
+  lowBoundPct: number | null;
+  highBoundPct: number | null;
   extendsBelow: boolean;
   extendsAbove: boolean;
 }
@@ -89,6 +90,13 @@ interface Extremum {
  * 2 short vs. 1+1 long), so sampling 1pt further out reveals whether an
  * extremum is a single peak or an open-ended plateau.
  */
+interface ExtremumRaw {
+  payoffPct: number;
+  atLowPct: number | null; // set when the extreme value also holds at/below the low end of the sampled range
+  atHighPct: number | null; // set when it also holds at/above the high end
+  atInteriorPct: number | null; // set when it's a single interior peak/trough, not a plateau touching either end
+}
+
 function findExtrema(
   shortStrikePct: number,
   lowerLongPct: number,
@@ -99,29 +107,50 @@ function findExtrema(
   const candidates = [strikes[0] - 1, strikes[0], strikes[1], strikes[2], strikes[2] + 1];
   const payoffs = candidates.map((c) => computeIntrinsicPayoffPct(c, shortStrikePct, lowerLongPct, upperLongPct, shortContracts));
 
-  let maxIdx = 0;
-  let minIdx = 0;
-  for (let i = 1; i < payoffs.length; i++) {
-    if (payoffs[i] > payoffs[maxIdx]) maxIdx = i;
-    if (payoffs[i] < payoffs[minIdx]) minIdx = i;
+  function analyze(extremeValue: number, pickInteriorIdx: (a: number, b: number) => number): ExtremumRaw {
+    const EPS = 1e-9;
+    const atLow = Math.abs(payoffs[0] - extremeValue) < EPS;
+    const atHigh = Math.abs(payoffs[payoffs.length - 1] - extremeValue) < EPS;
+    if (atLow || atHigh) {
+      return {
+        payoffPct: extremeValue,
+        atLowPct: atLow ? strikes[0] : null,
+        atHighPct: atHigh ? strikes[2] : null,
+        atInteriorPct: null,
+      };
+    }
+    // Genuinely interior (e.g. the classic butterfly's single peak at the short strike) — report the first matching sample.
+    let idx = 0;
+    for (let i = 1; i < payoffs.length; i++) if (pickInteriorIdx(payoffs[i], payoffs[idx]) === payoffs[i]) idx = i;
+    return { payoffPct: extremeValue, atLowPct: null, atHighPct: null, atInteriorPct: candidates[idx] };
   }
 
-  function toExtremum(idx: number): Extremum {
-    const atPct = candidates[idx];
-    const payoffPct = payoffs[idx];
-    const extendsBelow = idx > 0 && Math.abs(payoffs[idx - 1] - payoffPct) < 1e-9;
-    const extendsAbove = idx < payoffs.length - 1 && Math.abs(payoffs[idx + 1] - payoffPct) < 1e-9;
-    return { payoffPct, atPct, extendsBelow, extendsAbove };
+  const maxValue = Math.max(...payoffs);
+  const minValue = Math.min(...payoffs);
+  const maxRaw = analyze(maxValue, (a, b) => Math.max(a, b));
+  const minRaw = analyze(minValue, (a, b) => Math.min(a, b));
+
+  function toExtremum(raw: ExtremumRaw): Extremum {
+    if (raw.atInteriorPct !== null) {
+      return { payoffPct: raw.payoffPct, lowBoundPct: raw.atInteriorPct, highBoundPct: null, extendsBelow: false, extendsAbove: false };
+    }
+    return {
+      payoffPct: raw.payoffPct,
+      lowBoundPct: raw.atLowPct,
+      highBoundPct: raw.atHighPct,
+      extendsBelow: raw.atLowPct !== null,
+      extendsAbove: raw.atHighPct !== null,
+    };
   }
 
-  return { maxProfit: toExtremum(maxIdx), maxLoss: toExtremum(minIdx) };
+  return { maxProfit: toExtremum(maxRaw), maxLoss: toExtremum(minRaw) };
 }
 
 function describeCondition(e: Extremum): string {
-  if (e.extendsBelow && !e.extendsAbove) return `Close at or below ${e.atPct}% of entry`;
-  if (e.extendsAbove && !e.extendsBelow) return `Close at or above ${e.atPct}% of entry`;
-  if (e.extendsBelow && e.extendsAbove) return `True regardless of where the close lands`;
-  return `Close exactly at ${e.atPct}% of entry`;
+  if (e.extendsBelow && e.extendsAbove) return `Close at or below ${e.lowBoundPct}% of entry, or at or above ${e.highBoundPct}% of entry`;
+  if (e.extendsBelow) return `Close at or below ${e.lowBoundPct}% of entry`;
+  if (e.extendsAbove) return `Close at or above ${e.highBoundPct}% of entry`;
+  return `Close exactly at ${e.lowBoundPct}% of entry`;
 }
 
 /**
