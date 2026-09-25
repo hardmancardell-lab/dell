@@ -5,6 +5,7 @@ import { getSectorOverview } from "@/lib/agents/research-agent/skills/sector-ove
 import { Tabs } from "@/components/Tabs";
 import { AppNavigationProvider } from "@/lib/navigation/app-navigation";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
+import { HelpMenu } from "@/components/HelpMenu";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
 import { IndustryImpactTab } from "@/components/IndustryImpactTab";
 import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
@@ -398,19 +399,12 @@ export default async function Home() {
               label: "Research Agent",
               content: (
                 <div>
-                  <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                    <video
-                      controls
-                      preload="metadata"
-                      poster="/videos/top-down-investing-agent-poster.svg"
-                      className="w-full aspect-video bg-black"
-                      src="/videos/top-down-investing-agent.mp4"
-                    >
-                      Your browser does not support embedded video.
-                    </video>
-                    <div className="px-4 py-2 text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800">
-                      New here? This ~5-minute walkthrough explains the top-down approach and every tab below.
+                  <div className="mb-6 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Research Agent</div>
+                      <h1 className="text-2xl font-semibold tracking-tight mt-1">Research Agent</h1>
                     </div>
+                    <HelpMenu agentId="top-down" />
                   </div>
                   <Tabs
                     size="secondary"
@@ -519,19 +513,12 @@ export default async function Home() {
               label: "Trading Agent",
               content: (
                 <div>
-                <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                  <div className="aspect-video">
-                    <iframe
-                      className="w-full h-full"
-                      src="https://www.youtube-nocookie.com/embed/v02p4kI9Hyo"
-                      title="The Illusion of Patterns"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      allowFullScreen
-                    />
+                <div className="mb-6 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Trading Agent</div>
+                    <h1 className="text-2xl font-semibold tracking-tight mt-1">Trading Agent</h1>
                   </div>
-                  <div className="px-4 py-2 text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800">
-                    New here? This walkthrough explains why not every backtested pattern is a real edge — and how this app tells the difference.
-                  </div>
+                  <HelpMenu agentId="trading" />
                 </div>
                 <Tabs
                   size="secondary"
@@ -955,21 +942,12 @@ export default async function Home() {
               label: "Portfolio Tracking Agent",
               content: (
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Portfolio Tracker</div>
-                  <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Portfolio Tracker</h1>
-                  <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                    <div className="aspect-video">
-                      <iframe
-                        className="w-full h-full"
-                        src="https://www.youtube-nocookie.com/embed/9gM8_K201Dk"
-                        title="Portfolio Tracker Agent"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                      />
+                  <div className="mb-6 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Portfolio Tracker</div>
+                      <h1 className="text-2xl font-semibold tracking-tight mt-1">Portfolio Tracker</h1>
                     </div>
-                    <div className="px-4 py-2 text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800">
-                      New here? This ~5-minute walkthrough explains every tab below, with real-world examples.
-                    </div>
+                    <HelpMenu agentId="portfolio" />
                   </div>
                   <Tabs
                     size="secondary"
@@ -992,21 +970,12 @@ export default async function Home() {
               label: "Financial Literacy",
               content: (
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Financial Literacy</div>
-                  <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Financial Literacy</h1>
-                  <div className="mb-8 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                    <div className="aspect-video">
-                      <iframe
-                        className="w-full h-full"
-                        src="https://www.youtube-nocookie.com/embed/EwzFA3qd2hM"
-                        title="Shielding Your Finances"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                      />
+                  <div className="mb-6 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Financial Literacy</div>
+                      <h1 className="text-2xl font-semibold tracking-tight mt-1">Financial Literacy</h1>
                     </div>
-                    <div className="px-4 py-2 text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800">
-                      Shielding Your Finances — a short primer before you start the curriculum below.
-                    </div>
+                    <HelpMenu agentId="literacy" />
                   </div>
                   <FinancialLiteracyTab />
                 </div>
@@ -1017,8 +986,13 @@ export default async function Home() {
               label: "Assistant",
               content: (
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Assistant</div>
-                  <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Assistant</h1>
+                  <div className="mb-6 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">Assistant</div>
+                      <h1 className="text-2xl font-semibold tracking-tight mt-1">Assistant</h1>
+                    </div>
+                    <HelpMenu agentId="assistant" />
+                  </div>
                   <AssistantChatTab />
                 </div>
               ),
