@@ -1,8 +1,6 @@
 import { getDailyBars } from "./daily-bars";
 import { QUAD_WITCHING_DATES } from "./quad-witching-study";
 
-export type PayoffZone = "at-or-below-short" | "short-to-first-long" | "between-longs" | "above-far-long";
-
 export interface WitchingRangeOccurrence {
   witchingDate: string;
   entryDate: string;
@@ -10,9 +8,9 @@ export interface WitchingRangeOccurrence {
   exitClose: number;
   changePct: number;
   outcome: "within-range" | "dropped-below-entry" | "exceeded-upper-wing";
-  zone: PayoffZone;
-  intrinsicPayoffPct: number; // percentage points of entry price, ignoring premium paid/received
-  intrinsicPayoffPerShare: number; // same figure priced in real dollars using that date's real entryClose
+  zoneLabel: string;
+  intrinsicPayoffPct: number;
+  intrinsicPayoffPerShare: number;
 }
 
 export interface WitchingRangeContainmentResult {
@@ -21,8 +19,8 @@ export interface WitchingRangeContainmentResult {
   upperBoundPct: number;
   lookbackYears: number;
   shortStrikePct: number;
-  longStrike1Pct: number;
-  longStrike2Pct: number;
+  lowerLongPct: number;
+  upperLongPct: number;
   shortContracts: number;
   maxProfitCondition: string;
   maxProfitPayoffPct: number;
@@ -38,44 +36,93 @@ export interface WitchingRangeContainmentResult {
 }
 
 /**
- * Intrinsic payoff (in percentage points of the entry price) for a
- * sell-shortContracts-calls @ shortStrikePct / buy-1-call @ longStrike1Pct /
- * buy-1-call @ longStrike2Pct structure, given exitPct (the close as % of
- * entry, e.g. 101.17 for a +1.17% day). Piecewise, same math a real options
- * desk would use for the payoff diagram — ignores premium paid/received
- * entirely (see dataLimitations: no historical options-pricing data exists
- * anywhere for free to know the real net debit/credit on a past date).
+ * General intrinsic payoff (percentage points of entry price) for
+ * sell-shortContracts-calls @ shortStrikePct / buy-1-call @ lowerLongPct /
+ * buy-1-call @ upperLongPct, at exitPct (close as % of entry). Works
+ * regardless of whether the longs bracket the short strike (a classic
+ * symmetric butterfly, e.g. 95/100/105) or both sit on one side (the
+ * asymmetric ratio-spread shape tested earlier, e.g. 100/105/115) — the
+ * max() terms are order-independent, so no special-casing is needed.
  */
 export function computeIntrinsicPayoffPct(
   exitPct: number,
   shortStrikePct: number,
-  longStrike1Pct: number,
-  longStrike2Pct: number,
+  lowerLongPct: number,
+  upperLongPct: number,
   shortContracts: number
 ): number {
   const shortLeg = -shortContracts * Math.max(exitPct - shortStrikePct, 0);
-  const longLeg1 = Math.max(exitPct - longStrike1Pct, 0);
-  const longLeg2 = Math.max(exitPct - longStrike2Pct, 0);
-  return shortLeg + longLeg1 + longLeg2;
+  const longLegA = Math.max(exitPct - lowerLongPct, 0);
+  const longLegB = Math.max(exitPct - upperLongPct, 0);
+  return shortLeg + longLegA + longLegB;
 }
 
-function classifyZone(exitPct: number, shortStrikePct: number, longStrike1Pct: number, longStrike2Pct: number): PayoffZone {
-  if (exitPct <= shortStrikePct) return "at-or-below-short";
-  if (exitPct <= longStrike1Pct) return "short-to-first-long";
-  if (exitPct <= longStrike2Pct) return "between-longs";
-  return "above-far-long";
+function zoneLabelFor(exitPct: number, sortedStrikes: number[]): string {
+  const [s1, s2, s3] = sortedStrikes;
+  if (exitPct <= s1) return `At/below ${s1}%`;
+  if (exitPct <= s2) return `${s1}%–${s2}%`;
+  if (exitPct <= s3) return `${s2}%–${s3}%`;
+  return `Above ${s3}%`;
+}
+
+interface Extremum {
+  payoffPct: number;
+  atPct: number;
+  extendsBelow: boolean;
+  extendsAbove: boolean;
+}
+
+/**
+ * Finds the best/worst intrinsic payoff by evaluating the piecewise-linear
+ * function at every strike (the only places its slope can change) plus 1pt
+ * outside each end — payoff is provably flat beyond the outermost strike
+ * whenever shortContracts equals the total long-contract count (true here:
+ * 2 short vs. 1+1 long), so sampling 1pt further out reveals whether an
+ * extremum is a single peak or an open-ended plateau.
+ */
+function findExtrema(
+  shortStrikePct: number,
+  lowerLongPct: number,
+  upperLongPct: number,
+  shortContracts: number
+): { maxProfit: Extremum; maxLoss: Extremum } {
+  const strikes = [shortStrikePct, lowerLongPct, upperLongPct].sort((a, b) => a - b);
+  const candidates = [strikes[0] - 1, strikes[0], strikes[1], strikes[2], strikes[2] + 1];
+  const payoffs = candidates.map((c) => computeIntrinsicPayoffPct(c, shortStrikePct, lowerLongPct, upperLongPct, shortContracts));
+
+  let maxIdx = 0;
+  let minIdx = 0;
+  for (let i = 1; i < payoffs.length; i++) {
+    if (payoffs[i] > payoffs[maxIdx]) maxIdx = i;
+    if (payoffs[i] < payoffs[minIdx]) minIdx = i;
+  }
+
+  function toExtremum(idx: number): Extremum {
+    const atPct = candidates[idx];
+    const payoffPct = payoffs[idx];
+    const extendsBelow = idx > 0 && Math.abs(payoffs[idx - 1] - payoffPct) < 1e-9;
+    const extendsAbove = idx < payoffs.length - 1 && Math.abs(payoffs[idx + 1] - payoffPct) < 1e-9;
+    return { payoffPct, atPct, extendsBelow, extendsAbove };
+  }
+
+  return { maxProfit: toExtremum(maxIdx), maxLoss: toExtremum(minIdx) };
+}
+
+function describeCondition(e: Extremum): string {
+  if (e.extendsBelow && !e.extendsAbove) return `Close at or below ${e.atPct}% of entry`;
+  if (e.extendsAbove && !e.extendsBelow) return `Close at or above ${e.atPct}% of entry`;
+  if (e.extendsBelow && e.extendsAbove) return `True regardless of where the close lands`;
+  return `Close exactly at ${e.atPct}% of entry`;
 }
 
 /**
  * Real price-containment + intrinsic-payoff check for a witching-day option
- * spread whose short strike sits at entry price (100%) and whose two long
- * legs sit above it — e.g. sell 2C @ 100%, buy 1C @ 105%, buy 1C @ 115%.
- * Deliberately does NOT compute full spread P&L: no historical
- * options-pricing data exists anywhere for free (see
- * TRADIER_INTEGRATION_NOTES.md) to know the real net debit/credit paid on a
- * past date, so intrinsicPayoffPct/intrinsicPayoffPerShare below are the
- * payoff-at-expiration diagram value only — real profit/loss also includes
- * whatever premium changed hands at entry, which this can't source.
+ * spread — defaults to the classic symmetric butterfly (buy 1C @ 95%, sell
+ * 2C @ 100%, buy 1C @ 105%) but works for any 3-strike shape. Deliberately
+ * does NOT compute full spread P&L: no historical options-pricing data
+ * exists anywhere for free (see TRADIER_INTEGRATION_NOTES.md) to know the
+ * real net debit/credit paid on a past date, so intrinsicPayoffPct/
+ * intrinsicPayoffPerShare are the payoff-at-expiration diagram value only.
  */
 export async function runWitchingRangeContainmentStudy(
   ticker: string,
@@ -83,23 +130,21 @@ export async function runWitchingRangeContainmentStudy(
   upperBoundPct: number = 15,
   lookbackYears: number = 3,
   shortStrikePct: number = 100,
-  longStrike1Pct: number = 105,
-  longStrike2Pct: number = 115,
+  lowerLongPct: number = 95,
+  upperLongPct: number = 105,
   shortContracts: number = 2
 ): Promise<WitchingRangeContainmentResult> {
   const symbol = ticker.trim().toUpperCase();
+  const sortedStrikes = [shortStrikePct, lowerLongPct, upperLongPct].sort((a, b) => a - b);
 
-  // Beyond longStrike2Pct the payoff is flat whenever shortContracts equals
-  // the total long-contract count (delta-neutral past the far strike, true
-  // for this 2-short/1-long/1-long structure) — evaluating exactly at
-  // longStrike2Pct already lands on that flat plateau.
-  const maxProfitPayoffPct = computeIntrinsicPayoffPct(shortStrikePct, shortStrikePct, longStrike1Pct, longStrike2Pct, shortContracts);
-  const maxLossPayoffPct = computeIntrinsicPayoffPct(longStrike2Pct, shortStrikePct, longStrike1Pct, longStrike2Pct, shortContracts);
+  const { maxProfit, maxLoss } = findExtrema(shortStrikePct, lowerLongPct, upperLongPct, shortContracts);
+  const maxProfitCondition = describeCondition(maxProfit);
+  const maxLossCondition = describeCondition(maxLoss);
 
   const dataLimitations: string[] = [
     "Entry is modeled at the prior real trading day's close, exit at the witching day's own close (open the day before, close on witching day) — the closing print, not a specific intraday \"last hour\" price, since minute bars don't reliably reach back this many years on this app's data provider (only ~3 months) while daily closes do.",
-    "intrinsicPayoffPct/intrinsicPayoffPerShare are the payoff-at-expiration diagram value only (in percentage points of entry price, and priced in real dollars off that date's real entry close) — they exclude the premium paid/received at entry. No historical options-pricing data exists anywhere this app could source for free (see TRADIER_INTEGRATION_NOTES.md), so real net P&L (premium collected/paid, netted against this payoff) isn't modeled here.",
-    `Max profit condition assumes the position is held to expiration with the underlying at or below the short strike (${shortStrikePct}% of entry) — intrinsic payoff is flat at ${maxProfitPayoffPct.toFixed(2)} points regardless of how far below. Max loss condition assumes the underlying finishes at or above the far long strike (${longStrike2Pct}% of entry), where the payoff caps at ${maxLossPayoffPct.toFixed(2)} points (delta-neutral beyond that point since ${shortContracts} short contract(s) are fully offset by ${shortContracts} long contracts total).`,
+    "intrinsicPayoffPct/intrinsicPayoffPerShare are the payoff-at-expiration diagram value only (in percentage points of entry price, and priced in real dollars off that date's real entry close) — they exclude the premium paid/received at entry. No historical options-pricing data exists anywhere this app could source for free (see TRADIER_INTEGRATION_NOTES.md), so real net P&L isn't modeled here.",
+    `Strikes: sell ${shortContracts}C @ ${shortStrikePct}%, buy 1C @ ${lowerLongPct}%, buy 1C @ ${upperLongPct}% of entry. Max profit condition: ${maxProfitCondition} (${maxProfit.payoffPct.toFixed(2)} pts). Max loss condition: ${maxLossCondition} (${maxLoss.payoffPct.toFixed(2)} pts).`,
   ];
 
   try {
@@ -146,9 +191,9 @@ export async function runWitchingRangeContainmentStudy(
       const outcome: WitchingRangeOccurrence["outcome"] =
         changePct < lowerBoundPct ? "dropped-below-entry" : changePct > upperBoundPct ? "exceeded-upper-wing" : "within-range";
 
-      const exitPct = 100 + changePct; // entry always treated as the 100% reference point, matching shortStrikePct's convention
-      const zone = classifyZone(exitPct, shortStrikePct, longStrike1Pct, longStrike2Pct);
-      const intrinsicPayoffPct = computeIntrinsicPayoffPct(exitPct, shortStrikePct, longStrike1Pct, longStrike2Pct, shortContracts);
+      const exitPct = 100 + changePct;
+      const zoneLabel = zoneLabelFor(exitPct, sortedStrikes);
+      const intrinsicPayoffPct = computeIntrinsicPayoffPct(exitPct, shortStrikePct, lowerLongPct, upperLongPct, shortContracts);
       const intrinsicPayoffPerShare = (intrinsicPayoffPct / 100) * priorBar.close;
 
       occurrences.push({
@@ -158,7 +203,7 @@ export async function runWitchingRangeContainmentStudy(
         exitClose: rec.close,
         changePct,
         outcome,
-        zone,
+        zoneLabel,
         intrinsicPayoffPct,
         intrinsicPayoffPerShare,
       });
@@ -178,13 +223,13 @@ export async function runWitchingRangeContainmentStudy(
       upperBoundPct,
       lookbackYears,
       shortStrikePct,
-      longStrike1Pct,
-      longStrike2Pct,
+      lowerLongPct,
+      upperLongPct,
       shortContracts,
-      maxProfitCondition: `Close at or below ${shortStrikePct}% of entry (flat or down)`,
-      maxProfitPayoffPct,
-      maxLossCondition: `Close at or above ${longStrike2Pct}% of entry (up ${(longStrike2Pct - 100).toFixed(0)}%+)`,
-      maxLossPayoffPct,
+      maxProfitCondition,
+      maxProfitPayoffPct: maxProfit.payoffPct,
+      maxLossCondition,
+      maxLossPayoffPct: maxLoss.payoffPct,
       occurrences,
       withinRangeCount,
       droppedBelowCount,
@@ -199,13 +244,13 @@ export async function runWitchingRangeContainmentStudy(
       upperBoundPct,
       lookbackYears,
       shortStrikePct,
-      longStrike1Pct,
-      longStrike2Pct,
+      lowerLongPct,
+      upperLongPct,
       shortContracts,
-      maxProfitCondition: `Close at or below ${shortStrikePct}% of entry (flat or down)`,
-      maxProfitPayoffPct,
-      maxLossCondition: `Close at or above ${longStrike2Pct}% of entry (up ${(longStrike2Pct - 100).toFixed(0)}%+)`,
-      maxLossPayoffPct,
+      maxProfitCondition,
+      maxProfitPayoffPct: maxProfit.payoffPct,
+      maxLossCondition,
+      maxLossPayoffPct: maxLoss.payoffPct,
       occurrences: [],
       withinRangeCount: 0,
       droppedBelowCount: 0,
