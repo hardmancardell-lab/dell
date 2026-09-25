@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+type Zone = "at-or-below-short" | "short-to-first-long" | "between-longs" | "above-far-long";
+
 interface Occurrence {
   witchingDate: string;
   entryDate: string;
@@ -9,6 +11,9 @@ interface Occurrence {
   exitClose: number;
   changePct: number;
   outcome: "within-range" | "dropped-below-entry" | "exceeded-upper-wing";
+  zone: Zone;
+  intrinsicPayoffPct: number;
+  intrinsicPayoffPerShare: number;
 }
 
 interface Result {
@@ -16,6 +21,14 @@ interface Result {
   lowerBoundPct: number;
   upperBoundPct: number;
   lookbackYears: number;
+  shortStrikePct: number;
+  longStrike1Pct: number;
+  longStrike2Pct: number;
+  shortContracts: number;
+  maxProfitCondition: string;
+  maxProfitPayoffPct: number;
+  maxLossCondition: string;
+  maxLossPayoffPct: number;
   occurrences: Occurrence[];
   withinRangeCount: number;
   droppedBelowCount: number;
@@ -25,17 +38,19 @@ interface Result {
   error?: string;
 }
 
-const OUTCOME_LABEL: Record<Occurrence["outcome"], string> = {
-  "within-range": "Within range",
-  "dropped-below-entry": "Dropped below entry",
-  "exceeded-upper-wing": "Exceeded upper wing",
+const ZONE_LABEL: Record<Zone, string> = {
+  "at-or-below-short": "At/below short strike",
+  "short-to-first-long": "Short strike → 1st long",
+  "between-longs": "Between the two longs",
+  "above-far-long": "Above far long (capped)",
 };
 
-const OUTCOME_CLASS: Record<Occurrence["outcome"], string> = {
-  "within-range": "c-signal",
-  "dropped-below-entry": "c-danger",
-  "exceeded-upper-wing": "c-danger",
-};
+/** Colored by real intrinsic economics (0 = best/max-profit, more negative = worse), not by the old "stayed in range" framing — for this 2-short/1-long/1-long structure those are opposite things. */
+function payoffClass(payoffPct: number): string {
+  if (payoffPct >= 0) return "c-signal";
+  if (payoffPct >= -10) return "c-neutral";
+  return "c-danger";
+}
 
 export function WitchingRangeContainmentTab() {
   const [ticker, setTicker] = useState("NVDA");
@@ -75,11 +90,11 @@ export function WitchingRangeContainmentTab() {
   return (
     <div className="jarvis flex flex-col gap-6">
       <p className="jv-lede" style={{ marginBottom: 0 }}>
-        Real price-containment check for a witching-day spread: entry at the prior trading day&apos;s close, exit
-        at the witching day&apos;s own close. Checks whether the underlying stayed between the lower bound
-        (typically the short strike, 0% = entry price) and the upper bound (the furthest long leg) — e.g. sell
-        2C @ 100%, buy 1C @ 105%, buy 1C @ 115% means a 0%&ndash;15% band. This checks price containment only, not
-        actual spread P&amp;L — no historical options-pricing data exists anywhere to model the real net debit paid.
+        Real per-occurrence payoff breakdown for a witching-day spread: sell {result?.shortContracts ?? 2} call(s) @{" "}
+        {result?.shortStrikePct ?? 100}% of entry, buy 1 call @ {result?.longStrike1Pct ?? 105}%, buy 1 call @{" "}
+        {result?.longStrike2Pct ?? 115}%. Entry at the prior trading day&apos;s close, exit at the witching day&apos;s own
+        close. Shows the intrinsic payoff-at-expiration only — real P&amp;L also depends on the premium paid/received
+        at entry, which no free historical options-pricing source can supply (see TRADIER_INTEGRATION_NOTES.md).
       </p>
 
       <form onSubmit={run} className="flex flex-wrap items-end gap-3">
@@ -126,6 +141,24 @@ export function WitchingRangeContainmentTab() {
 
       {result && (
         <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="jv-card" style={{ borderColor: "var(--verdict)" }}>
+              <div className="jv-label mb-1">Max Profit Condition</div>
+              <div className="text-sm mb-2" style={{ color: "var(--text-0)" }}>{result.maxProfitCondition}</div>
+              <div className="font-mono text-lg" style={{ color: "var(--verdict)" }}>
+                {result.maxProfitPayoffPct >= 0 ? "+" : ""}
+                {result.maxProfitPayoffPct.toFixed(2)} pts (intrinsic)
+              </div>
+            </div>
+            <div className="jv-card" style={{ borderColor: "var(--danger)" }}>
+              <div className="jv-label mb-1">Max Loss Condition</div>
+              <div className="text-sm mb-2" style={{ color: "var(--text-0)" }}>{result.maxLossCondition}</div>
+              <div className="font-mono text-lg" style={{ color: "var(--danger)" }}>
+                {result.maxLossPayoffPct.toFixed(2)} pts (intrinsic, capped)
+              </div>
+            </div>
+          </div>
+
           <div className="jv-card grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div className="jv-br-b" />
             <div>
@@ -134,7 +167,7 @@ export function WitchingRangeContainmentTab() {
             </div>
             <div>
               <div className="jv-label">Within Range</div>
-              <div className="font-mono" style={{ color: "var(--verdict)" }}>
+              <div className="font-mono" style={{ color: "var(--text-1)" }}>
                 {result.withinRangeCount} ({result.pctWithinRange !== null ? result.pctWithinRange.toFixed(0) : "N/A"}%)
               </div>
             </div>
@@ -162,7 +195,9 @@ export function WitchingRangeContainmentTab() {
                   <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Entry Close</th>
                   <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Exit Close</th>
                   <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Change</th>
-                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Outcome</th>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Zone</th>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Intrinsic Payoff</th>
+                  <th className="py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal">Payoff $/sh</th>
                 </tr>
               </thead>
               <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -175,8 +210,15 @@ export function WitchingRangeContainmentTab() {
                       {o.changePct >= 0 ? "+" : ""}
                       {o.changePct.toFixed(2)}%
                     </td>
+                    <td className="py-2 pr-4 text-xs" style={{ color: "var(--text-2)" }}>{ZONE_LABEL[o.zone]}</td>
                     <td className="py-2 pr-4">
-                      <span className={`jv-badge ${OUTCOME_CLASS[o.outcome]}`}>{OUTCOME_LABEL[o.outcome]}</span>
+                      <span className={`jv-badge ${payoffClass(o.intrinsicPayoffPct)}`}>
+                        {o.intrinsicPayoffPct >= 0 ? "+" : ""}
+                        {o.intrinsicPayoffPct.toFixed(2)} pts
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 font-mono" style={{ color: o.intrinsicPayoffPerShare >= 0 ? "var(--verdict)" : "var(--text-1)" }}>
+                      {o.intrinsicPayoffPerShare >= 0 ? "+" : "-"}${Math.abs(o.intrinsicPayoffPerShare).toFixed(2)}
                     </td>
                   </tr>
                 ))}
