@@ -17,6 +17,7 @@ import { WeekStartMomentumTab } from "@/components/WeekStartMomentumTab";
 import { OvernightIntradayPatternTab } from "@/components/OvernightIntradayPatternTab";
 import { PostBigDayStudyTab } from "@/components/PostBigDayStudyTab";
 import { LowOfDayTimingTab } from "@/components/LowOfDayTimingTab";
+import { WitchingRangeContainmentTab } from "@/components/WitchingRangeContainmentTab";
 import { SectorFundamentalsTab } from "@/components/SectorFundamentalsTab";
 import { SectorRecommendationsTab } from "@/components/SectorRecommendationsTab";
 import { SectorStockAnalysisTab } from "@/components/SectorStockAnalysisTab";
@@ -586,6 +587,15 @@ export default async function Home() {
                                 content: (
                                   <RequiresPlacementTier minTier="intermediate">
                                     <QuadWitchingStudyTab />
+                                  </RequiresPlacementTier>
+                                ),
+                              },
+                              {
+                                id: "witching-range-containment",
+                                label: "Witching Range Containment",
+                                content: (
+                                  <RequiresPlacementTier minTier="intermediate">
+                                    <WitchingRangeContainmentTab />
                                   </RequiresPlacementTier>
                                 ),
                               },

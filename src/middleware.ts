@@ -38,6 +38,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/overnight-intraday-pattern",
   "/api/post-big-day-study",
   "/api/low-of-day-timing",
+  "/api/witching-range-containment",
 ];
 
 function isPublicPath(pathname: string): boolean {
