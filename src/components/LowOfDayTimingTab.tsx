@@ -10,6 +10,7 @@ interface Bucket {
 
 interface LowOfDayTimingResult {
   ticker: string;
+  filterDayOfWeekLabel: string | null;
   lateLowCutoffClock: string;
   daysAnalyzed: number;
   pctLowBeforeCutoff: number | null;
@@ -30,8 +31,18 @@ interface LowOfDayTimingResult {
   error?: string;
 }
 
+const WEEKDAY_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Every trading day" },
+  { value: "1", label: "Mondays" },
+  { value: "2", label: "Tuesdays" },
+  { value: "3", label: "Wednesdays" },
+  { value: "4", label: "Thursdays" },
+  { value: "5", label: "Fridays" },
+];
+
 export function LowOfDayTimingTab() {
   const [tickers, setTickers] = useState("GOOGL");
+  const [dayOfWeek, setDayOfWeek] = useState("");
   const [results, setResults] = useState<LowOfDayTimingResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +51,8 @@ export function LowOfDayTimingTab() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/low-of-day-timing?tickers=${encodeURIComponent(tickers)}`);
+      const url = `/api/low-of-day-timing?tickers=${encodeURIComponent(tickers)}${dayOfWeek ? `&dayOfWeek=${dayOfWeek}` : ""}`;
+      const res = await fetch(url);
       const json = await res.json();
       if (!res.ok) setError(json.error ?? "Unknown error");
       else setResults(json.tickers as LowOfDayTimingResult[]);
@@ -75,6 +87,16 @@ export function LowOfDayTimingTab() {
           <label className="jv-label block mb-1">Tickers (comma-separated)</label>
           <input value={tickers} onChange={(e) => setTickers(e.target.value.toUpperCase())} className="jv-input" style={{ width: 260 }} />
         </div>
+        <div>
+          <label className="jv-label block mb-1">Day of week</label>
+          <select value={dayOfWeek} onChange={(e) => setDayOfWeek(e.target.value)} className="jv-select">
+            {WEEKDAY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <button type="submit" disabled={loading} className="jv-btn">
           {loading ? "Running…" : "Run Study"}
         </button>
@@ -87,7 +109,14 @@ export function LowOfDayTimingTab() {
           {results.map((t) => (
             <div key={t.ticker} className="jv-card">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-lg font-semibold" style={{ color: "var(--text-0)" }}>{t.ticker}</div>
+                <div className="text-lg font-semibold" style={{ color: "var(--text-0)" }}>
+                  {t.ticker}
+                  {t.filterDayOfWeekLabel && (
+                    <span className="text-xs font-normal ml-2" style={{ color: "var(--text-2)" }}>
+                      ({t.filterDayOfWeekLabel}s only)
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs" style={{ color: "var(--text-2)" }}>n={t.daysAnalyzed} real days</div>
               </div>
               {t.error ? (

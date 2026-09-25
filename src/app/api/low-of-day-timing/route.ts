@@ -11,9 +11,11 @@ export async function GET(request: Request) {
   const tickers = tickersParam
     ? tickersParam.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean)
     : DEFAULT_TICKERS;
+  const dayOfWeekParam = searchParams.get("dayOfWeek");
+  const filterDayOfWeek = dayOfWeekParam !== null && dayOfWeekParam !== "" ? Number(dayOfWeekParam) : null;
 
   try {
-    const results = await runLowOfDayTimingStudy(tickers);
+    const results = await runLowOfDayTimingStudy(tickers, filterDayOfWeek);
     return NextResponse.json({ tickers: results });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

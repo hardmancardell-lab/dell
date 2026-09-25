@@ -18,6 +18,7 @@ async function fetchMinuteBarsChunked(ticker: string, startMs: number, endMs: nu
 
 export interface LowOfDayTimingResult {
   ticker: string;
+  filterDayOfWeekLabel: string | null; // e.g. "Friday", or null for every trading day
   lateLowCutoffClock: string; // "10:30am"
   daysAnalyzed: number;
   pctLowBeforeCutoff: number | null;
@@ -44,11 +45,19 @@ export interface LowOfDayTimingResult {
   error?: string;
 }
 
-async function studyOneTicker(ticker: string): Promise<LowOfDayTimingResult> {
+const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** getUTCDay() on a plain YYYY-MM-DD dateKey at noon UTC — safe from any DST/timezone edge shifting a date string across midnight, since we only need the day-of-week, not a real instant. */
+function dayOfWeekOf(dateKey: string): number {
+  return new Date(`${dateKey}T12:00:00Z`).getUTCDay();
+}
+
+async function studyOneTicker(ticker: string, filterDayOfWeek: number | null): Promise<LowOfDayTimingResult> {
   const now = Date.now();
   const startMs = now - MINUTE_BAR_LOOKBACK_MONTHS * 30.44 * 24 * 60 * 60 * 1000;
   const minuteBars = await fetchMinuteBarsChunked(ticker, startMs, now);
-  const days = groupCandlesByEasternDay(minuteBars);
+  const allDays = groupCandlesByEasternDay(minuteBars);
+  const days = filterDayOfWeek === null ? allDays : allDays.filter((d) => dayOfWeekOf(d.dateKey) === filterDayOfWeek);
 
   const allLowTimes: number[] = [];
   const allHighTimes: number[] = [];
@@ -78,9 +87,13 @@ async function studyOneTicker(ticker: string): Promise<LowOfDayTimingResult> {
     "\"Low of day\" is the real regular-session (9:30am-4:00pm ET) low print — premarket/after-hours lows are excluded, matching this app's other HOD/LOD studies.",
     `The "late low" subset (at or after ${formatMinutesAsClock(LATE_LOW_CUTOFF_MINUTES)}) is exactly the population asked about — it excludes every day where the low actually did come before that cutoff, so its own sample size is meaningfully smaller than the total days analyzed.`,
   ];
+  if (filterDayOfWeek !== null) {
+    dataLimitations.push(`Filtered to ${WEEKDAY_LABELS[filterDayOfWeek]}s only — with only ~3 months of real minute-bar history, that's roughly 12-13 real trading days, a thin sample for a day-of-week-specific read.`);
+  }
 
   return {
     ticker,
+    filterDayOfWeekLabel: filterDayOfWeek === null ? null : WEEKDAY_LABELS[filterDayOfWeek],
     lateLowCutoffClock: formatMinutesAsClock(LATE_LOW_CUTOFF_MINUTES),
     daysAnalyzed: allLowTimes.length,
     pctLowBeforeCutoff: allLowTimes.length > 0 ? ((allLowTimes.length - lateLowTimes.length) / allLowTimes.length) * 100 : null,
@@ -111,14 +124,15 @@ async function studyOneTicker(ticker: string): Promise<LowOfDayTimingResult> {
  * late-low subset and shows its own real timing distribution, most common
  * 30-minute bucket, and median clock time.
  */
-export async function runLowOfDayTimingStudy(tickers: string[]): Promise<LowOfDayTimingResult[]> {
+export async function runLowOfDayTimingStudy(tickers: string[], filterDayOfWeek: number | null = null): Promise<LowOfDayTimingResult[]> {
   return Promise.all(
     tickers.map(async (ticker) => {
       try {
-        return await studyOneTicker(ticker);
+        return await studyOneTicker(ticker, filterDayOfWeek);
       } catch (err) {
         return {
           ticker,
+          filterDayOfWeekLabel: filterDayOfWeek === null ? null : WEEKDAY_LABELS[filterDayOfWeek],
           lateLowCutoffClock: formatMinutesAsClock(LATE_LOW_CUTOFF_MINUTES),
           daysAnalyzed: 0,
           pctLowBeforeCutoff: null,
