@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 
-const PILP_BASE_URL = "http://127.0.0.1:7810";
-const STATUS_URL = `${PILP_BASE_URL}/pilp/status`;
-const CHAT_URL = `${PILP_BASE_URL}/pilp/chat`;
+// Faye's server still lives at the /pilp/* routes (see Documents/Pilp_Assistant) —
+// only her displayed name changed, not the underlying package/endpoints.
+const FAYE_BASE_URL = "http://127.0.0.1:7810";
+const STATUS_URL = `${FAYE_BASE_URL}/pilp/status`;
+const CHAT_URL = `${FAYE_BASE_URL}/pilp/chat`;
 
-type PilpStatus = "checking" | "available" | "unavailable";
+type FayeStatus = "checking" | "available" | "unavailable";
 
 interface ChatMessage {
   id: string;
@@ -18,16 +20,16 @@ interface ChatMessage {
 }
 
 /**
- * Pilp runs entirely on the user's own machine (Flask + Ollama, localhost
+ * Faye runs entirely on the user's own machine (Flask + Ollama, localhost
  * only) — see Documents/Pilp_Assistant. This widget only shows its entry
  * point once GET /pilp/status reports AVAILABLE, per INTEGRATION.md, and
  * follows that doc's exact SSE parsing shape. state.portfolio is built from
  * the same localStorage-only holdings the Portfolio Tracker itself uses —
  * nothing here reaches a server; it flows straight from this browser to the
- * local Pilp process and back.
+ * local Faye process and back.
  */
-export function PilpChatWidget() {
-  const [status, setStatus] = useState<PilpStatus>("checking");
+export function FayeChatWidget() {
+  const [status, setStatus] = useState<FayeStatus>("checking");
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -83,7 +85,7 @@ export function PilpChatWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, state: buildState(), stream: true }),
       });
-      if (!res.body) throw new Error("Pilp returned no response stream.");
+      if (!res.body) throw new Error("Faye returned no response stream.");
 
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -119,7 +121,7 @@ export function PilpChatWidget() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, text: err instanceof Error ? err.message : "Pilp is not reachable right now.", error: true }
+            ? { ...m, text: err instanceof Error ? err.message : "Faye is not reachable right now.", error: true }
             : m
         )
       );
@@ -155,7 +157,7 @@ export function PilpChatWidget() {
           boxShadow: "0 2px 10px rgba(0,0,0,0.25)",
         }}
       >
-        {open ? "Close Pilp" : "Ask Pilp"}
+        {open ? "Close Faye" : "Ask Faye"}
       </button>
 
       {open && (
@@ -177,7 +179,7 @@ export function PilpChatWidget() {
           }}
         >
           <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>Pilp</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>Faye</div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>
               Runs on your own computer — nothing you type leaves this machine.
             </div>
@@ -186,7 +188,7 @@ export function PilpChatWidget() {
           <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
             {messages.length === 0 && (
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>
-                Ask about your portfolio, fees, risk, or any investing concept. Pilp explains — it never tells you what to buy or sell.
+                Ask about your portfolio, fees, risk, or any investing concept. Faye explains — it never tells you what to buy or sell.
               </div>
             )}
             {messages.map((m) => (
@@ -215,7 +217,7 @@ export function PilpChatWidget() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask Pilp…"
+              placeholder="Ask Faye…"
               disabled={sending}
               style={{
                 flex: 1,
