@@ -29,6 +29,8 @@ export function AdvisorClientsManager() {
   const [passcodeEditValue, setPasscodeEditValue] = useState("");
   const [passcodeSaving, setPasscodeSaving] = useState(false);
   const [passcodeJustSetSlug, setPasscodeJustSetSlug] = useState<string | null>(null);
+  const [confirmingSlug, setConfirmingSlug] = useState<string | null>(null);
+  const [confirmResult, setConfirmResult] = useState<{ slug: string; message: string } | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<PortfolioHolding[] | null>(null);
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
@@ -183,6 +185,27 @@ export function AdvisorClientsManager() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setPasscodeSaving(false);
+    }
+  }
+
+  async function confirmAccount(client: AdvisorClient) {
+    if (!client.linkedEmail) return;
+    setConfirmingSlug(client.slug);
+    setConfirmResult(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/confirm-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: client.linkedEmail }),
+      });
+      const json = await res.json();
+      if (!res.ok) setError(json.error ?? "Unknown error");
+      else setConfirmResult({ slug: client.slug, message: json.message });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setConfirmingSlug(null);
     }
   }
 
@@ -486,6 +509,27 @@ export function AdvisorClientsManager() {
                     </>
                   )}
                 </div>
+
+                {c.linkedEmail && (
+                  <div className="mt-1 flex items-center gap-2">
+                    {confirmResult?.slug === c.slug ? (
+                      <span className="text-xs text-teal-400">{confirmResult.message}</span>
+                    ) : (
+                      <>
+                        <span className="text-xs text-zinc-500">
+                          Stuck on an unconfirmed signup email? Force-confirm their real account (no email sent).
+                        </span>
+                        <button
+                          onClick={() => confirmAccount(c)}
+                          disabled={confirmingSlug === c.slug}
+                          className="text-xs text-zinc-400 hover:text-zinc-200 underline disabled:opacity-50"
+                        >
+                          {confirmingSlug === c.slug ? "Working…" : "Confirm account"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-1 flex items-center gap-2">
                   {passcodeEditSlug === c.slug ? (
