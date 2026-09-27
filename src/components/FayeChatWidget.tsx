@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
+import type { AssetClass } from "@/lib/agents/trading-agent/types";
 
 // Faye's server still lives at the /pilp/* routes (see Documents/Pilp_Assistant) —
 // only her displayed name changed, not the underlying package/endpoints.
@@ -11,12 +12,20 @@ const CHAT_URL = `${FAYE_BASE_URL}/pilp/chat`;
 
 type FayeStatus = "checking" | "available" | "unavailable";
 
+type ProposedAction =
+  | { type: "add_holding"; params: { symbol: string; assetClass: string; shares: number; costBasisPerShare: number; acquiredDate: string } }
+  | { type: "sell_holding"; params: { symbol: string; sharesSold: number; salePricePerShare: number; fee: number; saleDate: string } }
+  | { type: "remove_holding"; params: { symbol: string } };
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
-  kind?: "generated" | "conduct" | "guardrail";
+  kind?: "generated" | "conduct" | "guardrail" | "action_proposal";
   error?: boolean;
+  action?: ProposedAction | null;
+  actionStatus?: "pending" | "done" | "cancelled" | "error";
+  actionResultText?: string;
 }
 
 /**
@@ -34,7 +43,7 @@ export function FayeChatWidget() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const { holdings, hydrated } = usePortfolio();
+  const { holdings, hydrated, addHolding, removeHolding, sellHolding } = usePortfolio();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   async function checkStatus() {
@@ -108,7 +117,14 @@ export function FayeChatWidget() {
             setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: snapshot } : m)));
           } else if (event === "done") {
             const kind = data.kind as ChatMessage["kind"];
-            setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, kind } : m)));
+            const action = (data.action ?? null) as ProposedAction | null;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, kind, action, actionStatus: action ? "pending" : undefined }
+                  : m
+              )
+            );
           } else if (event === "error") {
             setMessages((prev) =>
               prev.map((m) => (m.id === assistantId ? { ...m, text: data.error ?? "Something went wrong.", error: true } : m))
@@ -129,6 +145,50 @@ export function FayeChatWidget() {
     } finally {
       setSending(false);
     }
+  }
+
+  // Faye never calls a mutating function herself -- she only ever produces
+  // a proposal. This is the one and only place any of these three functions
+  // get called from a Faye-originated action, and only after this explicit
+  // click on the real numbers shown in the card below.
+  function confirmAction(messageId: string, action: ProposedAction) {
+    let resultText = "";
+    let ok = true;
+    if (action.type === "add_holding") {
+      const p = action.params;
+      addHolding(p.symbol, p.assetClass as AssetClass, p.shares, p.costBasisPerShare, p.acquiredDate);
+      resultText = `Added ${p.shares} share(s) of ${p.symbol}.`;
+    } else {
+      const matches = holdings.filter((h) => h.symbol === action.params.symbol);
+      if (matches.length === 0) {
+        ok = false;
+        resultText = `No holding found for ${action.params.symbol} -- nothing changed.`;
+      } else if (matches.length > 1) {
+        ok = false;
+        resultText = `You have multiple ${action.params.symbol} lots, so I can't tell which one you mean -- use the Portfolio Tracker directly for this one.`;
+      } else if (action.type === "remove_holding") {
+        removeHolding(matches[0].id);
+        resultText = `Removed ${action.params.symbol} from your portfolio.`;
+      } else if (action.type === "sell_holding") {
+        const p = action.params;
+        const sale = sellHolding(matches[0].id, p.sharesSold, p.salePricePerShare, p.fee, p.saleDate);
+        if (!sale) {
+          ok = false;
+          resultText = `You only hold ${matches[0].shares} share(s) of ${p.symbol} -- can't sell ${p.sharesSold}.`;
+        } else {
+          resultText = `Recorded the sale of ${p.sharesSold} share(s) of ${p.symbol}.`;
+        }
+      }
+    }
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, actionStatus: ok ? "done" : "error", actionResultText: resultText } : m
+      )
+    );
+  }
+
+  function cancelAction(messageId: string) {
+    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, actionStatus: "cancelled" } : m)));
   }
 
   if (status !== "available") return null;
@@ -208,6 +268,35 @@ export function FayeChatWidget() {
                 {m.text || (m.role === "assistant" ? "…" : "")}
                 {m.kind === "guardrail" && (
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>educational redirect</div>
+                )}
+                {m.action && m.actionStatus === "pending" && (
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.15)" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => confirmAction(m.id, m.action!)}
+                        style={{ background: "#0f6e56", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cancelAction(m.id)}
+                        style={{ background: "transparent", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {m.actionStatus === "done" && (
+                  <div style={{ fontSize: 11, color: "#8fd9c4", marginTop: 6 }}>✓ {m.actionResultText}</div>
+                )}
+                {m.actionStatus === "error" && (
+                  <div style={{ fontSize: 11, color: "#f3a8a8", marginTop: 6 }}>{m.actionResultText}</div>
+                )}
+                {m.actionStatus === "cancelled" && (
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 6 }}>Cancelled -- nothing changed.</div>
                 )}
               </div>
             ))}
