@@ -44,6 +44,7 @@ import { TradeJournalTab } from "@/components/TradeJournalTab";
 import { InternationalEconomicsTab } from "@/components/InternationalEconomicsTab";
 import { BondDashboardTab } from "@/components/BondDashboardTab";
 import { YieldCurveTab } from "@/components/YieldCurveTab";
+import { YieldAlertThresholdTab } from "@/components/YieldAlertThresholdTab";
 import { OptionsDashboardTab } from "@/components/OptionsDashboardTab";
 import { OptionsStrategiesTab } from "@/components/OptionsStrategiesTab";
 import { OptionsChainTradeTab } from "@/components/OptionsChainTradeTab";
@@ -683,6 +684,11 @@ export default async function Home() {
                                 id: "rolling-move-stats",
                                 label: "Rolling Move Stats",
                                 content: <RollingMoveStatsTab defaultTicker="TLT" defaultAssetClass="bond" />,
+                              },
+                              {
+                                id: "yield-alert-threshold",
+                                label: "Yield Alert Threshold",
+                                content: <YieldAlertThresholdTab />,
                               },
                             ]}
                           />
