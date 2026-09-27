@@ -31,6 +31,10 @@ export function AdvisorClientsManager() {
   const [passcodeJustSetSlug, setPasscodeJustSetSlug] = useState<string | null>(null);
   const [confirmingSlug, setConfirmingSlug] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<{ slug: string; message: string } | null>(null);
+  const [pwEditSlug, setPwEditSlug] = useState<string | null>(null);
+  const [pwEditValue, setPwEditValue] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwResult, setPwResult] = useState<{ slug: string; message: string } | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<PortfolioHolding[] | null>(null);
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
@@ -206,6 +210,37 @@ export function AdvisorClientsManager() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setConfirmingSlug(null);
+    }
+  }
+
+  function startPwEdit(client: AdvisorClient) {
+    setPwEditSlug(client.slug);
+    setPwEditValue("");
+    setPwResult(null);
+  }
+
+  async function savePwEdit(client: AdvisorClient) {
+    if (!client.linkedEmail) return;
+    const value = pwEditValue;
+    if (!value) return;
+    setPwSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: client.linkedEmail, password: value }),
+      });
+      const json = await res.json();
+      if (!res.ok) setError(json.error ?? "Unknown error");
+      else {
+        setPwEditSlug(null);
+        setPwResult({ slug: client.slug, message: json.message });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setPwSaving(false);
     }
   }
 
@@ -525,6 +560,45 @@ export function AdvisorClientsManager() {
                           className="text-xs text-zinc-400 hover:text-zinc-200 underline disabled:opacity-50"
                         >
                           {confirmingSlug === c.slug ? "Working…" : "Confirm account"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {c.linkedEmail && (
+                  <div className="mt-1 flex items-center gap-2">
+                    {pwEditSlug === c.slug ? (
+                      <>
+                        <span className="text-xs text-zinc-500">New login password</span>
+                        <input
+                          value={pwEditValue}
+                          onChange={(e) => setPwEditValue(e.target.value)}
+                          type="text"
+                          autoFocus
+                          placeholder="their real /login password"
+                          className="text-xs border border-zinc-700 rounded px-2 py-1 bg-transparent w-48"
+                        />
+                        <button
+                          onClick={() => savePwEdit(c)}
+                          disabled={pwSaving || !pwEditValue}
+                          className="text-xs text-teal-400 hover:text-teal-300 disabled:opacity-50"
+                        >
+                          {pwSaving ? "Saving…" : "Save"}
+                        </button>
+                        <button onClick={() => setPwEditSlug(null)} className="text-xs text-zinc-500 hover:text-zinc-300">
+                          Cancel
+                        </button>
+                      </>
+                    ) : pwResult?.slug === c.slug ? (
+                      <span className="text-xs text-teal-400">{pwResult.message}</span>
+                    ) : (
+                      <>
+                        <span className="text-xs text-zinc-500">
+                          Set their real /login password directly (no reset email).
+                        </span>
+                        <button onClick={() => startPwEdit(c)} className="text-xs text-zinc-400 hover:text-zinc-200 underline">
+                          Set password
                         </button>
                       </>
                     )}
