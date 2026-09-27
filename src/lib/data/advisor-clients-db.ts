@@ -102,13 +102,14 @@ export async function createAdvisorClient(
 
 export async function updateAdvisorClient(
   slug: string,
-  updates: { cashBalance?: number; linkedEmail?: string | null }
+  updates: { cashBalance?: number; linkedEmail?: string | null; passcode?: string }
 ): Promise<AdvisorClient> {
   const body: Record<string, unknown> = {};
   if (updates.cashBalance !== undefined) body.cash_balance = updates.cashBalance;
   if (updates.linkedEmail !== undefined) {
     body.linked_email = updates.linkedEmail ? updates.linkedEmail.trim().toLowerCase() : null;
   }
+  if (updates.passcode !== undefined) body.passcode_hash = hashPasscode(updates.passcode);
   const rows = await supabaseRequest<ClientRow[]>("advisor_clients?slug=eq." + encodeURIComponent(slug), {
     method: "PATCH",
     prefer: "return=representation",

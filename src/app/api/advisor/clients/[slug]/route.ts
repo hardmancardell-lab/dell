@@ -7,7 +7,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
   const { slug } = await params;
   const body = await request.json().catch(() => null);
 
-  const updates: { cashBalance?: number; linkedEmail?: string | null } = {};
+  const updates: { cashBalance?: number; linkedEmail?: string | null; passcode?: string } = {};
   if (body?.cashBalance !== undefined) {
     const cashBalance = Number(body.cashBalance);
     if (!Number.isFinite(cashBalance) || cashBalance < 0) {
@@ -18,8 +18,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
   if (body?.linkedEmail !== undefined) {
     updates.linkedEmail = typeof body.linkedEmail === "string" && body.linkedEmail.trim() ? body.linkedEmail : null;
   }
+  if (body?.passcode !== undefined) {
+    if (typeof body.passcode !== "string" || !body.passcode.trim()) {
+      return NextResponse.json({ error: "'passcode' must be a non-empty string." }, { status: 400 });
+    }
+    updates.passcode = body.passcode.trim();
+  }
   if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: "Provide 'cashBalance' and/or 'linkedEmail' to update." }, { status: 400 });
+    return NextResponse.json({ error: "Provide 'cashBalance', 'linkedEmail', and/or 'passcode' to update." }, { status: 400 });
   }
 
   try {

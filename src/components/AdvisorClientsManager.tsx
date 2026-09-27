@@ -25,6 +25,10 @@ export function AdvisorClientsManager() {
   const [emailEditSlug, setEmailEditSlug] = useState<string | null>(null);
   const [emailEditValue, setEmailEditValue] = useState("");
   const [emailSaving, setEmailSaving] = useState(false);
+  const [passcodeEditSlug, setPasscodeEditSlug] = useState<string | null>(null);
+  const [passcodeEditValue, setPasscodeEditValue] = useState("");
+  const [passcodeSaving, setPasscodeSaving] = useState(false);
+  const [passcodeJustSetSlug, setPasscodeJustSetSlug] = useState<string | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [holdings, setHoldings] = useState<PortfolioHolding[] | null>(null);
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
@@ -146,6 +150,39 @@ export function AdvisorClientsManager() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setEmailSaving(false);
+    }
+  }
+
+  function startPasscodeEdit(client: AdvisorClient) {
+    setPasscodeEditSlug(client.slug);
+    setPasscodeEditValue("");
+    setPasscodeJustSetSlug(null);
+  }
+
+  async function savePasscodeEdit(slug: string) {
+    const value = passcodeEditValue.trim();
+    if (!value) return;
+    setPasscodeSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/advisor/clients/${slug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode: value }),
+      });
+      const json = await res.json();
+      if (!res.ok) setError(json.error ?? "Unknown error");
+      else {
+        setPasscodeEditSlug(null);
+        setPasscodeJustSetSlug(slug);
+        // Deliberately NOT cleared — this is the one and only moment the
+        // plaintext passcode is visible anywhere (it's stored hashed), so
+        // the banner below reads it back from this same state.
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setPasscodeSaving(false);
     }
   }
 
@@ -445,6 +482,43 @@ export function AdvisorClientsManager() {
                       </span>
                       <button onClick={() => startEmailEdit(c)} className="text-xs text-zinc-400 hover:text-zinc-200 underline">
                         Edit
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-1 flex items-center gap-2">
+                  {passcodeEditSlug === c.slug ? (
+                    <>
+                      <span className="text-xs text-zinc-500">New passcode</span>
+                      <input
+                        value={passcodeEditValue}
+                        onChange={(e) => setPasscodeEditValue(e.target.value)}
+                        type="text"
+                        autoFocus
+                        placeholder="passcode they'll enter"
+                        className="text-xs border border-zinc-700 rounded px-2 py-1 bg-transparent w-40"
+                      />
+                      <button
+                        onClick={() => savePasscodeEdit(c.slug)}
+                        disabled={passcodeSaving || !passcodeEditValue.trim()}
+                        className="text-xs text-teal-400 hover:text-teal-300 disabled:opacity-50"
+                      >
+                        {passcodeSaving ? "Saving…" : "Save"}
+                      </button>
+                      <button onClick={() => setPasscodeEditSlug(null)} className="text-xs text-zinc-500 hover:text-zinc-300">
+                        Cancel
+                      </button>
+                    </>
+                  ) : passcodeJustSetSlug === c.slug ? (
+                    <span className="text-xs text-teal-400">
+                      New passcode set: <span className="font-mono">{passcodeEditValue}</span> — copy it now, it won&apos;t be shown again.
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-xs text-zinc-500">Passcode: not shown (stored hashed)</span>
+                      <button onClick={() => startPasscodeEdit(c)} className="text-xs text-zinc-400 hover:text-zinc-200 underline">
+                        Reset
                       </button>
                     </>
                   )}
