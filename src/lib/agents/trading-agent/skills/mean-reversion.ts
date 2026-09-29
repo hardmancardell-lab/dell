@@ -1,8 +1,41 @@
 import { mean, stdDev } from "../stats";
+import { toEasternParts } from "./time-windows";
 import type { DailyBar, MeanReversionSignal } from "../types";
 
 export const MEAN_REVERSION_LOOKBACK_DAYS = 20;
 export const MEAN_REVERSION_Z_THRESHOLD = 2;
+
+/**
+ * Swaps in a live quote price for "today" before scoring, so the alert path
+ * (alert-conditions.ts's mean_reversion case) evaluates the CURRENT intraday
+ * price against the rolling window, not whatever getDailyBars last returned
+ * for today — which lags behind the live tape for two independent reasons:
+ * daily-bars.ts caches its fetch for 30 minutes (fetchQuote's own cache is
+ * 30 seconds), and some providers don't emit a bar for the current day at
+ * all until the session closes. Either way, without this swap the z-score
+ * only ever reflects a completed or stale "today" close — which reads as
+ * the signal only ever firing end-of-day, even though it's checked more
+ * often, because the input it's fed doesn't move until the bar does.
+ *
+ * If the last bar in `bars` is already dated today (ET), its close is
+ * replaced with the live price. If getDailyBars hasn't produced a bar for
+ * today yet, a synthetic one is appended. Either way the rolling
+ * mean/stddev window (computeMeanReversion's own `bars.slice(0, -1)`) is
+ * still built purely from prior, fully-completed days — only the "today"
+ * comparison point changes.
+ */
+export function withLiveTodayClose(bars: DailyBar[], livePrice: number): DailyBar[] {
+  if (bars.length === 0 || !Number.isFinite(livePrice) || livePrice <= 0) return bars;
+
+  const todayDateKey = toEasternParts(Date.now()).dateKey;
+  const last = bars[bars.length - 1];
+
+  if (last.dateKey === todayDateKey) {
+    return [...bars.slice(0, -1), { ...last, close: livePrice, high: Math.max(last.high, livePrice), low: Math.min(last.low, livePrice) }];
+  }
+
+  return [...bars, { dateKey: todayDateKey, open: livePrice, high: livePrice, low: livePrice, close: livePrice, volume: 0 }];
+}
 
 /**
  * Rolling z-score of today's close vs. a trailing lookback-day mean/stddev

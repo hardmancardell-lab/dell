@@ -1,0 +1,26 @@
+name: Check Alerts (Intraday)
+
+# Vercel's Hobby plan caps native cron at once/day — see ALERTS_INTEGRATION_NOTES.md.
+# This workflow is the free workaround: it hits the same authenticated
+# /api/cron/check-alerts route on a real intraday cadence instead. The route
+# itself already gates on real market hours (9:30am-4:00pm ET) via
+# isDuringMarketHours(), so firing outside that window here just costs one
+# cheap no-op request, not a wasted full evaluation.
+#
+# UTC 13:00-21:59 covers 9:30am-4:00pm ET across both EST and EDT (same
+# fixed-UTC-superset reasoning vercel.json's own schedule comment uses).
+on:
+  schedule:
+    - cron: "*/15 13-21 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/cron/check-alerts
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/check-alerts" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -o response.json -w "HTTP %{http_code}\n"
+          cat response.json

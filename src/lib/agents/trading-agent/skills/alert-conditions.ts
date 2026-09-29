@@ -1,7 +1,7 @@
 import { fetchQuote } from "@/lib/data/market-data";
 import { getDailyBars } from "./daily-bars";
 import { computeMomentum, computeVolumeDisplacement } from "./scan-signals";
-import { computeMeanReversion } from "./mean-reversion";
+import { computeMeanReversion, withLiveTodayClose } from "./mean-reversion";
 import { runOrbBacktest } from "./opening-range-breakout";
 import { getOptionsChainSummary } from "./options-chain";
 import { computeChainWideUnusualActivity, UNUSUAL_VOLUME_OI_RATIO } from "./options-flow-skew";
@@ -73,12 +73,19 @@ export async function evaluateAlertRule(rule: AlertRule): Promise<AlertEvaluatio
 
     case "mean_reversion": {
       const bars = await getDailyBars(ticker, DAILY_BAR_LOOKBACK_DAYS);
-      const signal = computeMeanReversion(bars);
+      // Live quote (30s cache) stands in for "today" instead of whatever
+      // getDailyBars last returned (30min cache, and some providers don't
+      // emit today's bar until the close anyway) — see withLiveTodayClose's
+      // doc comment. This is what lets the rule fire intraday, as soon as
+      // the cron tick after the threshold is actually crossed, rather than
+      // only ever reflecting a completed/stale daily close.
+      const quote = await fetchQuote(ticker);
+      const signal = computeMeanReversion(withLiveTodayClose(bars, quote.lastPrice));
       return {
         triggered: signal.triggered,
         message:
           signal.zScore !== null
-            ? `${ticker} z-score is ${signal.zScore.toFixed(2)} (${signal.direction ?? "neutral"}, threshold ±${signal.threshold}).`
+            ? `${ticker} z-score is ${signal.zScore.toFixed(2)} (${signal.direction ?? "neutral"}, threshold ±${signal.threshold}), live price $${signal.price.toFixed(2)}.`
             : `${ticker}: not enough price history to evaluate yet.`,
         proximity: signal.zScore !== null ? Math.abs(signal.zScore) / signal.threshold : null,
       };
