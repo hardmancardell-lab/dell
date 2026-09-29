@@ -39,8 +39,9 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/post-big-day-study",
   "/api/low-of-day-timing",
   "/api/witching-range-containment",
+  "/api/cron",
 ];
-"/api/cron",
+
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
