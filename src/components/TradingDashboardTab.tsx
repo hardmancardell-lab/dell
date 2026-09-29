@@ -80,6 +80,7 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
   const volumeFlagged = summary?.results.filter((r) => r.volumeDisplacement?.triggered) ?? [];
   const momentumFlagged = summary?.results.filter((r) => r.momentum?.triggered) ?? [];
   const meanReversionFlagged = summary?.results.filter((r) => r.meanReversion?.triggered) ?? [];
+  const vwapReversionFlagged = summary?.results.filter((r) => r.vwapMeanReversion?.triggered) ?? [];
   const pmVolumeFlagged = summary?.results.filter((r) => r.pmVolume?.isAnomaly) ?? [];
   const failed = summary?.results.filter((r) => r.error !== null) ?? [];
 
@@ -87,8 +88,8 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
     <div className="jarvis">
       <p className="jv-lede">
         {filterAssetClass
-          ? `Add ${assetClassLabel(filterAssetClass).toLowerCase()} symbols, then scan for four signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), Mean Reversion (price deviation from its rolling mean), and PM-Volume Anomaly (today's real premarket volume vs. a rolling average). This dashboard scans automatically when it loads.`
-          : "Add symbols across any asset class, then scan the watchlist for four signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), Mean Reversion (price deviation from its rolling mean), and PM-Volume Anomaly (today's real premarket volume vs. a rolling average)."}
+          ? `Add ${assetClassLabel(filterAssetClass).toLowerCase()} symbols, then scan for five signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), Mean Reversion (price deviation from its rolling daily mean), VWAP Mean Reversion (today's live price deviation from its own session VWAP), and PM-Volume Anomaly (today's real premarket volume vs. a rolling average). This dashboard scans automatically when it loads.`
+          : "Add symbols across any asset class, then scan the watchlist for five signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), Mean Reversion (price deviation from its rolling daily mean), VWAP Mean Reversion (today's live price deviation from its own session VWAP), and PM-Volume Anomaly (today's real premarket volume vs. a rolling average)."}
       </p>
 
       <WatchlistSelector />
@@ -258,6 +259,57 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
                         label="Rolling Std Dev"
                         value={r.meanReversion!.rollingStdDev !== null ? `$${r.meanReversion!.rollingStdDev.toFixed(2)}` : "N/A"}
                         sub={`${r.meanReversion!.lookbackDays}-day`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <div className="jv-strip-title">VWAP Mean Reversion ({vwapReversionFlagged.length} flagged)</div>
+            <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+              Today&apos;s live price vs. its own session-anchored VWAP &plusmn;2 standard-deviation bands &mdash;
+              the intraday counterpart to Mean Reversion above, which only looks at daily closes. A statistical
+              deviation, not a prediction &mdash; see the VWAP Reversion Backtest tab for whether reversion
+              actually followed historically.
+            </p>
+            {vwapReversionFlagged.length === 0 ? (
+              <p className="text-sm" style={{ color: "var(--text-2)" }}>
+                No tickers crossed their VWAP &plusmn;2 std-dev band.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {vwapReversionFlagged.map((r) => (
+                  <div key={r.symbol} className="jv-card">
+                    <div className="jv-br-b" />
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="text-sm font-mono font-medium" style={{ color: "var(--text-0)" }}>
+                        {r.symbol} <span style={{ color: "var(--text-2)" }}>({assetClassLabel(r.assetClass)})</span>
+                      </div>
+                      <span className={`jv-badge ${r.vwapMeanReversion!.direction === "oversold" ? "c-signal" : "c-danger"}`}>
+                        {r.vwapMeanReversion!.direction}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <StatCard
+                        label="Deviation"
+                        value={r.vwapMeanReversion!.deviationPct !== null ? `${r.vwapMeanReversion!.deviationPct.toFixed(2)}%` : "N/A"}
+                        sub={`Bands: ±${r.vwapMeanReversion!.stdDevMult}σ`}
+                      />
+                      <StatCard label="Price" value={`$${r.vwapMeanReversion!.price.toFixed(2)}`} />
+                      <StatCard
+                        label="VWAP"
+                        value={r.vwapMeanReversion!.vwap !== null ? `$${r.vwapMeanReversion!.vwap.toFixed(2)}` : "N/A"}
+                      />
+                      <StatCard
+                        label="Band"
+                        value={
+                          r.vwapMeanReversion!.lowerBand !== null && r.vwapMeanReversion!.upperBand !== null
+                            ? `$${r.vwapMeanReversion!.lowerBand.toFixed(2)} – $${r.vwapMeanReversion!.upperBand.toFixed(2)}`
+                            : "N/A"
+                        }
                       />
                     </div>
                   </div>

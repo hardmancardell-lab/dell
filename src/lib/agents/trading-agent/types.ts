@@ -229,6 +229,22 @@ export interface MeanReversionSignal {
   threshold: number;
 }
 
+/**
+ * Intraday analog of MeanReversionSignal — price vs. today's own
+ * session-anchored VWAP (technical-indicators.ts's vwapWithBands) instead of
+ * a rolling SMA of daily closes. See vwap-mean-reversion.ts.
+ */
+export interface VwapMeanReversionSignal {
+  triggered: boolean;
+  direction: "oversold" | "overbought" | null;
+  price: number;
+  vwap: number | null;
+  upperBand: number | null;
+  lowerBand: number | null;
+  deviationPct: number | null; // (price - vwap) / vwap * 100
+  stdDevMult: number;
+}
+
 export interface ScanResult {
   symbol: string;
   assetClass: AssetClass;
@@ -236,6 +252,8 @@ export interface ScanResult {
   volumeDisplacement: VolumeDisplacementSignal | null;
   momentum: MomentumSignal | null;
   meanReversion: MeanReversionSignal | null;
+  vwapMeanReversion: VwapMeanReversionSignal | null;
+  vwapMeanReversionError: string | null;
   pmVolume: PmVolumeSnapshot | null;
   pmVolumeError: string | null;
 }
@@ -598,6 +616,69 @@ export interface EquityBacktestResult {
   liquidityZoneStopOverlay: LiquidityZoneStopResult[];
   reversionStats: ReversionStats | null;
   tradeLog: EquityTradeLogRow[];
+  dataLimitations: string[];
+}
+
+// ---------------------------------------------------------------------------
+// VWAP Mean Reversion Backtest — the intraday analog of EquityBacktestResult
+// above. Deliberately a separate, smaller family rather than folded into
+// EquityBacktestSignalType/EquityBacktestResult: horizons here are measured
+// in 5-min bars within a single session, not trading days, and there's no
+// stop-loss/liquidity-zone overlay — the session close itself already bounds
+// every occurrence (VWAP resets next session, so "further out" stops don't
+// carry the same meaning intraday). See vwap-reversion-backtest.ts.
+// ---------------------------------------------------------------------------
+
+export type VwapBacktestSignalType = "vwapMeanReversionOversold" | "vwapMeanReversionOverbought";
+
+export interface VwapBacktestHorizonResult extends WinLossMetrics {
+  horizonBars: number; // count of 5-min bars ahead
+  horizonLabel: string; // e.g. "15 min"
+  sampleSize: number;
+  meanForwardReturnPct: number | null;
+  medianForwardReturnPct: number | null;
+  pValue: number | null;
+  pValueFdrAdjusted: number | null;
+  significantAfterFdr: boolean;
+  bootstrapCiLower: number | null;
+  bootstrapCiUpper: number | null;
+  ciExcludesZero: boolean;
+  trainMeanReturnPct: number | null;
+  testMeanReturnPct: number | null;
+  sameSignOutOfSample: boolean | null;
+  passesAllThreeBars: boolean;
+}
+
+export interface VwapReversionStats {
+  occurrencesTracked: number;
+  occurrencesReverted: number; // reverted back to VWAP before the session ended
+  occurrencesNeverReverted: number; // still hadn't crossed back by session close
+  meanBarsToRevert: number | null;
+  medianBarsToRevert: number | null;
+  avgMaxAdverseExcursionPct: number | null;
+  worstMaxAdverseExcursionPct: number | null;
+}
+
+export interface VwapTradeLogRow {
+  dateKey: string;
+  entryTimeClock: string;
+  entryPrice: number;
+  entryDeviationPct: number; // distance from VWAP at entry
+  returnsByHorizon: { horizonLabel: string; returnPct: number | null }[];
+  isWin: boolean | null;
+  barsToRevert: number | null;
+  maxAdverseExcursionPct: number | null;
+}
+
+export interface VwapReversionBacktestResult {
+  ticker: string;
+  signalType: VwapBacktestSignalType;
+  lookbackDays: number;
+  sessionsScanned: number;
+  signalOccurrences: number;
+  horizons: VwapBacktestHorizonResult[];
+  reversionStats: VwapReversionStats | null;
+  tradeLog: VwapTradeLogRow[];
   dataLimitations: string[];
 }
 

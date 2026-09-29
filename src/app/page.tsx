@@ -32,6 +32,7 @@ import { AssetChartsTab } from "@/components/AssetChartsTab";
 import { BacktestSuiteTab } from "@/components/BacktestSuiteTab";
 import { HistoricalBacktestTab } from "@/components/HistoricalBacktestTab";
 import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
+import { VwapReversionBacktestTab } from "@/components/VwapReversionBacktestTab";
 import { PremarketGapHodLodTab } from "@/components/PremarketGapHodLodTab";
 import { GapCalendarStudyTab } from "@/components/GapCalendarStudyTab";
 import { RequiresPlacementTier } from "@/components/RequiresPlacementTier";
@@ -558,6 +559,11 @@ export default async function Home() {
                                 content: <CalendarEffectsTab key="equities-calendar-effects" defaultTicker="AAPL" assetClass="equity" />,
                               },
                               {
+                                id: "vwap-reversion-backtest",
+                                label: "VWAP Reversion Backtest",
+                                content: <VwapReversionBacktestTab key="equities-vwap-reversion-backtest" defaultTicker="AAPL" />,
+                              },
+                              {
                                 id: "premarket-gaps",
                                 label: "Premarket Gaps",
                                 content: (
@@ -681,6 +687,11 @@ export default async function Home() {
                                 id: "calendar-effects",
                                 label: "Calendar Effects",
                                 content: <CalendarEffectsTab key="bonds-calendar-effects" defaultTicker="TLT" assetClass="bond" />,
+                              },
+                              {
+                                id: "vwap-reversion-backtest",
+                                label: "VWAP Reversion Backtest",
+                                content: <VwapReversionBacktestTab key="bonds-vwap-reversion-backtest" defaultTicker="TLT" />,
                               },
                               {
                                 id: "rolling-move-stats",
@@ -821,6 +832,11 @@ export default async function Home() {
                                 content: <CalendarEffectsTab key="futures-calendar-effects" defaultTicker="SPY" assetClass="future" />,
                               },
                               {
+                                id: "vwap-reversion-backtest",
+                                label: "VWAP Reversion Backtest",
+                                content: <VwapReversionBacktestTab key="futures-vwap-reversion-backtest" defaultTicker="SPY" />,
+                              },
+                              {
                                 id: "gap-calendar-study",
                                 label: "Gap & Calendar Study",
                                 content: (
@@ -894,6 +910,11 @@ export default async function Home() {
                                 id: "calendar-effects",
                                 label: "Calendar Effects",
                                 content: <CalendarEffectsTab key="commodities-calendar-effects" defaultTicker="GLD" assetClass="commodity" />,
+                              },
+                              {
+                                id: "vwap-reversion-backtest",
+                                label: "VWAP Reversion Backtest",
+                                content: <VwapReversionBacktestTab key="commodities-vwap-reversion-backtest" defaultTicker="GLD" />,
                               },
                               {
                                 id: "gap-calendar-study",

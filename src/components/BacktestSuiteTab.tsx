@@ -4,9 +4,10 @@ import { useState } from "react";
 import { HistoricalBacktestTab } from "./HistoricalBacktestTab";
 import { CalendarEffectsTab } from "./CalendarEffectsTab";
 import { RollingMoveStatsTab } from "./RollingMoveStatsTab";
+import { VwapReversionBacktestTab } from "./VwapReversionBacktestTab";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
 
-type Mode = "backtest" | "calendar" | "rolling";
+type Mode = "backtest" | "calendar" | "rolling" | "vwapReversion";
 
 /**
  * Merges Backtest, Calendar Effects, and Rolling Move Stats into one tab
@@ -31,6 +32,7 @@ export function BacktestSuiteTab({
             ["backtest", "Signal Backtest"],
             ["calendar", "Calendar Effects"],
             ["rolling", "Rolling Move Stats"],
+            ["vwapReversion", "VWAP Reversion Backtest"],
           ] as [Mode, string][]
         ).map(([m, label]) => (
           <button key={m} onClick={() => setMode(m)} className={mode === m ? "jv-btn" : "jv-btn-outline"}>
@@ -42,6 +44,7 @@ export function BacktestSuiteTab({
       {mode === "backtest" && <HistoricalBacktestTab defaultTicker={defaultTicker} assetClass={assetClass} />}
       {mode === "calendar" && <CalendarEffectsTab defaultTicker={defaultTicker} assetClass={assetClass} />}
       {mode === "rolling" && <RollingMoveStatsTab defaultTicker={defaultTicker} defaultAssetClass={assetClass} />}
+      {mode === "vwapReversion" && <VwapReversionBacktestTab defaultTicker={defaultTicker} />}
     </div>
   );
 }
