@@ -53,6 +53,16 @@ education tool.
   (`assistant_message_sent`/`assistant_message_failed`, `assistant_voice_input_used`,
   `assistant_speak_replies_toggled` events) — **never the actual text of your question or the
   assistant's reply**.
+- **Faye (the optional local assistant)**: Faye is a separate assistant that runs on a computer
+  you or we control, not inside the app's analytics. When Faye is running, she records the
+  question text you type to her **after removing personal data** (dollar amounts, share counts,
+  emails, phone numbers and long number strings are replaced with placeholders), a set of topic
+  tags (for example "rebalancing" or "risk"), any stock tickers you named, and a yes/no for
+  whether portfolio data was attached, so we can learn what people want to know and teach her to
+  answer it. **The portfolio data itself, and any account details, are never recorded.** The log
+  stays on the computer running Faye and is not sent to our analytics. *[DRAFT — attorney to
+  review wording, retention period, consent mechanism and whether Faye's users must opt in
+  before Faye is offered to anyone other than the owner and a known collaborator.]*
 - **Referral/first-touch source**: the first time your browser visits, any `utm_source`/
   `utm_medium`/`utm_campaign` URL parameters present, the referring page (if any), and the landing
   path (`session_start` event, fired once per browser).
@@ -64,7 +74,7 @@ education tool.
 
 **What we do NOT collect**: names, addresses, government IDs, account numbers, passwords,
 portfolio holdings, share counts, cost basis, dollar amounts, brokerage credentials, the literal
-text of anything you type into the Assistant chat or a Financial Literacy question, the values you
+text of anything you type into the in-app Assistant chat or a Financial Literacy question (Faye's redacted question text is described above), the values you
 type into a calculator, or any other data typed into a form field (portfolio holdings you enter
 live only in your browser's local storage, on your device — they are never sent to our servers).
 

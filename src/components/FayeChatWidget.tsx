@@ -386,7 +386,7 @@ export function FayeChatWidget() {
           <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>Faye</div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>
-              Runs on your own computer. When she runs the app&apos;s tools, your browser calls the app as you.
+              Runs on your own computer. When she runs the app&apos;s tools, your browser calls the app as you. Your questions are logged with amounts and account details removed; your portfolio data is never saved.
             </div>
           </div>
 
