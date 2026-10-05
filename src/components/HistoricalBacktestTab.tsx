@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GlossaryTerm } from "./GlossaryTerm";
+import { BacktestChartsPanel, type ChartHorizon, type ChartTrade, type OverlayRow } from "./BacktestCharts";
 import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { PriceChart } from "./PriceChart";
 import { useTrackEvent } from "@/lib/analytics/use-track";
@@ -46,6 +47,62 @@ function fmtDayContext(row: {
   if (row.dayHigh !== null) parts.push(`High: $${row.dayHigh.toFixed(2)}${row.dayHighTimeClock ? ` @ ${row.dayHighTimeClock}` : ""}`);
   if (row.dayLow !== null) parts.push(`Low: $${row.dayLow.toFixed(2)}${row.dayLowTimeClock ? ` @ ${row.dayLowTimeClock}` : ""}`);
   return parts.length > 0 ? parts.join(" · ") : "N/A";
+}
+
+function toChartProps(result: EquityBacktestResult) {
+  const horizons: ChartHorizon[] = result.horizons.map((h) => ({
+    label: `${h.horizonDays}d`,
+    n: h.sampleSize,
+    mean: h.meanForwardReturnPct,
+    median: h.medianForwardReturnPct,
+    ciLo: h.bootstrapCiLower,
+    ciHi: h.bootstrapCiUpper,
+    passes: h.passesAllThreeBars,
+    train: h.trainMeanReturnPct,
+    test: h.testMeanReturnPct,
+    winRate: h.winRate,
+    profitFactor: h.profitFactor,
+    maxDrawdownPct: h.maxDrawdownPct,
+    largestLossPct: h.largestLossPct,
+  }));
+  const trades: ChartTrade[] = result.tradeLog.map((r) => ({
+    date: r.dateKey,
+    returns: Object.fromEntries(r.returnsByHorizon.map((x) => [`${x.horizonDays}d`, x.returnPct])),
+  }));
+  const revert = result.reversionStats
+    ? { days: result.tradeLog.map((r) => r.daysToRevert), unit: "trading days", maxDay: result.reversionStats.maxTrackingDays }
+    : null;
+
+  const stoppedPct = (c: { stoppedOutCount: number; sampleSize: number }) =>
+    c.sampleSize > 0 ? `${Math.round((c.stoppedOutCount / c.sampleSize) * 100)}% stopped` : undefined;
+  const rows: OverlayRow[] = [{ label: "Hold (no stop)", cells: result.horizons.map((h) => ({ v: h.meanForwardReturnPct })) }];
+  for (const sp of [...new Set(result.stopLossOverlay.map((s) => s.stopPct))]) {
+    rows.push({
+      label: `${sp}% stop`,
+      cells: result.horizons.map((h) => {
+        const c = result.stopLossOverlay.find((s) => s.stopPct === sp && s.horizonDays === h.horizonDays);
+        return c ? { v: c.expectancy, sub: stoppedPct(c) } : null;
+      }),
+    });
+  }
+  if (result.liquidityZoneStopOverlay.length > 0) {
+    rows.push({
+      label: "Liquidity-zone stop",
+      cells: result.horizons.map((h) => {
+        const c = result.liquidityZoneStopOverlay.find((z) => z.horizonDays === h.horizonDays);
+        return c ? { v: c.expectancy, sub: stoppedPct(c) } : null;
+      }),
+    });
+  }
+
+  return {
+    horizons,
+    trades,
+    isShort: result.signalType === "meanReversionOverbought",
+    occurrences: result.signalOccurrences,
+    revert,
+    overlay: { cols: horizons.map((h) => h.label), rows },
+  };
 }
 
 const TRADE_LOG_DISPLAY_LIMIT = 50;
@@ -182,6 +239,8 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
               {d}
             </div>
           ))}
+
+          <BacktestChartsPanel {...toChartProps(result)} />
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>

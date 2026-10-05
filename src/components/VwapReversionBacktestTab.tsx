@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GlossaryTerm } from "./GlossaryTerm";
+import { BacktestChartsPanel, type ChartHorizon, type ChartTrade } from "./BacktestCharts";
 import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { VwapBacktestSignalType, VwapReversionBacktestResult } from "@/lib/agents/trading-agent/types";
@@ -27,6 +28,38 @@ function fmtRatio(v: number | null): string {
 
 function fmtBars(v: number | null): string {
   return v !== null ? `${v} bar(s)` : "N/A";
+}
+
+const SESSION_BARS = 78; // 5-min bars in a regular 9:30-16:00 session
+
+function toChartProps(result: VwapReversionBacktestResult) {
+  const horizons: ChartHorizon[] = result.horizons.map((h) => ({
+    label: h.horizonLabel,
+    n: h.sampleSize,
+    mean: h.meanForwardReturnPct,
+    median: h.medianForwardReturnPct,
+    ciLo: h.bootstrapCiLower,
+    ciHi: h.bootstrapCiUpper,
+    passes: h.passesAllThreeBars,
+    train: h.trainMeanReturnPct,
+    test: h.testMeanReturnPct,
+    winRate: h.winRate,
+    profitFactor: h.profitFactor,
+    maxDrawdownPct: h.maxDrawdownPct,
+    largestLossPct: h.largestLossPct,
+  }));
+  const trades: ChartTrade[] = result.tradeLog.map((r) => ({
+    date: r.dateKey,
+    returns: Object.fromEntries(r.returnsByHorizon.map((x) => [x.horizonLabel, x.returnPct])),
+  }));
+  return {
+    horizons,
+    trades,
+    isShort: result.signalType === "vwapMeanReversionOverbought",
+    occurrences: result.signalOccurrences,
+    revert: result.reversionStats ? { days: result.tradeLog.map((r) => r.barsToRevert), unit: "5-min bars", maxDay: SESSION_BARS } : null,
+    overlay: null,
+  };
 }
 
 const TRADE_LOG_DISPLAY_LIMIT = 50;
@@ -127,6 +160,8 @@ export function VwapReversionBacktestTab({ defaultTicker = "AAPL" }: { defaultTi
               {d}
             </div>
           ))}
+
+          <BacktestChartsPanel {...toChartProps(result)} />
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
