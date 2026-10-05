@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { PaperOrderForm } from "./PaperOrderForm";
+import { attributionFromSignal } from "@/lib/agents/trading-agent/skills/paper-attribution";
 import { OptionScenarioPanel } from "./OptionScenarioPanel";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import type { GuidedTradeSignal } from "@/lib/agents/trading-agent/types";
@@ -140,6 +141,7 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
                 strikePrice: signal.suggestedOption.strikePrice,
               }}
               compact
+              attribution={attributionFromSignal(signal, "ui")}
               onFilled={() => setSkipped(true)}
             />
           ) : (
@@ -149,6 +151,7 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
               prefillAssetClass={signal.assetClass}
               prefillPrice={signal.currentPrice}
               compact
+              attribution={attributionFromSignal(signal, "ui")}
               onFilled={() => setSkipped(true)}
             />
           )}

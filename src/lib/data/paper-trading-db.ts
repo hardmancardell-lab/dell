@@ -4,6 +4,7 @@ import type {
   PaperFill,
   PaperOptionFields,
   PaperOrder,
+  PaperOrderAttribution,
   PaperOrderSide,
   PaperOrderStatus,
   PaperOrderType,
@@ -116,6 +117,7 @@ interface OrderRow extends OptionFieldsRow {
   created_at: string;
   filled_at: string | null;
   cancelled_at: string | null;
+  attribution?: PaperOrderAttribution | null;
 }
 
 function toOrder(row: OrderRow): PaperOrder {
@@ -139,6 +141,7 @@ function toOrder(row: OrderRow): PaperOrder {
     createdAt: row.created_at,
     filledAt: row.filled_at,
     cancelledAt: row.cancelled_at,
+    attribution: row.attribution ?? null,
     ...toOptionFields(row),
   };
 }
@@ -247,13 +250,39 @@ export async function createOrder(order: {
   trailAmount: number | null;
   ocoGroupId: string | null;
   strategyGroupId?: string | null;
+  attribution?: PaperOrderAttribution | null;
   status: PaperOrderStatus;
   rejectedReason: string | null;
 } & Partial<PaperOptionFields>): Promise<PaperOrder> {
-  const rows = await supabaseRequest<OrderRow[]>("paper_orders", {
+  let rows: OrderRow[];
+  try {
+    rows = await createOrderRequest(order);
+  } catch (err) {
+    const columnMissing = order.attribution && err instanceof Error && /attribution/i.test(err.message);
+    if (columnMissing && !order.attribution!.strategyType) {
+      // A plain manual order must never be blocked by a migration that has not
+      // been applied yet: place it without the column (the log then records
+      // origin "api"). Only a strategy-tagged order needs the column.
+      rows = await createOrderRequest({ ...order, attribution: null });
+    } else if (columnMissing) {
+      throw new Error(
+        "Strategy attribution is not set up in the database yet. Apply db/migrations/2026-10-05_paper_trade_log.sql in Supabase, then retry."
+      );
+    } else {
+      throw err;
+    }
+  }
+  return toOrder(rows[0]);
+}
+
+async function createOrderRequest(order: Parameters<typeof createOrder>[0]): Promise<OrderRow[]> {
+  return supabaseRequest<OrderRow[]>("paper_orders", {
     method: "POST",
     prefer: "return=representation",
     body: {
+      // Sent only when present so orders still work before the attribution
+      // migration has been applied (the column simply does not exist yet).
+      ...(order.attribution ? { attribution: order.attribution } : {}),
       account_id: order.accountId,
       symbol: order.symbol,
       asset_class: order.assetClass,
@@ -271,7 +300,6 @@ export async function createOrder(order: {
       ...fromOptionFields(order),
     },
   });
-  return toOrder(rows[0]);
 }
 
 export async function getOrderById(orderId: string): Promise<PaperOrder | null> {
@@ -419,5 +447,103 @@ export async function deletePosition(accountId: string, symbol: string, assetCla
   await supabaseRequest(
     `paper_positions?account_id=eq.${encodeURIComponent(accountId)}&symbol=eq.${encodeURIComponent(symbol)}&asset_class=eq.${encodeURIComponent(assetClass)}`,
     { method: "DELETE" }
+  );
+}
+
+
+// --- Trade log (append-only: one row per fill, with the strategy and its KPIs) ---
+
+export interface TradeLogRow {
+  id: string;
+  logged_at: string;
+  account_id: string;
+  order_id: string;
+  fill_id: string;
+  symbol: string;
+  asset_class: AssetClass;
+  side: PaperOrderSide;
+  quantity: number;
+  fill_price: number;
+  total_fees: number;
+  realized_pnl: number | null;
+  option_right: "call" | "put" | null;
+  strike_price: number | null;
+  expiration_date: string | null;
+  underlying_symbol: string | null;
+  strategy_group_id: string | null;
+  origin: string;
+  source: string;
+  strategy_type: string | null;
+  strategy_label: string | null;
+  hypothesis_id: string | null;
+  kpis: Record<string, unknown> | null;
+}
+
+/**
+ * Record one fill in the trade log. This must never break a trade: the order
+ * and fill are already committed by the time this runs, so any failure here
+ * (including the table not existing yet) is swallowed and reported as false.
+ */
+/**
+ * A closing fill carries the realized P&L, but the strategy that earned or lost
+ * it is the one that OPENED the position. When the closing order names no
+ * strategy of its own, inherit it from the most recent strategy-tagged opening
+ * fill on the same instrument. Approximate when a position was built from
+ * several strategies (the latest one wins), and said so in the docs.
+ */
+async function findOpeningStrategy(fill: PaperFill, order: PaperOrder): Promise<TradeLogRow | null> {
+  const opposite = fill.side === "sell" ? "buy" : "sell";
+  let q =
+    `paper_trade_log?account_id=eq.${encodeURIComponent(fill.accountId)}` +
+    `&symbol=eq.${encodeURIComponent(fill.symbol)}&asset_class=eq.${encodeURIComponent(order.assetClass)}` +
+    `&side=eq.${opposite}&strategy_type=not.is.null&order=logged_at.desc&limit=1`;
+  if (fill.optionRight) q += `&option_right=eq.${fill.optionRight}`;
+  if (fill.strikePrice !== null && fill.strikePrice !== undefined) q += `&strike_price=eq.${fill.strikePrice}`;
+  if (fill.expirationDate) q += `&expiration_date=eq.${encodeURIComponent(fill.expirationDate)}`;
+  const rows = await supabaseRequest<TradeLogRow[]>(q, { method: "GET", prefer: "return=representation" });
+  return rows[0] ?? null;
+}
+
+export async function insertTradeLog(order: PaperOrder, fill: PaperFill): Promise<boolean> {
+  try {
+    const a = order.attribution;
+    let inheritedFrom: TradeLogRow | null = null;
+    if (fill.realizedPnl !== null && !a?.strategyType) {
+      inheritedFrom = await findOpeningStrategy(fill, order).catch(() => null);
+    }
+    const strategyType = a?.strategyType ?? inheritedFrom?.strategy_type ?? null;
+    await supabaseRequest("paper_trade_log", {
+      method: "POST",
+      body: {
+        account_id: fill.accountId,
+        order_id: fill.orderId,
+        fill_id: fill.id,
+        symbol: fill.symbol,
+        asset_class: order.assetClass,
+        side: fill.side,
+        quantity: fill.quantity,
+        fill_price: fill.fillPrice,
+        total_fees: fill.totalFees,
+        realized_pnl: fill.realizedPnl,
+        ...fromOptionFields(fill),
+        strategy_group_id: order.strategyGroupId,
+        origin: a?.origin ?? "api",
+        source: inheritedFrom ? inheritedFrom.source : (a?.source ?? "manual"),
+        strategy_type: strategyType,
+        strategy_label: a?.strategyLabel ?? inheritedFrom?.strategy_label ?? null,
+        hypothesis_id: a?.hypothesisId ?? inheritedFrom?.hypothesis_id ?? null,
+        kpis: a?.kpis ?? inheritedFrom?.kpis ?? null,
+      },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function getTradeLog(accountId: string, limit = 500): Promise<TradeLogRow[]> {
+  return supabaseRequest<TradeLogRow[]>(
+    `paper_trade_log?account_id=eq.${encodeURIComponent(accountId)}&order=logged_at.desc&limit=${limit}`,
+    { method: "GET", prefer: "return=representation" }
   );
 }

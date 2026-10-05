@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
+import { getOrCreateSessionId } from "@/lib/analytics/use-track";
+import { validatePaperOrder } from "@/lib/faye/paper-order-validation";
 
 // Faye's server still lives at the /pilp/* routes (see Documents/Pilp_Assistant) —
 // only her displayed name changed, not the underlying package/endpoints.
@@ -25,6 +27,7 @@ const ALLOWED_TOOLS: Record<string, "GET" | "POST"> = {
   "/api/option-expirations": "GET",
   "/api/option-chain-contracts": "GET",
   "/api/historical-backtest": "GET",
+  "/api/guided-trade-signals": "GET",
 };
 const SAFE_PARAM = /^[A-Za-z0-9.\-_/ ]{1,40}$/;
 const SAFE_SYMBOL = /^[A-Za-z0-9.\-/]{1,12}$/;
@@ -112,7 +115,9 @@ type FayeStatus = "checking" | "available" | "unavailable";
 type ProposedAction =
   | { type: "add_holding"; params: { symbol: string; assetClass: string; shares: number; costBasisPerShare: number; acquiredDate: string } }
   | { type: "sell_holding"; params: { symbol: string; sharesSold: number; salePricePerShare: number; fee: number; saleDate: string } }
-  | { type: "remove_holding"; params: { symbol: string } };
+  | { type: "remove_holding"; params: { symbol: string } }
+  // Untrusted until validatePaperOrder() accepts it; placed via the app's own paper-trading route.
+  | { type: "paper_order"; params: Record<string, unknown> };
 
 interface ChatMessage {
   id: string;
@@ -122,7 +127,7 @@ interface ChatMessage {
   toolLog?: string[];
   error?: boolean;
   action?: ProposedAction | null;
-  actionStatus?: "pending" | "done" | "cancelled" | "error";
+  actionStatus?: "pending" | "placing" | "done" | "cancelled" | "error";
   actionResultText?: string;
 }
 
@@ -210,8 +215,25 @@ export function FayeChatWidget() {
         );
         continue;
       }
+      // A final turn may end in a proposal (e.g. a paper order for a signal). It is
+      // shown as a confirm card and does nothing until the user clicks Confirm.
+      const finalAction =
+        json.action && typeof json.action === "object" && json.action.type === "paper_order"
+          ? (json.action as ProposedAction)
+          : null;
       setMessages((prev) =>
-        prev.map((m) => (m.id === messageId ? { ...m, text: String(json.text ?? ""), kind: "final", toolLog: snapshot } : m))
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                text: String(json.text ?? ""),
+                kind: "final",
+                toolLog: snapshot,
+                action: finalAction,
+                actionStatus: finalAction ? "pending" : undefined,
+              }
+            : m
+        )
       );
       return;
     }
@@ -296,7 +318,51 @@ export function FayeChatWidget() {
   // a proposal. This is the one and only place any of these three functions
   // get called from a Faye-originated action, and only after this explicit
   // click on the real numbers shown in the card below.
+  // A paper order goes through the app's own paper-trading route, which fills
+  // it at the simulator's price and writes the trade log. The strategy and KPIs
+  // in the proposal travel with the order so the log can attribute the fill.
+  async function placePaperOrder(messageId: string, raw: Record<string, unknown>) {
+    const setStatus = (actionStatus: ChatMessage["actionStatus"], actionResultText: string) =>
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, actionStatus, actionResultText } : m)));
+    setStatus("placing", "Placing the paper order…");
+    const v = validatePaperOrder(raw);
+    if (!v.ok) {
+      setStatus("error", v.error);
+      return;
+    }
+    try {
+      const res = await fetch("/api/paper-trading/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ sessionId: getOrCreateSessionId(), order: v.order }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setStatus("error", `The paper order was not placed: ${data?.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      const o = v.order;
+      const what = o.assetClass === "option"
+        ? `${o.quantity} contract(s) of ${o.underlyingSymbol} ${o.expirationDate} ${o.strikePrice} ${o.optionRight?.toUpperCase()}`
+        : `${o.quantity} share(s) of ${o.symbol}`;
+      const strategy = typeof o.attribution.strategyLabel === "string" ? ` Logged under "${o.attribution.strategyLabel}".` : " Logged as a manual trade.";
+      setStatus(
+        "done",
+        data?.filled
+          ? `Paper ${o.side} of ${what} filled.${strategy}`
+          : `Paper ${o.side} of ${what} is resting as a pending order.${strategy}`
+      );
+    } catch (e) {
+      setStatus("error", `The paper order was not placed: ${e instanceof Error ? e.message : "request failed"}`);
+    }
+  }
+
   function confirmAction(messageId: string, action: ProposedAction) {
+    if (action.type === "paper_order") {
+      void placePaperOrder(messageId, action.params);
+      return;
+    }
     let resultText = "";
     let ok = true;
     if (action.type === "add_holding") {
@@ -447,6 +513,9 @@ export function FayeChatWidget() {
                       </button>
                     </div>
                   </div>
+                )}
+                {m.actionStatus === "placing" && (
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 6 }}>{m.actionResultText}</div>
                 )}
                 {m.actionStatus === "done" && (
                   <div style={{ fontSize: 11, color: "#8fd9c4", marginTop: 6 }}>✓ {m.actionResultText}</div>

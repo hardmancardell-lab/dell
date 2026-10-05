@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { formatOptionLabel } from "@/lib/agents/trading-agent/skills/option-symbol";
-import type { AssetClass, PaperOptionRight, PaperOrderSide, PaperOrderType } from "@/lib/agents/trading-agent/types";
+import type { AssetClass, PaperOptionRight, PaperOrderAttribution, PaperOrderSide, PaperOrderType } from "@/lib/agents/trading-agent/types";
 
 const ORDER_TYPES: { value: PaperOrderType; label: string }[] = [
   { value: "market", label: "Market" },
@@ -47,6 +47,7 @@ export function PaperOrderForm({
   prefillPrice,
   prefillOption,
   compact,
+  attribution,
   onFilled,
 }: {
   sessionId: string;
@@ -55,6 +56,8 @@ export function PaperOrderForm({
   prefillPrice?: number;
   prefillOption?: PrefillOption;
   compact?: boolean;
+  /** Why this order exists (e.g. the guided signal it came from); defaults to a manual UI trade. */
+  attribution?: PaperOrderAttribution;
   onFilled?: () => void;
 }) {
   const { track } = useTrackEvent();
@@ -126,7 +129,7 @@ export function PaperOrderForm({
       const res = await fetch("/api/paper-trading/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, order }),
+        body: JSON.stringify({ sessionId, order: { ...order, attribution: attribution ?? { origin: "ui", source: "manual" } } }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to place order.");

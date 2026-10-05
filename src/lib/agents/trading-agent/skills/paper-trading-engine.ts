@@ -1,5 +1,6 @@
 import { fetchLatestForexBidAsk, fetchMinuteBars, fetchOptionsChain, fetchQuote } from "@/lib/data/market-data";
 import { buildOccSymbol } from "./option-symbol";
+import { sanitizeAttribution } from "./paper-attribution";
 import {
   cancelOcoSiblings,
   cancelOrder as dbCancelOrder,
@@ -15,6 +16,7 @@ import {
   getPosition,
   getPositions,
   insertFill,
+  insertTradeLog,
   markOrderEvaluated,
   updateAccountCash,
   upsertPosition,
@@ -171,7 +173,7 @@ async function applyFill(params: { order: PaperOrder; fillPrice: number; slippag
   const acct = await requireAccountById(order.accountId);
   await updateAccountCash(order.accountId, acct.cashBalance + cashDelta);
 
-  await insertFill({
+  const fill = await insertFill({
     orderId: order.id,
     accountId: order.accountId,
     symbol: order.symbol,
@@ -187,6 +189,7 @@ async function applyFill(params: { order: PaperOrder; fillPrice: number; slippag
     ...optionFields,
   });
 
+  await insertTradeLog(order, fill);
   await dbFillOrder(order.id);
 
   if (order.ocoGroupId) {
@@ -282,6 +285,7 @@ export async function placeOrder(sessionId: string, input: PaperOrderInput): Pro
     trailAmount: input.trailAmount ?? null,
     ocoGroupId,
     strategyGroupId: input.strategyGroupId ?? null,
+    attribution: sanitizeAttribution(input.attribution, "api"),
     status: isImmediatelyMarketable ? "filled" : "pending",
     rejectedReason: null,
   });
@@ -405,6 +409,7 @@ async function placeOptionOrder(sessionId: string, input: PaperOrderInput): Prom
     trailAmount: null,
     ocoGroupId: null,
     strategyGroupId: input.strategyGroupId ?? null,
+    attribution: sanitizeAttribution(input.attribution, "api"),
     status: "filled",
     rejectedReason: null,
     underlyingSymbol,

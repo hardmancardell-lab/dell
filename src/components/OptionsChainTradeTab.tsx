@@ -121,6 +121,7 @@ export function OptionsChainTradeTab({ initialTicker }: { initialTicker?: string
               optionRight: leg.right,
               strikePrice: leg.strike,
               strategyGroupId,
+              attribution: { origin: "ui", source: "manual", strategyType: null, strategyLabel: null, hypothesisId: null, kpis: null },
             },
           }),
         });

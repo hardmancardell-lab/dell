@@ -1427,6 +1427,39 @@ export interface PaperOptionFields {
   strikePrice: number | null;
 }
 
+/**
+ * Why a paper order exists. Stored on the order so the trade log can record the
+ * strategy and its KPIs at FILL time, even for a limit order that fills days
+ * later. `kpis` are the signal's own backtested numbers at the moment of the
+ * decision (not realized results) so realized-vs-backtested can be compared.
+ */
+export type PaperOrderOrigin = "ui" | "faye" | "api";
+export type PaperOrderSource = "guided_signal" | "backtest" | "manual";
+
+export interface PaperSignalKpis {
+  historicalWinRatePct: number | null;
+  sampleSize: number | null;
+  // Bootstrap interval on the signal's MEAN FORWARD RETURN (%), not on the win rate.
+  bootstrapCiLower: number | null;
+  bootstrapCiUpper: number | null;
+  profitFactor: number | null;
+  largestLossPct: number | null;
+  maxDrawdownPct: number | null;
+  horizonLabel: string | null;
+  entryRule: string | null;
+  exitRule: string | null;
+  signalPrice: number | null;
+}
+
+export interface PaperOrderAttribution {
+  origin: PaperOrderOrigin;
+  source: PaperOrderSource;
+  strategyType: string | null; // e.g. "meanReversionOversold"
+  strategyLabel: string | null; // plain-language headline
+  hypothesisId: string | null; // strategy-hypothesis ledger row, when known
+  kpis: PaperSignalKpis | null;
+}
+
 export interface PaperAccount {
   id: string;
   sessionId: string;
@@ -1461,6 +1494,7 @@ export interface PaperOrder extends PaperOptionFields {
   createdAt: string;
   filledAt: string | null;
   cancelledAt: string | null;
+  attribution: PaperOrderAttribution | null; // null for orders placed before attribution existed, or by hand with no strategy
 }
 
 export interface PaperFill extends PaperOptionFields {
@@ -1491,6 +1525,7 @@ export interface PaperOrderInput extends Partial<PaperOptionFields> {
   trailAmount?: number | null;
   ocoGroupId?: string | null;
   strategyGroupId?: string | null;
+  attribution?: Partial<PaperOrderAttribution> | null; // sanitized server-side before use
 }
 
 export interface PaperPositionView extends PaperPosition {
