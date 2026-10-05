@@ -31,7 +31,14 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
       try {
         const { LongHaulEngine } = await import("./long-haul-engine");
         if (cancelled) return;
-        const engine = new LongHaulEngine(container, {
+        // The wrapper around `container` is display:none until status flips
+        // to "ready" (below), so if the engine measures container.clientWidth/
+        // Height at construction time it reads 0x0 and the renderer never
+        // recovers — confirmed by actually loading this in a browser: the
+        // canvas existed but was 0x0 and nothing ever painted. Passing the
+        // known fixed size explicitly removes the race instead of patching
+        // around display timing.
+        const engine = new LongHaulEngine(container, CANVAS_WIDTH, CANVAS_HEIGHT, {
           onHud: (h) => setHud(h),
           onLoanPrompt: () => setModalOpen(true),
           onFinish: (s) => {
