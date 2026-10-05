@@ -9,6 +9,103 @@ import type { AssetClass } from "@/lib/agents/trading-agent/types";
 const FAYE_BASE_URL = "http://127.0.0.1:7810";
 const STATUS_URL = `${FAYE_BASE_URL}/pilp/status`;
 const CHAT_URL = `${FAYE_BASE_URL}/pilp/chat`;
+const CONTINUE_URL = `${FAYE_BASE_URL}/pilp/continue`;
+
+// Faye plans multi-step runs; this widget executes them as the signed-in user,
+// because the research and trading routes sit behind the app's login. The plan
+// arrives from Faye's server, so it is never trusted to choose a path: only
+// these read-only routes, with the method listed, will ever be called.
+const ALLOWED_TOOLS: Record<string, "GET" | "POST"> = {
+  "/api/macro-overview": "GET",
+  "/api/sector-recommendations": "GET",
+  "/api/research-screener": "GET",
+  "/api/security-analysis": "GET",
+  "/api/watchlist-scan": "POST",
+  "/api/gex-signal": "GET",
+  "/api/option-expirations": "GET",
+  "/api/option-chain-contracts": "GET",
+  "/api/historical-backtest": "GET",
+};
+const SAFE_PARAM = /^[A-Za-z0-9.\-_/ ]{1,40}$/;
+const SAFE_SYMBOL = /^[A-Za-z0-9.\-/]{1,12}$/;
+const MAX_PLAN_TURNS = 6;
+const TOOL_CONCURRENCY = 4;
+const TOOL_TIMEOUT_MS = 90_000;
+
+interface PlanCall {
+  id: string;
+  tool: string;
+  agent: string;
+  method: "GET" | "POST";
+  path: string;
+  params?: Record<string, string | number>;
+  body?: { entries?: { symbol: string; assetClass: string }[] };
+}
+
+interface ToolResult {
+  ok: boolean;
+  status: number;
+  data: unknown;
+  error: string | null;
+}
+
+const blocked = (error: string): ToolResult => ({ ok: false, status: 0, data: null, error });
+
+async function executeCall(c: PlanCall): Promise<ToolResult> {
+  if (ALLOWED_TOOLS[c.path] !== c.method) return blocked("blocked: not an allowed read-only tool");
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(c.params ?? {})) {
+    if (!/^[A-Za-z]{1,30}$/.test(k) || !SAFE_PARAM.test(String(v))) return blocked("blocked: unsafe parameter");
+    qs.set(k, String(v));
+  }
+  let body: string | undefined;
+  if (c.method === "POST") {
+    const entries = c.body?.entries;
+    if (!Array.isArray(entries) || entries.length < 1 || entries.length > 10 || !entries.every((e) => SAFE_SYMBOL.test(e?.symbol ?? "") && SAFE_PARAM.test(e?.assetClass ?? ""))) {
+      return blocked("blocked: unsafe request body");
+    }
+    body = JSON.stringify({ entries: entries.map((e) => ({ symbol: e.symbol, assetClass: e.assetClass })) });
+  }
+  const url = qs.toString() ? `${c.path}?${qs}` : c.path;
+  try {
+    const res = await fetch(url, {
+      method: c.method,
+      credentials: "same-origin",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body,
+      signal: AbortSignal.timeout(TOOL_TIMEOUT_MS),
+    });
+    if (res.redirected && new URL(res.url).pathname.startsWith("/login")) {
+      return { ok: false, status: 401, data: null, error: "not signed in" };
+    }
+    if (!(res.headers.get("content-type") ?? "").includes("application/json")) {
+      return { ok: false, status: res.status, data: null, error: "not signed in, or the app returned a non-JSON response" };
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      const msg = data && typeof data === "object" && "error" in data ? String((data as { error: unknown }).error) : `HTTP ${res.status}`;
+      return { ok: false, status: res.status, data: null, error: msg };
+    }
+    return { ok: true, status: res.status, data, error: null };
+  } catch (e) {
+    return blocked(e instanceof Error ? e.message : "request failed");
+  }
+}
+
+// A bounded pool: a deep dive asks for a dozen option chains at once, and the
+// app's own backend should not be hit with all of them simultaneously.
+async function runCalls(calls: PlanCall[]): Promise<Record<string, ToolResult>> {
+  const out: Record<string, ToolResult> = {};
+  let next = 0;
+  const worker = async () => {
+    while (next < calls.length) {
+      const c = calls[next++];
+      out[c.id] = await executeCall(c);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(TOOL_CONCURRENCY, calls.length) }, worker));
+  return out;
+}
 
 type FayeStatus = "checking" | "available" | "unavailable";
 
@@ -21,7 +118,8 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
-  kind?: "generated" | "conduct" | "guardrail" | "action_proposal";
+  kind?: "generated" | "conduct" | "guardrail" | "action_proposal" | "tool_calls" | "final";
+  toolLog?: string[];
   error?: boolean;
   action?: ProposedAction | null;
   actionStatus?: "pending" | "done" | "cancelled" | "error";
@@ -78,6 +176,48 @@ export function FayeChatWidget() {
     return { page: "Dellegate", portfolio: { positions } };
   }
 
+  // Executes a multi-step plan: run the turn's calls as the user, hand the raw
+  // results back to Faye with her opaque state, repeat until she returns the
+  // final answer. Faye holds no tool access of her own and no model is
+  // involved in planning, so each hop is quick and deterministic.
+  async function runPlan(messageId: string, firstCalls: PlanCall[], firstState: unknown) {
+    let calls: PlanCall[] | null = firstCalls;
+    let state: unknown = firstState;
+    const log: string[] = [];
+    const label = (c: PlanCall) => {
+      const p = Object.values(c.params ?? {});
+      return `${c.agent} · ${c.tool}${p.length ? ` (${p.join(", ")})` : ""}`;
+    };
+    for (let turn = 0; calls && turn < MAX_PLAN_TURNS; turn++) {
+      const results = await runCalls(calls);
+      for (const c of calls) {
+        const r = results[c.id];
+        log.push(`${label(c)}: ${r?.ok ? "ok" : `failed (${r?.error ?? "no result"})`}`);
+      }
+      const res = await fetch(CONTINUE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state, results }),
+      });
+      const json = await res.json();
+      if (!json?.ok) throw new Error(json?.error ?? "Faye couldn't continue that run.");
+      const snapshot = [...log];
+      if (json.kind === "tool_calls") {
+        calls = json.calls as PlanCall[];
+        state = json.state;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, text: String(json.text ?? ""), toolLog: snapshot } : m))
+        );
+        continue;
+      }
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, text: String(json.text ?? ""), kind: "final", toolLog: snapshot } : m))
+      );
+      return;
+    }
+    throw new Error("That run took more steps than expected, so I stopped it.");
+  }
+
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
     const question = input.trim();
@@ -100,6 +240,7 @@ export function FayeChatWidget() {
       const dec = new TextDecoder();
       let buf = "";
       let text = "";
+      let plan: { calls: PlanCall[]; state: unknown } | null = null;
 
       for (;;) {
         const { value, done } = await reader.read();
@@ -118,6 +259,9 @@ export function FayeChatWidget() {
           } else if (event === "done") {
             const kind = data.kind as ChatMessage["kind"];
             const action = (data.action ?? null) as ProposedAction | null;
+            if (kind === "tool_calls" && Array.isArray(data.calls) && data.state) {
+              plan = { calls: data.calls as PlanCall[], state: data.state };
+            }
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
@@ -133,6 +277,7 @@ export function FayeChatWidget() {
         }
         buf = buf.slice(buf.lastIndexOf("\n\n") + 2);
       }
+      if (plan) await runPlan(assistantId, plan.calls, plan.state);
     } catch (err) {
       setMessages((prev) =>
         prev.map((m) =>
@@ -241,7 +386,7 @@ export function FayeChatWidget() {
           <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>Faye</div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>
-              Runs on your own computer — nothing you type leaves this machine.
+              Runs on your own computer. When she runs the app&apos;s tools, your browser calls the app as you.
             </div>
           </div>
 
@@ -266,6 +411,20 @@ export function FayeChatWidget() {
                 }}
               >
                 {m.text || (m.role === "assistant" ? "…" : "")}
+                {m.toolLog && m.toolLog.length > 0 && (
+                  <details style={{ marginTop: 8, fontSize: 11, color: "rgba(255,255,255,0.6)" }}>
+                    <summary style={{ cursor: "pointer" }}>
+                      {m.kind === "final" ? "Tools run" : "Running tools"} ({m.toolLog.length})
+                    </summary>
+                    <div style={{ fontFamily: "ui-monospace, Consolas, monospace", marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+                      {m.toolLog.map((line, i) => (
+                        <div key={i} style={{ color: line.includes("failed") ? "#f3a8a8" : undefined }}>
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
                 {m.kind === "guardrail" && (
                   <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>educational redirect</div>
                 )}
