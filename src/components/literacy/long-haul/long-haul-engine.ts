@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { TRACK, VEHICLE, TRAILER, ECONOMY } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { LongHaulAudio } from "./long-haul-audio";
 
 /**
  * Three.js + Rapier engine for "The Long Haul", framework-agnostic on
@@ -31,6 +32,7 @@ import { TRACK, VEHICLE, TRAILER, ECONOMY } from "@/lib/agents/financial-literac
 
 export interface LongHaulHud {
   speedMph: number;
+  speedFrac: number; // 0..1 of base max speed — drives the UI speed-sensation vignette
   fuel: number;
   tollPaid: number;
   trailerAttached: boolean;
@@ -57,6 +59,33 @@ const MAX_FOV_BONUS = 14; // added at top speed, classic "sense of speed" trick
 const MAX_BANK = 0.16; // radians, body roll into a turn
 const MAX_PITCH = 0.05; // radians, nose dips/lifts under brake/throttle
 const WHEEL_RADIUS = 0.34;
+const DUST_POOL_SIZE = 18;
+const DUST_SPAWN_INTERVAL = 0.07; // seconds between spawns while kicking up dust
+
+interface DustParticle {
+  sprite: THREE.Sprite;
+  velocity: THREE.Vector3;
+  life: number;
+  maxLife: number;
+  active: boolean;
+}
+
+/** Small soft-radial-gradient canvas texture — shared recipe for the dust puff and the car's contact shadow, just different colors. */
+function makeRadialTexture(innerColor: string, outerColor: string): THREE.CanvasTexture {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, innerColor);
+  gradient.addColorStop(1, outerColor);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
 
 export class LongHaulEngine {
   private renderer: THREE.WebGLRenderer;
@@ -69,6 +98,12 @@ export class LongHaulEngine {
   private wheels: THREE.Mesh[] = [];
   private trailerMesh: THREE.Mesh;
   private trailerHistory: { x: number; z: number; heading: number }[] = [];
+  private contactShadow!: THREE.Mesh;
+  private headlightSpot!: THREE.SpotLight;
+  private headlightTarget!: THREE.Object3D;
+  private dustPool: DustParticle[] = [];
+  private dustSpawnTimer = 0;
+  private readonly audio = new LongHaulAudio();
 
   private phase: Phase = "driving";
   private heading = Math.PI;
@@ -154,12 +189,83 @@ export class LongHaulEngine {
 
     this.buildTrack();
     this.buildCar();
+    this.buildContactShadow();
+    this.buildHeadlight();
+    this.buildDustPool();
 
     this.scene.add(this.carGroup);
     this.scene.add(this.trailerMesh);
 
     this.lastT = performance.now();
     this.animate();
+  }
+
+  /** A soft dark blob just under the car — cheap, but it's what actually sells the car as sitting ON the road instead of floating above it. */
+  private buildContactShadow() {
+    const texture = makeRadialTexture("rgba(0,0,0,0.45)", "rgba(0,0,0,0)");
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
+    this.contactShadow = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 4.6), mat);
+    this.contactShadow.rotation.x = -Math.PI / 2;
+    this.contactShadow.position.y = 0.02;
+    this.scene.add(this.contactShadow);
+  }
+
+  /** One forward-facing spotlight (no shadow — the sun's shadow map already covers the budget) for real headlight illumination on the road at night. */
+  private buildHeadlight() {
+    this.headlightSpot = new THREE.SpotLight(0xfff0cf, 6, 28, Math.PI / 6, 0.6, 1.2);
+    this.headlightTarget = new THREE.Object3D();
+    this.scene.add(this.headlightSpot);
+    this.scene.add(this.headlightTarget);
+    this.headlightSpot.target = this.headlightTarget;
+  }
+
+  private buildDustPool() {
+    const texture = makeRadialTexture("rgba(196,178,140,0.9)", "rgba(196,178,140,0)");
+    for (let i = 0; i < DUST_POOL_SIZE; i++) {
+      const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.6, 0.6, 1);
+      sprite.visible = false;
+      this.scene.add(sprite);
+      this.dustPool.push({ sprite, velocity: new THREE.Vector3(), life: 0, maxLife: 1, active: false });
+    }
+  }
+
+  /** Spawns one dust puff near a rear wheel, reusing the oldest free pool slot. */
+  private spawnDust(carX: number, carZ: number) {
+    const slot = this.dustPool.find((p) => !p.active) ?? this.dustPool[0];
+    const backward = new THREE.Vector3(-Math.sin(this.heading), 0, -Math.cos(this.heading));
+    const sideJitter = (Math.random() - 0.5) * 1.2;
+    slot.sprite.position.set(
+      carX + backward.x * 1.6 + sideJitter,
+      0.15,
+      carZ + backward.z * 1.6 + sideJitter
+    );
+    slot.sprite.scale.set(0.5, 0.5, 1);
+    slot.velocity.set(backward.x * 1.5 + (Math.random() - 0.5), 1.2 + Math.random() * 0.8, backward.z * 1.5 + (Math.random() - 0.5));
+    slot.maxLife = 0.5 + Math.random() * 0.35;
+    slot.life = slot.maxLife;
+    slot.active = true;
+    slot.sprite.visible = true;
+    (slot.sprite.material as THREE.SpriteMaterial).opacity = 0.65;
+  }
+
+  private updateDust(dt: number) {
+    for (const p of this.dustPool) {
+      if (!p.active) continue;
+      p.life -= dt;
+      if (p.life <= 0) {
+        p.active = false;
+        p.sprite.visible = false;
+        continue;
+      }
+      p.sprite.position.addScaledVector(p.velocity, dt);
+      p.velocity.y -= dt * 1.5; // gentle gravity so puffs settle rather than float forever
+      const lifeFrac = p.life / p.maxLife;
+      (p.sprite.material as THREE.SpriteMaterial).opacity = 0.65 * lifeFrac;
+      const scale = 0.5 + (1 - lifeFrac) * 0.9;
+      p.sprite.scale.set(scale, scale, 1);
+    }
   }
 
   /** A large inverted sphere with a vertical gradient — cheap stand-in for a real sky, much better than a flat fill. */
@@ -368,10 +474,19 @@ export class LongHaulEngine {
   }
 
   private setKey(code: string, val: boolean) {
+    // Browsers require a real user gesture before audio can play — the
+    // first drive key is as natural a gesture as this game has. start() is
+    // idempotent, so calling it on every keydown costs nothing after the
+    // first real one.
+    if (val) this.audio.start();
     if (code === "KeyW" || code === "ArrowUp") this.keys.up = val;
     if (code === "KeyS" || code === "ArrowDown") this.keys.down = val;
     if (code === "KeyA" || code === "ArrowLeft") this.keys.left = val;
     if (code === "KeyD" || code === "ArrowRight") this.keys.right = val;
+  }
+
+  setMuted(muted: boolean) {
+    this.audio.setMuted(muted);
   }
 
   private currentTuning() {
@@ -401,11 +516,13 @@ export class LongHaulEngine {
     this.debt = ECONOMY.loanAmount;
     this.fuel = 100;
     this.phase = "driving";
+    this.audio.playAccept();
   }
 
   declineLoan() {
     if (this.phase !== "modal") return;
     this.phase = "driving";
+    this.audio.playDecline();
   }
 
   reset() {
@@ -424,6 +541,11 @@ export class LongHaulEngine {
     this.trailerMesh.visible = false;
     this.trailerHistory = [];
     this.carTiltGroup.rotation.set(0, 0, 0);
+    this.dustSpawnTimer = 0;
+    for (const p of this.dustPool) {
+      p.active = false;
+      p.sprite.visible = false;
+    }
   }
 
   private animate = () => {
@@ -470,6 +592,7 @@ export class LongHaulEngine {
       if (!this.tollCharged && pos.z <= TRACK.tollZ && pos.x > 2) {
         this.tollCharged = true;
         this.tollPaid += ECONOMY.tollCost;
+        this.audio.playToll();
       }
 
       if (!this.gasStationResolved && pos.z <= TRACK.gasStationZ) {
@@ -477,13 +600,27 @@ export class LongHaulEngine {
         if (this.fuel < TRACK.gasStationFuelThreshold) {
           this.pauseCar();
           this.phase = "modal";
+          this.audio.playLoanAlert();
           this.callbacks.onLoanPrompt();
         }
+      }
+
+      // Engine note + tire noise react to real state every driving frame.
+      const inRoughZoneNow = pos.z < TRACK.laneSplitStartZ && pos.z > TRACK.laneSplitEndZ && pos.x < -2;
+      this.audio.setEngineState(speedFrac, throttle > 0);
+      this.audio.setSurfaceNoise(inRoughZoneNow, speedFrac);
+
+      this.dustSpawnTimer -= dt;
+      const kickingUpDust = Math.abs(this.speed) > 4 && (inRoughZoneNow || Math.abs(steer) > 0.6);
+      if (kickingUpDust && this.dustSpawnTimer <= 0) {
+        this.dustSpawnTimer = DUST_SPAWN_INTERVAL;
+        this.spawnDust(pos.x, pos.z);
       }
 
       if (pos.z <= TRACK.finishZ) {
         this.pauseCar();
         this.phase = "finished";
+        this.audio.playFinish();
         const elapsedSeconds = (now - this.startTime) / 1000;
         this.callbacks.onFinish({
           elapsedSeconds,
@@ -556,8 +693,19 @@ export class LongHaulEngine {
       this.camera.updateProjectionMatrix();
     }
 
+    // Contact shadow and headlight track the car every frame regardless of
+    // phase, so they're still correct the instant a paused run resumes.
+    this.contactShadow.position.set(t.x, 0.02, t.z);
+    this.contactShadow.rotation.z = -this.heading;
+    const forwardForLight = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
+    this.headlightSpot.position.set(t.x, 0.9, t.z);
+    this.headlightTarget.position.set(t.x + forwardForLight.x * 14, 0, t.z + forwardForLight.z * 14);
+
+    this.updateDust(dt);
+
     this.callbacks.onHud({
       speedMph: Math.round(Math.abs(this.speed) * 3.2),
+      speedFrac: speedFracForFov,
       fuel: Math.round(this.fuel),
       tollPaid: this.tollPaid,
       trailerAttached: this.trailerAttached,
@@ -572,6 +720,7 @@ export class LongHaulEngine {
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
+    this.audio.dispose();
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement === this.container) {
       this.container.removeChild(this.renderer.domElement);
