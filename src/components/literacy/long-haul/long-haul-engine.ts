@@ -121,8 +121,10 @@ export class LongHaulEngine {
   private rafId: number | null = null;
   private disposed = false;
 
-  private readonly onKeyDown = (e: KeyboardEvent) => this.setKey(e.code, true);
-  private readonly onKeyUp = (e: KeyboardEvent) => this.setKey(e.code, false);
+  private readonly onKeyDown = (e: KeyboardEvent) => this.setKey(e.code, true, e);
+  private readonly onKeyUp = (e: KeyboardEvent) => this.setKey(e.code, false, e);
+
+  private static readonly DRIVE_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
   constructor(
     private container: HTMLElement,
@@ -473,7 +475,24 @@ export class LongHaulEngine {
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.9, 0.5, 1.7).setMass(1), this.carRigid);
   }
 
-  private setKey(code: string, val: boolean) {
+  private setKey(code: string, val: boolean, e?: KeyboardEvent) {
+    if (!LongHaulEngine.DRIVE_KEYS.has(code)) return;
+
+    // Arrow keys (and Space, though we don't use it) scroll the page by
+    // default — with this card embedded mid-page in a long scrolling
+    // curriculum, every press was yanking the viewport away from the
+    // canvas the instant someone tried to drive. Confirmed by a real user
+    // hitting it, not caught in review. Guarded on the active element so
+    // this never swallows arrow-key input inside an actual text field,
+    // number input, or select elsewhere on the page.
+    const active = document.activeElement;
+    const isEditable =
+      active instanceof HTMLInputElement ||
+      active instanceof HTMLTextAreaElement ||
+      active instanceof HTMLSelectElement ||
+      (active instanceof HTMLElement && active.isContentEditable);
+    if (!isEditable) e?.preventDefault();
+
     // Browsers require a real user gesture before audio can play — the
     // first drive key is as natural a gesture as this game has. start() is
     // idempotent, so calling it on every keydown costs nothing after the
