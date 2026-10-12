@@ -12,6 +12,7 @@ import { getSecurityAnalysis } from "../research-agent/skills/security-analysis"
 import { getSectorPeerRanking } from "../research-agent/skills/sector-peer-ranking";
 import { getOptionsChainSummary } from "../trading-agent/skills/options-chain";
 import { computeGexSignal } from "../trading-agent/skills/gex-signal";
+import { upcomingCatalysts, type CatalystImpact } from "../trading-agent/skills/catalyst-calendar";
 import { classifyPutCallSkew, computeChainWideUnusualActivity } from "../trading-agent/skills/options-flow-skew";
 import { findCorrelations, DEFAULT_CORRELATION_CANDIDATES } from "../trading-agent/skills/correlation-finder";
 import { getRollingMoveStats } from "../trading-agent/skills/rolling-move-stats";
@@ -85,6 +86,19 @@ export const ASSISTANT_TOOLS: LlmToolSchema[] = [
       type: "object",
       properties: { ticker: { type: "string" } },
       required: ["ticker"],
+    },
+  },
+  {
+    name: "get_catalyst_calendar",
+    description:
+      "Dated events that can move markets, from a checked-in calendar whose official dates were read from the publishers (Fed, ECB, Bank of England, Bank of Japan, BLS CPI/PPI/jobs, NYSE) plus rule-based dates (option expirations, US election day, month-end). Each event has an impact tag, a region and a source. Pass a ticker, forex pair (GBP/JPY) or crypto symbol to see only what matters for it. Use it for 'what is coming up', 'when is the next Fed/CPI/jobs report', or to flag an event inside a trade's time horizon. It gives dates only, never a direction; say when the calendar's notes mention a coverage gap.",
+    input_schema: {
+      type: "object",
+      properties: {
+        days: { type: "number", description: "Days ahead, 1 to 366. Default 30." },
+        symbol: { type: "string", description: "Optional ticker, forex pair like 'GBP/JPY', or crypto symbol like 'BTC-USD'." },
+        minImpact: { type: "string", enum: ["low", "medium", "high"], description: "Lowest impact to include. Default low (everything)." },
+      },
     },
   },
   {
@@ -187,6 +201,12 @@ export async function dispatchTool(
         return truncate(await fetchQuote(String(input.ticker ?? "")));
       case "get_gex_signal":
         return truncate(await computeGexSignal(String(input.ticker ?? "")));
+      case "get_catalyst_calendar": {
+        const days = typeof input.days === "number" ? input.days : 30;
+        const impact = ["low", "medium", "high"].includes(String(input.minImpact)) ? (String(input.minImpact) as CatalystImpact) : "low";
+        const symbol = typeof input.symbol === "string" && input.symbol.trim() ? input.symbol.trim() : undefined;
+        return truncate(upcomingCatalysts({ days, symbol, minImpact: impact }));
+      }
       case "get_options_chain_summary": {
         const chain = await getOptionsChainSummary(String(input.ticker ?? ""));
         return truncate({

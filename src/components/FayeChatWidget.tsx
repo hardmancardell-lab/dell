@@ -28,6 +28,7 @@ const ALLOWED_TOOLS: Record<string, "GET" | "POST"> = {
   "/api/option-chain-contracts": "GET",
   "/api/historical-backtest": "GET",
   "/api/guided-trade-signals": "GET",
+  "/api/catalyst-calendar": "GET",
 };
 const SAFE_PARAM = /^[A-Za-z0-9.\-_/ ]{1,40}$/;
 const SAFE_SYMBOL = /^[A-Za-z0-9.\-/]{1,12}$/;

@@ -13,6 +13,7 @@ import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
 import { EconomicOutlookTab, InternationalCentralBanksView } from "@/components/EconomicOutlookTab";
 import { FomcReactionStudyTab } from "@/components/FomcReactionStudyTab";
 import { FomcWeekVarianceTab } from "@/components/FomcWeekVarianceTab";
+import { CatalystCalendarTab } from "@/components/CatalystCalendarTab";
 import { QuadWitchingStudyTab } from "@/components/QuadWitchingStudyTab";
 import { WeekStartMomentumTab } from "@/components/WeekStartMomentumTab";
 import { OvernightIntradayPatternTab } from "@/components/OvernightIntradayPatternTab";
@@ -440,6 +441,7 @@ export default async function Home() {
                               { id: "economic-outlook", label: "Economic Outlook", content: <EconomicOutlookTab /> },
                               { id: "fomc-reaction", label: "FOMC Reaction Study", content: <FomcReactionStudyTab /> },
                               { id: "fomc-week-variance", label: "FOMC Week Variance", content: <FomcWeekVarianceTab /> },
+                              { id: "catalyst-calendar", label: "Catalyst Calendar", content: <CatalystCalendarTab /> },
                             ]}
                           />
                         </div>
