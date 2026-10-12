@@ -14,6 +14,7 @@ import { EconomicOutlookTab, InternationalCentralBanksView } from "@/components/
 import { FomcReactionStudyTab } from "@/components/FomcReactionStudyTab";
 import { FomcWeekVarianceTab } from "@/components/FomcWeekVarianceTab";
 import { CatalystCalendarTab } from "@/components/CatalystCalendarTab";
+import { CryptoRegimeTab } from "@/components/CryptoRegimeTab";
 import { QuadWitchingStudyTab } from "@/components/QuadWitchingStudyTab";
 import { WeekStartMomentumTab } from "@/components/WeekStartMomentumTab";
 import { OvernightIntradayPatternTab } from "@/components/OvernightIntradayPatternTab";
@@ -442,6 +443,7 @@ export default async function Home() {
                               { id: "fomc-reaction", label: "FOMC Reaction Study", content: <FomcReactionStudyTab /> },
                               { id: "fomc-week-variance", label: "FOMC Week Variance", content: <FomcWeekVarianceTab /> },
                               { id: "catalyst-calendar", label: "Catalyst Calendar", content: <CatalystCalendarTab /> },
+                              { id: "crypto-regime", label: "Crypto Regime", content: <CryptoRegimeTab /> },
                             ]}
                           />
                         </div>

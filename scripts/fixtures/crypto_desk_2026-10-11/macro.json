@@ -1,0 +1,9 @@
+[
+ {"key":"fed_funds","label":"Fed funds (upper bound)","value":4.00,"unit":"%","note":"Hiked 25bp on 16 Sep 2026; dots show one more in 2026","signal":"bad","asof":"2026-10-09","source":"Federal Reserve FOMC statement, 16 Sep 2026"},
+ {"key":"us10y","label":"10-yr Treasury yield","value":5.24,"unit":"%","note":"24-yr high; ~5.37% intraday on 7 Oct","signal":"bad","asof":"2026-10-09","source":"ETF Trends Treasury snapshot, 9 Oct 2026"},
+ {"key":"us2y","label":"2-yr Treasury yield","value":4.80,"unit":"%","note":"Curve 2s10s +44bp","signal":"warn","asof":"2026-10-09","source":"ETF Trends Treasury snapshot, 9 Oct 2026"},
+ {"key":"dxy","label":"Dollar index (DXY)","value":102.21,"unit":"index","note":"52-wk high 102.54 on 5 Oct","signal":"warn","asof":"2026-10-09","source":"CNBC .DXY quote"},
+ {"key":"wti","label":"WTI crude","value":91.44,"unit":"usd","note":"Energy is driving the Fed's inflation problem","signal":"bad","asof":"2026-10-09","source":"Schwab market update, 9 Oct 2026"},
+ {"key":"oct_hold","label":"Odds Fed holds on 28 Oct","value":0.81,"unit":"share","note":"A surprise hike is the main downside catalyst","signal":"warn","asof":"2026-10-09","source":"Yahoo Finance markets news, 9 Oct 2026"},
+ {"key":"dec_hike","label":"Odds of a December hike","value":0.69,"unit":"share","note":"","signal":"bad","asof":"2026-10-09","source":"Yahoo Finance markets news, 9 Oct 2026"}
+]

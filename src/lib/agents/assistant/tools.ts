@@ -13,6 +13,7 @@ import { getSectorPeerRanking } from "../research-agent/skills/sector-peer-ranki
 import { getOptionsChainSummary } from "../trading-agent/skills/options-chain";
 import { computeGexSignal } from "../trading-agent/skills/gex-signal";
 import { upcomingCatalysts, type CatalystImpact } from "../trading-agent/skills/catalyst-calendar";
+import { getCryptoRegime } from "../trading-agent/skills/crypto-regime-service";
 import { classifyPutCallSkew, computeChainWideUnusualActivity } from "../trading-agent/skills/options-flow-skew";
 import { findCorrelations, DEFAULT_CORRELATION_CANDIDATES } from "../trading-agent/skills/correlation-finder";
 import { getRollingMoveStats } from "../trading-agent/skills/rolling-move-stats";
@@ -86,6 +87,15 @@ export const ASSISTANT_TOOLS: LlmToolSchema[] = [
       type: "object",
       properties: { ticker: { type: "string" } },
       required: ["ticker"],
+    },
+  },
+  {
+    name: "get_crypto_regime",
+    description:
+      "Six-condition crypto breakout checklist from free public data (stablecoin supply growth, US spot BTC ETF flows month to date, BTC dominance, BTC vs its 200-day average, the 10-year yield, Fear & Greed), scored 0 to 6: 4 or more is a breakout regime, 3 mixed, 2 or fewer range-bound. Use it for crypto questions about the market regime. A condition whose data could not be read is 'unavailable' and never counts as met; if the label is 'undetermined' say so rather than picking one. ETF flows have no free feed: pass etfFlowsMtdMusd only if the user gives the figure. It describes market conditions; it is not advice and not a price forecast.",
+    input_schema: {
+      type: "object",
+      properties: { etfFlowsMtdMusd: { type: "number", description: "Optional: US spot BTC ETF net flows month to date, in $M, as given by the user." } },
     },
   },
   {
@@ -201,6 +211,10 @@ export async function dispatchTool(
         return truncate(await fetchQuote(String(input.ticker ?? "")));
       case "get_gex_signal":
         return truncate(await computeGexSignal(String(input.ticker ?? "")));
+      case "get_crypto_regime": {
+        const etf = typeof input.etfFlowsMtdMusd === "number" && Number.isFinite(input.etfFlowsMtdMusd) ? input.etfFlowsMtdMusd : undefined;
+        return truncate(await getCryptoRegime({ etfFlowsMtdMusd: etf }));
+      }
       case "get_catalyst_calendar": {
         const days = typeof input.days === "number" ? input.days : 30;
         const impact = ["low", "medium", "high"].includes(String(input.minImpact)) ? (String(input.minImpact) as CatalystImpact) : "low";

@@ -1,0 +1,50 @@
+[
+ {
+  "key": "total_mcap",
+  "label": "Total crypto market cap",
+  "value": 2813099578042.2983,
+  "unit": "usd",
+  "change": -0.0288,
+  "change_period": "24h"
+ },
+ {
+  "key": "btc_dominance",
+  "label": "BTC dominance",
+  "value": 0.5959,
+  "unit": "share",
+  "change": null,
+  "change_period": null
+ },
+ {
+  "key": "stablecoin_supply",
+  "label": "Stablecoin supply",
+  "value": 311064817042.27,
+  "unit": "usd",
+  "change": 0.0082,
+  "change_period": "30d"
+ },
+ {
+  "key": "stablecoin_yoy",
+  "label": "Stablecoin supply, 1-yr change",
+  "value": 0.026,
+  "unit": "share",
+  "change": null,
+  "change_period": null
+ },
+ {
+  "key": "defi_tvl",
+  "label": "DeFi TVL, all chains",
+  "value": 92545990494,
+  "unit": "usd",
+  "change": 0.0692,
+  "change_period": "30d"
+ },
+ {
+  "key": "fear_greed",
+  "label": "Fear & Greed",
+  "value": 61,
+  "unit": "index",
+  "change": 5,
+  "change_period": "30d"
+ }
+]
