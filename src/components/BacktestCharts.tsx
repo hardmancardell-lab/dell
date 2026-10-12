@@ -292,6 +292,7 @@ function stratReturns(trades: ChartTrade[], label: string, isShort: boolean) {
 function ReturnHistogram({ trades, labels, isShort }: { trades: ChartTrade[]; labels: string[]; isShort: boolean }) {
   const [label, setLabel] = useState(labels[labels.length - 1]);
   const [tip, setTip] = useState<string | null>(null);
+  const [showNormal, setShowNormal] = useState(true);
   const data = useMemo(() => stratReturns(trades, label, isShort).map((d) => d.r), [trades, label, isShort]);
 
   const W = 420, H = 250, left = 34, right = 10, top = 24, axisH = 34;
@@ -302,20 +303,49 @@ function ReturnHistogram({ trades, labels, isShort }: { trades: ChartTrade[]; la
     const mn = Math.min(...data), mx = Math.max(...data);
     const k = Math.max(6, Math.min(14, Math.round(Math.sqrt(data.length))));
     const w = niceStep(mx - mn, k);
-    const e0 = Math.floor(mn / w) * w, e1 = Math.ceil(mx / w) * w;
+    const e0 = Math.floor(mn / w) * w;
+    // When every trade has the same return the range collapses to zero width and every x position becomes NaN.
+    const e1 = Math.max(Math.ceil(mx / w) * w, e0 + w);
     const nb = Math.max(1, Math.round((e1 - e0) / w));
     const counts = new Array(nb).fill(0);
     for (const v of data) counts[Math.min(nb - 1, Math.floor((v - e0) / w + 1e-9))]++;
-    const cmax = Math.max(...counts);
-    const x = (v: number) => left + ((v - e0) / (e1 - e0)) * (W - left - right);
-    const y = (c: number) => top + (1 - c / (cmax * 1.1)) * (H - top - axisH);
     const mean = data.reduce((s, v) => s + v, 0) / data.length;
     const med = median(data);
     const sd = Math.sqrt(data.reduce((s, v) => s + (v - mean) ** 2, 0) / data.length);
+
+    // Normal (bell-curve) fit with the same mean and spread, drawn in "trades per bucket" units so it sits
+    // directly on the bars: expected count in a bucket of width w is n * w * pdf(x).
+    const curveOn = showNormal && sd > 0;
+    const normalCount = (v: number) => (data.length * w * Math.exp(-0.5 * ((v - mean) / sd) ** 2)) / (sd * Math.sqrt(2 * Math.PI));
+    const curvePeak = sd > 0 ? normalCount(mean) : 0;
+    const cmax = Math.max(Math.max(...counts), curveOn ? curvePeak : 0);
+    const x = (v: number) => left + ((v - e0) / (e1 - e0)) * (W - left - right);
+    const y = (c: number) => top + (1 - c / (cmax * 1.1)) * (H - top - axisH);
+    const curvePoints = curveOn
+      ? Array.from({ length: 81 }, (_, i) => {
+          const v = e0 + ((e1 - e0) * i) / 80;
+          return `${x(v).toFixed(1)},${y(normalCount(v)).toFixed(1)}`;
+        }).join(" ")
+      : null;
+
+    // Shape versus normal: skewness, excess kurtosis (0 for a normal), Jarque-Bera. Moment-based, so it needs
+    // enough trades to mean anything; below 30 the comparison is only a rough guide.
+    const m3 = data.reduce((s, v) => s + (v - mean) ** 3, 0) / data.length;
+    const m4 = data.reduce((s, v) => s + (v - mean) ** 4, 0) / data.length;
+    const skew = sd > 0 ? m3 / sd ** 3 : 0;
+    const exKurt = sd > 0 ? m4 / sd ** 4 - 3 : 0;
+    const jbP = Math.exp(-((data.length / 6) * (skew ** 2 + exKurt ** 2 / 4)) / 2);
+    const shapeNote =
+      data.length < 30
+        ? ` Fewer than 30 trades, so the bell-curve comparison is only a rough guide (skew ${skew.toFixed(2)}, excess kurtosis ${exKurt.toFixed(2)}).`
+        : jbP < 0.05
+          ? ` Not normal (Jarque-Bera p ${jbP < 0.001 ? "<0.001" : jbP.toFixed(3)}): skew ${skew.toFixed(2)}, excess kurtosis ${exKurt.toFixed(2)}${exKurt > 0.5 ? ", fatter tails than a bell curve implies, so extreme trades are more likely than a normal model says" : ""}.`
+          : ` Consistent with normal (Jarque-Bera p ${jbP.toFixed(2)}): skew ${skew.toFixed(2)}, excess kurtosis ${exKurt.toFixed(2)}.`;
+
     const xt = niceTicks(e0, e1, 7);
     const yt = niceTicks(0, cmax, 4).filter((t) => Number.isInteger(t));
     const losers = data.filter((v) => v <= 0).length;
-    takeaway = `${Math.round((losers / data.length) * 100)}% of trades lose; worst ${fmt(mn)}, best ${fmt(mx)}.${Math.abs(mean - med) > 0.35 * sd ? " Mean and median diverge: a few large outcomes drive the average, so lean on the median." : " Mean and median agree: no single outlier is driving the result."}`;
+    takeaway = `${Math.round((losers / data.length) * 100)}% of trades lose; worst ${fmt(mn)}, best ${fmt(mx)}.${Math.abs(mean - med) > 0.35 * sd ? " Mean and median diverge: a few large outcomes drive the average, so lean on the median." : " Mean and median agree: no single outlier is driving the result."}${shapeNote}`;
     body = (
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label={`Histogram of ${label} strategy returns`} onMouseLeave={() => setTip(null)}>
         {yt.map((t) => (
@@ -337,6 +367,14 @@ function ReturnHistogram({ trades, labels, isShort }: { trades: ChartTrade[]; la
             </g>
           );
         })}
+        {curvePoints && (
+          <>
+            <polyline points={curvePoints} fill="none" style={{ stroke: C.t1, strokeWidth: 2, strokeLinejoin: "round" }} />
+            <text x={W - right - 2} y={top + 10} textAnchor="end" style={{ fill: C.t1, fontSize: 10, fontFamily: C.mono }}>
+              normal fit (same mean and spread)
+            </text>
+          </>
+        )}
         <line x1={x(0)} x2={x(0)} y1={top} y2={H - axisH} style={{ stroke: C.lineB, strokeWidth: 1.5 }} />
         <line x1={x(mean)} x2={x(mean)} y1={top - 6} y2={H - axisH} style={{ stroke: C.verdict, strokeWidth: 2 }} />
         <line x1={x(med)} x2={x(med)} y1={top - 6} y2={H - axisH} style={{ stroke: C.t0, strokeWidth: 1.5, strokeDasharray: "4 3" }} />
@@ -362,10 +400,18 @@ function ReturnHistogram({ trades, labels, isShort }: { trades: ChartTrade[]; la
     <ChartCard
       eyebrow="What does a typical trade look like?"
       title="Distribution of per-trade returns"
-      how="Each bar counts trades in a return bucket. Rose = losing buckets, teal = winners. The amber line is the mean, the dashed line the median. Fat left tails and mean/median gaps are what a single average hides."
+      how="Each bar counts trades in a return bucket. Rose = losing buckets, teal = winners. The amber line is the mean, the dashed line the median. The grey curve is a normal (bell-curve) distribution with the same mean and spread: where bars sit well above or below it, real returns are not normal. Fat left tails and mean/median gaps are what a single average hides."
       takeaway={takeaway}
       tip={tip}
-      controls={<HorizonPicker labels={labels} value={label} onChange={setLabel} />}
+      controls={
+        <div className="flex flex-wrap items-center gap-3">
+          <HorizonPicker labels={labels} value={label} onChange={setLabel} />
+          <label className="text-xs flex items-center gap-1" style={{ color: "var(--text-2)", cursor: "pointer" }}>
+            <input type="checkbox" checked={showNormal} onChange={(e) => setShowNormal(e.target.checked)} />
+            Show normal fit
+          </label>
+        </div>
+      }
     >
       {body}
     </ChartCard>
