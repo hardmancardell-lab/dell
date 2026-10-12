@@ -70,6 +70,7 @@ import { RebalancingTab } from "@/components/RebalancingTab";
 import { CorrelationFinderTab } from "@/components/CorrelationFinderTab";
 import { PortfolioMethodologyTab } from "@/components/PortfolioMethodologyTab";
 import { RetirementPlanTab } from "@/components/RetirementPlanTab";
+import { BusinessPhaseTab } from "@/components/BusinessPhaseTab";
 import { FinancialLiteracyTab } from "@/components/FinancialLiteracyTab";
 import { AssistantChatTab } from "@/components/AssistantChatTab";
 import { SupplyDemandShockScanTab } from "@/components/SupplyDemandShockScanTab";
@@ -497,6 +498,7 @@ export default async function Home() {
                             theme="jarvis"
                             tabs={[
                               { id: "analyze", label: "Analyze Ticker", content: <SecurityAnalystTab /> },
+                              { id: "phase", label: "Business Phase", content: <BusinessPhaseTab /> },
                               { id: "watchlist", label: "Watchlist", content: <ResearchWatchlistTab /> },
                               { id: "screener", label: "Screener", content: <ScreenerTab /> },
                             ]}
