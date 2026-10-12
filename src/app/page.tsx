@@ -69,6 +69,7 @@ import { ScenarioSimulationTab } from "@/components/ScenarioSimulationTab";
 import { RebalancingTab } from "@/components/RebalancingTab";
 import { CorrelationFinderTab } from "@/components/CorrelationFinderTab";
 import { PortfolioMethodologyTab } from "@/components/PortfolioMethodologyTab";
+import { RetirementPlanTab } from "@/components/RetirementPlanTab";
 import { FinancialLiteracyTab } from "@/components/FinancialLiteracyTab";
 import { AssistantChatTab } from "@/components/AssistantChatTab";
 import { SupplyDemandShockScanTab } from "@/components/SupplyDemandShockScanTab";
@@ -1038,6 +1039,7 @@ export default async function Home() {
                       { id: "correlation", label: "Correlation Finder", content: <CorrelationFinderTab /> },
                       { id: "scenario", label: "Scenario Simulation", content: <ScenarioSimulationTab /> },
                       { id: "rebalancing", label: "Risk & Rebalancing", content: <RebalancingTab /> },
+                      { id: "retirement", label: "401(k) Optimizer", content: <RetirementPlanTab /> },
                       { id: "guide", label: "Methodology Guide", content: <PortfolioMethodologyTab /> },
                     ]}
                   />
