@@ -33,6 +33,7 @@ import { BacktestSuiteTab } from "@/components/BacktestSuiteTab";
 import { HistoricalBacktestTab } from "@/components/HistoricalBacktestTab";
 import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
 import { VwapReversionBacktestTab } from "@/components/VwapReversionBacktestTab";
+import { VwapBandStudyTab } from "@/components/VwapBandStudyTab";
 import { PremarketGapHodLodTab } from "@/components/PremarketGapHodLodTab";
 import { GapCalendarStudyTab } from "@/components/GapCalendarStudyTab";
 import { RequiresPlacementTier } from "@/components/RequiresPlacementTier";
@@ -567,6 +568,11 @@ export default async function Home() {
                                 content: <VwapReversionBacktestTab key="equities-vwap-reversion-backtest" defaultTicker="AAPL" />,
                               },
                               {
+                                id: "vwap-band-study",
+                                label: "VWAP Band Study",
+                                content: <VwapBandStudyTab key="equities-vwap-band-study" defaultTicker="SPY" />,
+                              },
+                              {
                                 id: "premarket-gaps",
                                 label: "Premarket Gaps",
                                 content: (
@@ -697,6 +703,11 @@ export default async function Home() {
                                 content: <VwapReversionBacktestTab key="bonds-vwap-reversion-backtest" defaultTicker="TLT" />,
                               },
                               {
+                                id: "vwap-band-study",
+                                label: "VWAP Band Study",
+                                content: <VwapBandStudyTab key="bonds-vwap-band-study" defaultTicker="TLT" />,
+                              },
+                              {
                                 id: "rolling-move-stats",
                                 label: "Rolling Move Stats",
                                 content: <RollingMoveStatsTab defaultTicker="TLT" defaultAssetClass="bond" />,
@@ -769,6 +780,11 @@ export default async function Home() {
                                 content: <BacktestSuiteTab key="currency-backtest-suite" defaultTicker="EUR/USD" assetClass="forex" />,
                               },
                               {
+                                id: "vwap-band-study",
+                                label: "VWAP Band Study",
+                                content: <VwapBandStudyTab key="currency-vwap-band-study" defaultTicker="GBP/JPY" />,
+                              },
+                              {
                                 id: "gap-calendar-study",
                                 label: "Gap & Calendar Study",
                                 content: (
@@ -838,6 +854,11 @@ export default async function Home() {
                                 id: "vwap-reversion-backtest",
                                 label: "VWAP Reversion Backtest",
                                 content: <VwapReversionBacktestTab key="futures-vwap-reversion-backtest" defaultTicker="SPY" />,
+                              },
+                              {
+                                id: "vwap-band-study",
+                                label: "VWAP Band Study",
+                                content: <VwapBandStudyTab key="futures-vwap-band-study" defaultTicker="SPY" />,
                               },
                               {
                                 id: "gap-calendar-study",
@@ -918,6 +939,11 @@ export default async function Home() {
                                 id: "vwap-reversion-backtest",
                                 label: "VWAP Reversion Backtest",
                                 content: <VwapReversionBacktestTab key="commodities-vwap-reversion-backtest" defaultTicker="GLD" />,
+                              },
+                              {
+                                id: "vwap-band-study",
+                                label: "VWAP Band Study",
+                                content: <VwapBandStudyTab key="commodities-vwap-band-study" defaultTicker="GLD" />,
                               },
                               {
                                 id: "gap-calendar-study",
