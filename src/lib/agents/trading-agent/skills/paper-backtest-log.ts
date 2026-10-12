@@ -1,12 +1,19 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getDailyBars } from "./daily-bars";
-import type { GexSignalResult, PaperBacktestLogEntry } from "../types";
+import type { GexMethodVersion, GexSignalResult, PaperBacktestLogEntry } from "../types";
 
 // Same node:fs-on-project-root pattern as schwab-auth.ts's .schwab-tokens.json
 // — this is the first accumulating dataset this app has had beyond that
 // precedent (everything else is either localStorage or fetched fresh).
 const LOG_FILE = path.join(process.cwd(), "gex-paper-backtest-log.json");
+
+/** Rows written before method versioning carry no stamp; they used the nearest expiration only and swapped call and put walls. */
+export const LEGACY_METHOD_VERSION: GexMethodVersion = "gex-v1";
+
+export function methodOf(entry: PaperBacktestLogEntry): GexMethodVersion {
+  return entry.methodVersion ?? LEGACY_METHOD_VERSION;
+}
 
 async function readLog(): Promise<PaperBacktestLogEntry[]> {
   try {
@@ -23,8 +30,9 @@ async function writeLog(entries: PaperBacktestLogEntry[]): Promise<void> {
 
 /**
  * Appends an already-computed live GEX signal to the log, deduped per
- * (underlying, expiration) so repeat visits within the same cycle don't
- * create duplicate rows. Takes a precomputed GexSignalResult (rather than
+ * (underlying, expiration, method version) so repeat visits within the same
+ * cycle don't create duplicate rows, and so a row logged under an older wall
+ * definition never blocks (or gets mixed with) a row under the current one. Takes a precomputed GexSignalResult (rather than
  * recomputing it) so callers that already fetched it for display don't pay
  * for a second live chain/quote fetch. Returns null if already logged or if
  * no contracts came back (nothing meaningful to log).
@@ -33,8 +41,9 @@ export async function logSignal(signal: GexSignalResult): Promise<PaperBacktestL
   if (!signal.quadrant) return null;
 
   const entries = await readLog();
+  const method = signal.methodVersion ?? LEGACY_METHOD_VERSION;
   const alreadyLogged = entries.some(
-    (e) => e.underlying === signal.underlying && e.expirationDate === signal.nearExpiration
+    (e) => e.underlying === signal.underlying && e.expirationDate === signal.nearExpiration && methodOf(e) === method
   );
   if (alreadyLogged) return null;
 
@@ -50,6 +59,7 @@ export async function logSignal(signal: GexSignalResult): Promise<PaperBacktestL
     friRet: null,
     weekRangePct: null,
     pinnedNearWall: null,
+    methodVersion: method,
     gammaFlip: signal.gexRegime.gammaFlip,
     callWall: signal.gexRegime.callWall,
     putWall: signal.gexRegime.putWall,

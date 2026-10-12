@@ -447,11 +447,17 @@ export type GexRegimeLabel = "positive" | "negative";
 
 export interface GexRegime {
   totalNetGex: number;
+  /** Spot level where net dealer gamma crosses zero, found by re-pricing every contract at hypothetical spots (v2) rather than from a sign change between strikes (v1). */
   gammaFlip: number | null;
   spot: number;
   regime: GexRegimeLabel;
+  /** v2: the strike ABOVE spot with the most call gamma, summed over the expirations in the window. */
   callWall: number;
+  /** v2: the strike BELOW spot with the most put gamma, summed over the expirations in the window. */
   putWall: number;
+  /** v2: the three largest call-gamma strikes above spot and put-gamma strikes below it, largest first (callWall and putWall are the first of each). */
+  callWalls?: number[];
+  putWalls?: number[];
 }
 
 export type TermStructureShape = "backwardation" | "contango";
@@ -470,11 +476,21 @@ export interface FlowAtWalls {
 
 export type QuadrantLabel = "bullish-stable" | "bullish-volatile" | "bearish-stable" | "bearish-volatile";
 
+/** Bump when the wall / flip / window definitions change so logged rows from different methods are never mixed. */
+export type GexMethodVersion = "gex-v1" | "gex-v2";
+
 export interface GexSignalResult {
   underlying: string;
   asOfDateKey: string;
+  /** First and second expirations on or after today; used for the IV term structure and as the paper-log key. */
   nearExpiration: string;
   farExpiration: string | null;
+  /** v2: which wall / flip / window definitions produced gexRegime. */
+  methodVersion?: GexMethodVersion;
+  /** v2: every expiration whose open interest went into the walls, flip and regime (nearest first). */
+  expirationsUsed?: string[];
+  /** v2: how many days ahead the window reaches. */
+  windowDays?: number;
   gexRegime: GexRegime;
   termStructure: TermStructureSignal | null;
   flowAtWalls: FlowAtWalls;
@@ -499,6 +515,8 @@ export interface PaperBacktestLogEntry {
   friRet: number | null;
   weekRangePct: number | null;
   pinnedNearWall: boolean | null;
+  /** Which wall / flip / window definitions produced this row. Rows written before versioning have no value and are "gex-v1" (nearest expiration only, walls picked from the sign-adjusted net, which swapped call and put). */
+  methodVersion?: GexMethodVersion;
   // Diagnostic fields beyond backtest_engine.py's schema, kept for the app's
   // own display purposes.
   gammaFlip: number | null;

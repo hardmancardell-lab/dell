@@ -80,7 +80,7 @@ export const ASSISTANT_TOOLS: LlmToolSchema[] = [
   {
     name: "get_gex_signal",
     description:
-      "Real dealer options-positioning read for one underlying: gamma exposure regime, gamma flip level, term structure, and flow at the nearest call/put walls. Useful context on likely near-term volatility behavior, not a price forecast.",
+      "Real dealer options-positioning read for one underlying: gamma exposure regime, gamma flip level (spot sweep), term structure, and flow at the call wall (most call gamma above spot) and put wall (most put gamma below spot), combined over the next 45 days of expirations. The regime label rests on an assumed dealer sign; the walls and flip level do not. Useful context on likely near-term volatility behavior, not a price forecast.",
     input_schema: {
       type: "object",
       properties: { ticker: { type: "string" } },

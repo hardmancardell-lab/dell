@@ -21,7 +21,36 @@ import type {
  * original: dealers are net SHORT calls and net LONG puts against customer
  * buying pressure. This can be wrong for single names with unusual flow;
  * toggle dealerShortCalls/dealerShortPuts if better information exists.
+ *
+ * METHOD VERSION "gex-v2" (see GEX_METHOD_NOTES.md). The sign assumption above
+ * and the port's per-contract maths are unchanged. What changed from v1:
+ *   - Walls are picked BY SIDE: callWall = strike above spot with the most call
+ *     gamma, putWall = strike below spot with the most put gamma. v1 picked the
+ *     max / min of the sign-adjusted net, which labelled the strike where calls
+ *     dominate as the "put wall" (and vice versa) and favoured trivial strikes.
+ *   - Open interest from every expiration in a 45-day window is combined, not
+ *     only the nearest one, so tomorrow's expiry cannot dominate by itself.
+ *   - The gamma flip is a spot sweep: every contract is re-priced at hypothetical
+ *     spots and the zero crossing nearest spot is returned, not a sign change
+ *     between two adjacent strikes at today's spot.
+ *   - Expirations are treated as ending 4pm US Eastern on their date (not
+ *     midnight UTC), so today's expiry counts until the close and the final
+ *     hours keep a floor on time to expiry.
+ * The call/put walls are where gamma is concentrated. They are not a forecast
+ * that price will stop there, and the net sign stays an assumption.
  */
+
+export const GEX_METHOD_VERSION = "gex-v2" as const;
+export const GEX_WINDOW_DAYS = 45;
+/** Nearest expirations fetched per signal: bounds the Tradier calls when a dashboard scans several tickers. */
+export const GEX_MAX_WINDOW_EXPIRATIONS = 12;
+const GEX_FETCH_BATCH = 4;
+/** The spot sweep for the gamma flip covers spot +/- this fraction, in this many steps of equal size. */
+const FLIP_SWEEP_FRACTION = 0.15;
+const FLIP_SWEEP_STEPS = 60;
+const WALLS_RETURNED = 3;
+/** Smallest time to expiry used in the maths (a quarter of a day) so gamma stays finite in the last hours. */
+const MIN_T_MS = 6 * 60 * 60 * 1000;
 
 export interface StrikeGexRow {
   strikePrice: number;
@@ -31,6 +60,13 @@ export interface StrikeGexRow {
   gamma: number;
   dollarGamma: number;
   dealerGex: number;
+  /** +1 or -1: the sign this contract's gamma carries in dealerGex (calls -1 and puts +1 under the default assumption). */
+  dealerSign?: 1 | -1;
+  /** Implied volatility as a decimal and time to expiry in years, kept so the contract can be re-priced at another spot. */
+  volatility?: number;
+  tYears?: number;
+  /** Expiration date (YYYY-MM-DD) when the row came from a multi-expiration window. */
+  expiration?: string;
 }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -66,6 +102,9 @@ export function computeStrikeGex(
       gamma,
       dollarGamma,
       dealerGex: dollarGamma * callSign,
+      dealerSign: callSign,
+      volatility: c.volatility / 100,
+      tYears,
     });
   }
   for (const p of chain.puts) {
@@ -79,6 +118,9 @@ export function computeStrikeGex(
       gamma,
       dollarGamma,
       dealerGex: dollarGamma * putSign,
+      dealerSign: putSign,
+      volatility: p.volatility / 100,
+      tYears,
     });
   }
   return rows;
@@ -99,35 +141,103 @@ export function netGexByStrike(rows: StrikeGexRow[]): NetGexPoint[] {
     .sort((a, b) => a.strikePrice - b.strikePrice);
 }
 
-/** Linear interpolation of the zero-gamma crossing, same as signal_engine.py's find_gamma_flip. */
-export function findGammaFlip(netGex: NetGexPoint[]): number | null {
-  for (let i = 0; i < netGex.length - 1; i++) {
-    const s0 = Math.sign(netGex[i].netGex);
-    const s1 = Math.sign(netGex[i + 1].netGex);
-    if (s0 !== s1 && s0 !== 0) {
-      const x0 = netGex[i].strikePrice;
-      const x1 = netGex[i + 1].strikePrice;
-      const y0 = netGex[i].netGex;
-      const y1 = netGex[i + 1].netGex;
-      if (y1 === y0) continue;
-      return x0 + ((0 - y0) * (x1 - x0)) / (y1 - y0);
-    }
-  }
-  return null;
+/** An expiration date ends at 4pm US Eastern (20:00 UTC in summer; one hour early in winter, which is immaterial for gamma). */
+export function expiryMs(dateKey: string): number {
+  return Date.parse(`${dateKey.slice(0, 10)}T20:00:00Z`);
 }
 
-export function classifyGexRegime(netGex: NetGexPoint[], spot: number): GexRegime {
-  const totalNetGex = netGex.reduce((sum, p) => sum + p.netGex, 0);
-  const gammaFlip = findGammaFlip(netGex);
-  const callWall = netGex.reduce((best, p) => (p.netGex > best.netGex ? p : best), netGex[0]);
-  const putWall = netGex.reduce((best, p) => (p.netGex < best.netGex ? p : best), netGex[0]);
+/** Expirations still open at `now` and within `windowDays`, nearest first, at most `maxCount`. */
+export function windowExpirations(expirations: string[], now: number, windowDays = GEX_WINDOW_DAYS, maxCount = GEX_MAX_WINDOW_EXPIRATIONS): string[] {
+  return [...expirations]
+    .filter((e) => {
+      const end = expiryMs(e);
+      return end > now && (end - now) / ONE_DAY_MS <= windowDays;
+    })
+    .sort()
+    .slice(0, maxCount);
+}
+
+export interface GexWindowChain {
+  expiration: string;
+  chain: MarketOptionsChain;
+}
+
+/** One StrikeGexRow per contract across every chain in the window. Time to expiry never falls below MIN_T_MS. */
+export function computeWindowRows(chains: GexWindowChain[], spot: number, now: number): StrikeGexRow[] {
+  const rows: StrikeGexRow[] = [];
+  for (const { expiration, chain } of chains) {
+    const end = Math.max(expiryMs(expiration), now + MIN_T_MS);
+    for (const r of computeStrikeGex(chain, spot, now, end)) rows.push({ ...r, expiration });
+  }
+  return rows;
+}
+
+/** Strikes ranked by one side's dollar gamma, summed over every expiration in the rows. */
+function rankStrikes(rows: StrikeGexRow[], right: "call" | "put", keep: (strike: number) => boolean, n: number): number[] {
+  const byStrike = new Map<number, number>();
+  for (const r of rows) {
+    if (r.right !== right || !keep(r.strikePrice)) continue;
+    byStrike.set(r.strikePrice, (byStrike.get(r.strikePrice) ?? 0) + r.dollarGamma);
+  }
+  return [...byStrike.entries()]
+    .filter(([, g]) => g > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([strike]) => strike);
+}
+
+/** Call walls above spot and put walls below it, each the strikes with the most gamma on that side, largest first. */
+export function wallsBySide(rows: StrikeGexRow[], spot: number, n = WALLS_RETURNED): { callWalls: number[]; putWalls: number[] } {
+  return {
+    callWalls: rankStrikes(rows, "call", (k) => k > spot, n),
+    putWalls: rankStrikes(rows, "put", (k) => k < spot, n),
+  };
+}
+
+/** Total dealer-signed gamma exposure if spot were `s`, re-pricing every contract that carries its own IV and time to expiry. */
+export function netGexAtSpot(rows: StrikeGexRow[], s: number): number {
+  let total = 0;
+  for (const r of rows) {
+    if (r.volatility === undefined || r.tYears === undefined || r.dealerSign === undefined) continue;
+    const g = bsGamma(s, r.strikePrice, r.tYears, r.volatility) * s * s * 0.01 * r.openInterest * 100;
+    total += g * r.dealerSign;
+  }
+  return total;
+}
+
+/**
+ * Spot level where total net gamma crosses zero, by sweeping spot over +/-15% and interpolating the crossing
+ * nearest the current spot. Null when net gamma keeps one sign across the whole sweep. The crossing level is the same
+ * whichever sign convention is used; only which side counts as "positive gamma" changes.
+ */
+export function sweepGammaFlip(rows: StrikeGexRow[], spot: number): number | null {
+  const pts: { s: number; v: number }[] = [];
+  for (let i = 0; i <= FLIP_SWEEP_STEPS; i++) {
+    const s = spot * (1 - FLIP_SWEEP_FRACTION + (2 * FLIP_SWEEP_FRACTION * i) / FLIP_SWEEP_STEPS);
+    pts.push({ s, v: netGexAtSpot(rows, s) });
+  }
+  const crossings: number[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    if (a.v === 0) crossings.push(a.s);
+    else if (Math.sign(a.v) !== Math.sign(b.v) && b.v !== 0) crossings.push(a.s + ((0 - a.v) * (b.s - a.s)) / (b.v - a.v));
+  }
+  if (crossings.length === 0) return null;
+  return crossings.reduce((best, c) => (Math.abs(c - spot) < Math.abs(best - spot) ? c : best));
+}
+
+export function classifyGexRegime(rows: StrikeGexRow[], spot: number): GexRegime {
+  const totalNetGex = rows.reduce((sum, r) => sum + r.dealerGex, 0);
+  const { callWalls, putWalls } = wallsBySide(rows, spot);
   return {
     totalNetGex,
-    gammaFlip,
+    gammaFlip: sweepGammaFlip(rows, spot),
     spot,
     regime: totalNetGex > 0 ? "positive" : "negative",
-    callWall: callWall?.strikePrice ?? spot,
-    putWall: putWall?.strikePrice ?? spot,
+    callWall: callWalls[0] ?? spot,
+    putWall: putWalls[0] ?? spot,
+    callWalls,
+    putWalls,
   };
 }
 
@@ -141,12 +251,17 @@ export function flowRatioAtStrike(volumeToday: number, openInterest: number): nu
   return volumeToday / openInterest;
 }
 
+/** Today's volume over open interest on the wall strike, one side, summed over every expiration in the rows. */
+function flowAtStrike(rows: StrikeGexRow[], strike: number, right: "call" | "put"): number | null {
+  const side = rows.filter((r) => r.strikePrice === strike && r.right === right);
+  if (side.length === 0) return null;
+  return flowRatioAtStrike(side.reduce((s, r) => s + r.volume, 0), side.reduce((s, r) => s + r.openInterest, 0));
+}
+
 export function flowDirectionAtWalls(rows: StrikeGexRow[], regime: GexRegime): FlowAtWalls {
-  const callRow = rows.find((r) => r.strikePrice === regime.callWall && r.right === "call");
-  const putRow = rows.find((r) => r.strikePrice === regime.putWall && r.right === "put");
   return {
-    callWallFlowRatio: callRow ? flowRatioAtStrike(callRow.volume, callRow.openInterest) : null,
-    putWallFlowRatio: putRow ? flowRatioAtStrike(putRow.volume, putRow.openInterest) : null,
+    callWallFlowRatio: flowAtStrike(rows, regime.callWall, "call"),
+    putWallFlowRatio: flowAtStrike(rows, regime.putWall, "put"),
   };
 }
 
@@ -184,12 +299,23 @@ function toDateKey(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+/** Fetches option chains for the given expirations, a few at a time. A failed fetch is returned as null rather than thrown. */
+async function fetchChains(symbol: string, expirations: string[]): Promise<Map<string, MarketOptionsChain | null>> {
+  const out = new Map<string, MarketOptionsChain | null>();
+  for (let i = 0; i < expirations.length; i += GEX_FETCH_BATCH) {
+    const batch = expirations.slice(i, i + GEX_FETCH_BATCH);
+    const results = await Promise.all(batch.map((e) => fetchOptionsChain(symbol, e).catch(() => null)));
+    batch.forEach((e, k) => out.set(e, results[k]));
+  }
+  return out;
+}
+
 /**
- * Orchestrator: fetches near/far expirations + chains + a live quote, then
- * runs the full pipeline above. Requires Tradier specifically (the only
- * provider with real open interest) — throws a distinct, UI-matchable error
- * if it's not configured and mock mode is off, rather than silently
- * producing a degenerate all-zero result.
+ * Orchestrator: fetches the expirations in the 45-day window plus a live quote, then runs the full pipeline above.
+ * The near/far expirations (the first two on or after today) still drive the IV term structure and key the paper
+ * log; walls, gamma flip and regime combine every expiration in the window. Requires Tradier specifically (the only
+ * provider with real open interest) — throws a distinct, UI-matchable error if it's not configured and mock mode is
+ * off, rather than silently producing a degenerate all-zero result.
  */
 export async function computeGexSignal(underlying: string): Promise<GexSignalResult> {
   const symbol = underlying.trim().toUpperCase();
@@ -203,7 +329,8 @@ export async function computeGexSignal(underlying: string): Promise<GexSignalRes
   }
 
   const dataLimitations: string[] = [
-    "Dealer-positioning heuristic: dealers assumed net short calls / net long puts against customer flow — a simplification that can be wrong for single names with unusual order flow (same assumption options-signals-project/signal_engine.py documents).",
+    "Dealer-positioning heuristic: dealers assumed net short calls / net long puts against customer flow — a simplification that can be wrong for single names with unusual order flow (same assumption options-signals-project/signal_engine.py documents). It affects the regime label and the sign of total net GEX; the walls and the gamma flip level do not depend on it.",
+    "Call wall = the strike above spot with the most call gamma; put wall = the strike below spot with the most put gamma, summed over the expirations in the window. They show where option positioning is concentrated, not where price will stop. Open interest is the prior day's figure.",
   ];
 
   const quote = await fetchQuote(symbol);
@@ -213,6 +340,7 @@ export async function computeGexSignal(underlying: string): Promise<GexSignalRes
   let farExpiration: string | null = null;
   let nearChain: MarketOptionsChain;
   let farChain: MarketOptionsChain | null = null;
+  let windowChains: GexWindowChain[] = [];
 
   if (isMockMode) {
     // The mock chain (schwab-mock.ts's generateMockOptionsChain) has exactly
@@ -221,6 +349,7 @@ export async function computeGexSignal(underlying: string): Promise<GexSignalRes
     // chain's own contracts instead of calling Tradier.
     nearChain = await fetchOptionsChain(symbol);
     nearExpiration = nearChain.calls[0]?.expirationDate ?? nearChain.puts[0]?.expirationDate;
+    if (nearExpiration) windowChains = [{ expiration: nearExpiration, chain: nearChain }];
   } else {
     const expirations = await tradier.getExpirations(symbol);
     const futureExpirations = expirations.filter((e) => Date.parse(e) >= now);
@@ -230,8 +359,31 @@ export async function computeGexSignal(underlying: string): Promise<GexSignalRes
     if (!nearExpiration) {
       throw new Error(`No option expirations found for "${symbol}".`);
     }
-    nearChain = await fetchOptionsChain(symbol, nearExpiration);
-    farChain = farExpiration ? await fetchOptionsChain(symbol, farExpiration) : null;
+
+    const inWindow = windowExpirations(expirations, now);
+    const uncapped = windowExpirations(expirations, now, GEX_WINDOW_DAYS, Number.POSITIVE_INFINITY);
+    const wanted = [...new Set([nearExpiration, ...(farExpiration ? [farExpiration] : []), ...inWindow])];
+    const chains = await fetchChains(symbol, wanted);
+
+    const near = chains.get(nearExpiration);
+    if (!near) throw new Error(`Could not load the option chain for "${symbol}" at expiration ${nearExpiration}.`);
+    nearChain = near;
+    farChain = farExpiration ? (chains.get(farExpiration) ?? null) : null;
+
+    windowChains = inWindow.flatMap((e) => {
+      const chain = chains.get(e);
+      return chain ? [{ expiration: e, chain }] : [];
+    });
+    const failed = inWindow.length - windowChains.length;
+    if (failed > 0) dataLimitations.push(`${failed} expiration(s) in the window could not be loaded and are left out of the walls, flip and regime.`);
+    if (uncapped.length > inWindow.length) {
+      dataLimitations.push(`The window is capped at the nearest ${GEX_MAX_WINDOW_EXPIRATIONS} expirations (through ${inWindow[inWindow.length - 1]}) to limit data calls; ${uncapped.length - inWindow.length} later expiration(s) within ${GEX_WINDOW_DAYS} days are not included.`);
+    }
+    if (windowChains.length === 0) {
+      // Nothing in the window loaded: fall back to the single near chain rather than return nothing.
+      windowChains = [{ expiration: nearExpiration, chain: nearChain }];
+      dataLimitations.push("No expiration inside the 45-day window could be used, so only the nearest expiration was analysed.");
+    }
   }
 
   if (!nearExpiration) {
@@ -242,9 +394,8 @@ export async function computeGexSignal(underlying: string): Promise<GexSignalRes
     dataLimitations.push("Only one expiration available — IV term structure signal needs a second, further-dated expiration to compare against.");
   }
 
-  const rows = computeStrikeGex(nearChain, quote.lastPrice, now, Date.parse(nearExpiration));
-  const netGex = netGexByStrike(rows);
-  const gexRegime = classifyGexRegime(netGex, quote.lastPrice);
+  const rows = computeWindowRows(windowChains, quote.lastPrice, now);
+  const gexRegime = classifyGexRegime(rows, quote.lastPrice);
 
   const termStructure = farChain
     ? termStructureSignal(findAtmIv(nearChain, quote.lastPrice), findAtmIv(farChain, quote.lastPrice))
@@ -262,6 +413,9 @@ export async function computeGexSignal(underlying: string): Promise<GexSignalRes
     asOfDateKey: toDateKey(now),
     nearExpiration,
     farExpiration,
+    methodVersion: GEX_METHOD_VERSION,
+    expirationsUsed: windowChains.map((c) => c.expiration),
+    windowDays: GEX_WINDOW_DAYS,
     gexRegime,
     termStructure,
     flowAtWalls,

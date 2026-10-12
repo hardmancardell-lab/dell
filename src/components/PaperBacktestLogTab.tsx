@@ -95,6 +95,7 @@ export function PaperBacktestLogTab() {
                 <th className={TH_CLASS}>Signal Date</th>
                 <th className={TH_CLASS}>Expiration</th>
                 <th className={TH_CLASS}>Label</th>
+                <th className={TH_CLASS}>Method</th>
                 <th className={TH_CLASS}>Mon</th>
                 <th className={TH_CLASS}>Tue</th>
                 <th className={TH_CLASS}>Wed</th>
@@ -110,6 +111,7 @@ export function PaperBacktestLogTab() {
                   <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{e.signalDate}</td>
                   <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{e.expirationDate}</td>
                   <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{e.signalLabel}</td>
+                  <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }} title="gex-v2: walls by side, 45-day window, spot-sweep flip. gex-v1 (rows without a stamp): nearest expiration only, call and put walls swapped.">{e.methodVersion ?? "gex-v1"}</td>
                   <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(e.monRet)}</td>
                   <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(e.tueRet)}</td>
                   <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-1)" }}>{fmtPct(e.wedRet)}</td>

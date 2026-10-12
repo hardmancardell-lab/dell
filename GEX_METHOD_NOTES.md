@@ -1,0 +1,41 @@
+# GEX method notes
+
+Current method: **gex-v2** (changed 2026-10-10). Code: `src/lib/agents/trading-agent/skills/gex-signal.ts`. Tests: `scripts/gex-walls.test.mts`.
+
+## What changed and why
+
+The user compared the strategy's walls with an independent pull for SPY (spot 775) and GLD (spot 378) and they did not match. The cause was three separate things in v1.
+
+| | gex-v1 (before) | gex-v2 (now) |
+|---|---|---|
+| Wall labels | "Call wall" = strike with the largest `puts - calls` net, "put wall" = the smallest. Under the dealer sign assumption (calls -, puts +) that put the strike where **calls** dominate in the "put wall" slot and the put-heavy strike in the "call wall" slot. | Call wall = the strike **above spot** with the most **call** gamma. Put wall = the strike **below spot** with the most **put** gamma. The three largest of each are returned (`callWalls`, `putWalls`). |
+| Expirations | The single nearest expiration only (for SPY, tomorrow's). Tomorrow's gamma is very large per contract, so one day's strikes decided everything and the walls jumped day to day. | Open interest from every expiration in the next **45 days** (nearest 12 at most, to bound data calls). |
+| Gamma flip | Strike-by-strike sign change of the net at today's spot. | **Spot sweep**: every contract is re-priced at spots from -15% to +15% (60 steps) and the zero crossing nearest spot is returned. `null` if net gamma keeps one sign. |
+| Expiry time | Midnight UTC of the expiration date, so today's expiry was excluded for the whole trading day. | 4pm US Eastern (20:00 UTC) on the date, so today's expiry counts until the close. Time to expiry never goes below a quarter of a day in the maths. |
+
+Worked check (Yahoo chains, 8 Oct 2026, 9:47 ET): SPY v1 rule on tomorrow's expiry gave a "call wall" of 767 and a "put wall" of 780. Those are the same two strikes as the by-side walls for that expiry (call wall 780, put wall 767), just with the labels swapped. Across the 45-day window v2 gives SPY call wall 780 and put wall 775; GLD call wall 380 and put wall 375 (345 is a larger but far-away put strike, shown as the first of the put walls because it carries the most put gamma below spot).
+
+## What did NOT change
+
+- The per-contract maths (`blackScholesGreeks` gamma, dollar gamma per 1% move = gamma x spot^2 x 0.01 x open interest x 100).
+- The dealer sign assumption (dealers short calls, long puts). It still drives the **regime label** (`positive` / `negative` total net GEX) and the quadrant. It does **not** affect the walls or the flip level; the zero crossing is the same under the opposite sign.
+- The IV term structure still compares the first two expirations on or after today (`nearExpiration`, `farExpiration`). Those two also key the paper-trade log.
+
+## Limits worth remembering
+
+- The sign of dealer positioning cannot be seen in public data (see the earlier sign-assumption discussion). Treat "positive / negative gamma" as an assumption; treat the walls and the flip as a map of where option positioning is concentrated.
+- Open interest is the previous day's figure.
+- Walls are not a forecast that price will stop there. Near-dated gamma still carries the most weight per contract, so the nearest expirations still shape the walls even in a 45-day window.
+- The window is capped at 12 expirations. SPY had exactly 12 expirations inside 45 days on 8 Oct 2026, so the cap just fit; in weeks with more daily or weekly expirations it can cut the far end, and the signal says so in `dataLimitations` when it happens.
+- A single far strike can top the list (GLD 345 is 9% below spot). The runners-up are returned so the nearby structure is still visible.
+
+## Paper-trade log versioning
+
+`gex-paper-backtest-log.json` rows now carry `methodVersion`. Rows written before this change have no stamp and are read as `gex-v1`. A v2 signal is logged even if a v1 row exists for the same underlying and expiration, and is deduplicated only against other v2 rows. Do **not** pool v1 and v2 rows in one backtest: the `signalLabel` quadrant uses the walls (through the flow at the walls) and so can differ between methods for the same day. `pinnedNearWall` takes the nearer of the two walls, so the label swap did not change it, but v2 walls come from a wider window.
+
+## Where it shows up
+
+- API `GET /api/gex-signal?ticker=`: new fields `methodVersion`, `expirationsUsed`, `windowDays`, and `gexRegime.callWalls` / `putWalls`.
+- Options dashboard cards: wall labels have hover text, the runners-up are listed, and a line states how many expirations were combined.
+- Paper backtest log tab: a Method column.
+- Assistant tool `get_gex_signal`: description updated.

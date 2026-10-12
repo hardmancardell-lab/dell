@@ -202,17 +202,28 @@ export function OptionsDashboardTab() {
                       <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.regime}</div>
                     </div>
                     <div>
-                      <div className="jv-label">Gamma Flip</div>
+                      <div className="jv-label" title="Spot level where net dealer gamma crosses zero, found by re-pricing every contract at other spot prices.">Gamma Flip</div>
                       <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.gammaFlip !== null ? r.signal.gexRegime.gammaFlip.toFixed(2) : "N/A"}</div>
                     </div>
                     <div>
-                      <div className="jv-label">Call Wall</div>
+                      <div className="jv-label" title="The strike above spot with the most call gamma, summed over the expirations in the window.">Call Wall</div>
                       <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.callWall.toFixed(2)}</div>
+                      {r.signal.gexRegime.callWalls && r.signal.gexRegime.callWalls.length > 1 && (
+                        <div className="text-xs" style={{ color: "var(--text-2)" }}>next: {r.signal.gexRegime.callWalls.slice(1).join(", ")}</div>
+                      )}
                     </div>
                     <div>
-                      <div className="jv-label">Put Wall</div>
+                      <div className="jv-label" title="The strike below spot with the most put gamma, summed over the expirations in the window.">Put Wall</div>
                       <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.putWall.toFixed(2)}</div>
+                      {r.signal.gexRegime.putWalls && r.signal.gexRegime.putWalls.length > 1 && (
+                        <div className="text-xs" style={{ color: "var(--text-2)" }}>next: {r.signal.gexRegime.putWalls.slice(1).join(", ")}</div>
+                      )}
                     </div>
+                    {r.signal.expirationsUsed && r.signal.expirationsUsed.length > 0 && (
+                      <div className="col-span-2 sm:col-span-4 text-xs" style={{ color: "var(--text-2)" }}>
+                        Walls, flip and regime combine {r.signal.expirationsUsed.length} expiration{r.signal.expirationsUsed.length === 1 ? "" : "s"} ({r.signal.expirationsUsed[0]} to {r.signal.expirationsUsed[r.signal.expirationsUsed.length - 1]}), method {r.signal.methodVersion}.
+                      </div>
+                    )}
                     {r.signal.termStructure && (
                       <div className="col-span-2 sm:col-span-4">
                         <div className="jv-label">IV Term Structure</div>
