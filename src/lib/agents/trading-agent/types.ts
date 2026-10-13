@@ -458,6 +458,20 @@ export interface GexRegime {
   /** v2: the three largest call-gamma strikes above spot and put-gamma strikes below it, largest first (callWall and putWall are the first of each). */
   callWalls?: number[];
   putWalls?: number[];
+  /** Dollar gamma per 1% move on each side, summed over the window (always positive; the sign assumption is applied afterwards). */
+  callGamma?: number;
+  putGamma?: number;
+  /** callGamma + putGamma. */
+  grossGex?: number;
+  /** totalNetGex as a percent of grossGex (-100 to +100, under the app's sign assumption); null when there is no gamma. */
+  netToGrossPct?: number | null;
+  /**
+   * True when net is within BALANCED_BAND_PCT of gross. Then `regime` is a near coin flip: a small difference between
+   * call and put gamma decides the sign, so read the label as "balanced" rather than as a clear positive or negative.
+   */
+  balanced?: boolean;
+  /** What the regime label would be under the opposite dealer-positioning assumption (the sign of net flips). */
+  regimeOppositeConvention?: GexRegimeLabel;
 }
 
 export type TermStructureShape = "backwardation" | "contango";

@@ -198,8 +198,18 @@ export function OptionsDashboardTab() {
                 ) : r.signal ? (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div>
-                      <div className="jv-label">Regime</div>
-                      <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.regime}</div>
+                      <div className="jv-label" title="Positive or negative follows an assumption about which side dealers hold: here, short the calls and long the puts. Call-heavy gamma therefore reads negative. The assumption cannot be checked from public data.">Regime</div>
+                      <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.balanced ? "balanced" : r.signal.gexRegime.regime}</div>
+                      {r.signal.gexRegime.netToGrossPct !== null && r.signal.gexRegime.netToGrossPct !== undefined && (
+                        <div className="text-xs" style={{ color: "var(--text-2)" }}>
+                          net {r.signal.gexRegime.netToGrossPct >= 0 ? "+" : ""}{r.signal.gexRegime.netToGrossPct.toFixed(0)}% of total gamma
+                          {r.signal.gexRegime.balanced
+                            ? `; too close to call, leans ${r.signal.gexRegime.regime}`
+                            : r.signal.gexRegime.regimeOppositeConvention
+                              ? `; reads ${r.signal.gexRegime.regimeOppositeConvention} if dealers hold the other side`
+                              : ""}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="jv-label" title="Spot level where net dealer gamma crosses zero, found by re-pricing every contract at other spot prices.">Gamma Flip</div>

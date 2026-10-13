@@ -136,5 +136,32 @@ t("the window length is honoured", !G.windowExpirations(exps, NOW, 10).includes(
   t("a signal with no version is treated as v1 and is blocked by the existing v1 row", (await L.logSignal(signal(undefined))) === null);
 }
 
+// ---------------------------------------------------------------- how balanced is the regime
+{
+  const reg = (calls: number, puts: number, opposite = false) => {
+    const c = chain([contract(100, calls)], [contract(100, puts)]);
+    const end = Date.parse("2026-11-06T20:00:00Z");
+    const rows = G.computeStrikeGex(c, 100, NOW, end, 100, !opposite, opposite);   // default: dealers short calls, long puts
+    return G.classifyGexRegime(rows, 100);
+  };
+  const even = reg(1000, 1000);
+  t("equal call and put gamma: net is 0% of gross and the read is balanced", near(even.netToGrossPct, 0, 1e-9) && even.balanced === true, JSON.stringify(even));
+  const callHeavy = reg(3000, 1000);
+  t("calls 3x puts at one strike: net is -50% of gross, regime negative, not balanced, opposite convention positive", near(callHeavy.netToGrossPct, -50, 1e-6) && callHeavy.regime === "negative" && callHeavy.balanced === false && callHeavy.regimeOppositeConvention === "positive", JSON.stringify(callHeavy));
+  const putHeavy = reg(1000, 3000);
+  t("puts 3x calls: +50%, regime positive, opposite negative", near(putHeavy.netToGrossPct, 50, 1e-6) && putHeavy.regime === "positive" && putHeavy.regimeOppositeConvention === "negative");
+  const near5 = reg(1000, 1100), near13 = reg(1000, 1300);
+  t("puts 10% above calls (+4.8% net) is still balanced; puts 30% above (+13% net) is not", near(near5.netToGrossPct, (100 / 2100) * 100, 1e-6) && near5.balanced === true && near(near13.netToGrossPct, (300 / 2300) * 100, 1e-6) && near13.balanced === false);
+  t("the balanced band is 10 percent of gross", G.BALANCED_BAND_PCT === 10 && reg(1000, 1222).balanced === true && reg(1000, 1250).balanced === false, `${reg(1000, 1222).netToGrossPct} ${reg(1000, 1250).netToGrossPct}`);
+  t("gross is call gamma plus put gamma and both are reported as positive dollar amounts", callHeavy.callGamma > 0 && callHeavy.putGamma > 0 && near(callHeavy.grossGex, callHeavy.callGamma + callHeavy.putGamma, 1e-6) && near(callHeavy.callGamma / callHeavy.putGamma, 3, 1e-9));
+  const flipped = reg(3000, 1000, true);
+  t("under the opposite dealer assumption the same chain reads positive, with the same size of imbalance", flipped.regime === "positive" && near(flipped.netToGrossPct, 50, 1e-6) && flipped.balanced === callHeavy.balanced);
+  const none = G.classifyGexRegime([], 100);
+  t("no contracts: no percentage, not balanced, nothing divides by zero", none.netToGrossPct === null && none.balanced === false && none.grossGex === 0 && Number.isFinite(none.totalNetGex));
+  // the call-heavy-by-gamma effect behind the dashboard's mostly-negative readings: calls near the money outweigh far-out puts
+  const skew = G.classifyGexRegime(G.computeWindowRows([{ expiration: "2026-11-06", chain: chain([contract(100, 1000), contract(105, 1000)], [contract(80, 3000), contract(90, 3000)]) }], 100, NOW), 100);
+  t("more put OI than call OI can still be call-heavy by gamma when the puts sit far out of the money, so the label reads negative", skew.callGamma > skew.putGamma && skew.regime === "negative" && skew.netToGrossPct < 0, JSON.stringify([skew.callGamma, skew.putGamma]));
+}
+
 console.log(bad ? `\n${bad} FAILED` : "\nall checks passed");
 process.exit(bad ? 1 : 0);

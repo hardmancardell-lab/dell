@@ -39,3 +39,11 @@ Worked check (Yahoo chains, 8 Oct 2026, 9:47 ET): SPY v1 rule on tomorrow's expi
 - Options dashboard cards: wall labels have hover text, the runners-up are listed, and a line states how many expirations were combined.
 - Paper backtest log tab: a Method column.
 - Assistant tool `get_gex_signal`: description updated.
+
+## Regime label: how balanced the two sides are (added 2026-10-13)
+
+The user asked why the options scanner showed negative regimes almost everywhere. A survey of 15 live chains (12-13 Oct 2026) found it was not a bug: the label is `sign(puts - calls)` under the assumption that dealers are short the calls and long the puts, so **call-heavy gamma reads negative**, and single names are call-heavy by gamma (calls sit near the money where gamma is highest; hedging puts sit far out where each contract carries little). MSFT, AAPL, META, AMZN, NVDA read 25-76% call-heavy; SPY, GLD, AMD, INTC were within about 2% of balanced, so their sign was a coin flip; QQQ, IWM, XLF read positive. The v2 window did not cause it (11 of 15 negative on the nearest expiration alone, 9 of 15 across 45 days).
+
+`GexRegime` now also carries `callGamma`, `putGamma`, `grossGex`, `netToGrossPct`, `balanced` (net within `BALANCED_BAND_PCT` = 10% of gross, a judgement threshold, not a tested one) and `regimeOppositeConvention` (the label if dealers hold the other side). `regime` itself is unchanged because the strategy scanner and the quadrant label read it; the dashboard shows "balanced" when `balanced` is true, the net percentage, and the opposite-convention label, and `dataLimitations` says when a label is a coin flip. The strategy scanner still treats a balanced reading by its sign: that is a known simplification, not yet changed.
+
+Faye's deep dive (`pilp/options_math.py`) got the same fields and wording.

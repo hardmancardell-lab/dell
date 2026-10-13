@@ -41,6 +41,11 @@ import type {
  */
 
 export const GEX_METHOD_VERSION = "gex-v2" as const;
+/**
+ * Net gamma within this percent of gross gamma is called "balanced". A judgement threshold, not a tested one: on a
+ * 15-name survey (12 Oct 2026) SPY, GLD, AMD and INTC sat within about 2% and the single-name megacaps sat 20-60% call-heavy.
+ */
+export const BALANCED_BAND_PCT = 10;
 export const GEX_WINDOW_DAYS = 45;
 /** Nearest expirations fetched per signal: bounds the Tradier calls when a dashboard scans several tickers. */
 export const GEX_MAX_WINDOW_EXPIRATIONS = 12;
@@ -229,15 +234,26 @@ export function sweepGammaFlip(rows: StrikeGexRow[], spot: number): number | nul
 export function classifyGexRegime(rows: StrikeGexRow[], spot: number): GexRegime {
   const totalNetGex = rows.reduce((sum, r) => sum + r.dealerGex, 0);
   const { callWalls, putWalls } = wallsBySide(rows, spot);
+  const callGamma = rows.reduce((s, r) => (r.right === "call" ? s + r.dollarGamma : s), 0);
+  const putGamma = rows.reduce((s, r) => (r.right === "put" ? s + r.dollarGamma : s), 0);
+  const grossGex = callGamma + putGamma;
+  const netToGrossPct = grossGex > 0 ? (totalNetGex / grossGex) * 100 : null;
+  const regime = totalNetGex > 0 ? "positive" : "negative";
   return {
     totalNetGex,
     gammaFlip: sweepGammaFlip(rows, spot),
     spot,
-    regime: totalNetGex > 0 ? "positive" : "negative",
+    regime,
     callWall: callWalls[0] ?? spot,
     putWall: putWalls[0] ?? spot,
     callWalls,
     putWalls,
+    callGamma,
+    putGamma,
+    grossGex,
+    netToGrossPct,
+    balanced: netToGrossPct !== null && Math.abs(netToGrossPct) <= BALANCED_BAND_PCT,
+    regimeOppositeConvention: regime === "positive" ? "negative" : "positive",
   };
 }
 
@@ -406,6 +422,11 @@ export async function computeGexSignal(underlying: string): Promise<GexSignalRes
 
   if (rows.length === 0) {
     dataLimitations.push(`No option contracts returned for "${symbol}" at expiration ${nearExpiration}.`);
+  }
+  if (gexRegime.balanced && gexRegime.netToGrossPct !== null && gexRegime.netToGrossPct !== undefined) {
+    dataLimitations.push(
+      `Call and put gamma are within ${BALANCED_BAND_PCT}% of each other (net is ${gexRegime.netToGrossPct >= 0 ? "+" : ""}${gexRegime.netToGrossPct.toFixed(1)}% of total), so the ${gexRegime.regime} label is close to a coin flip. Read it as balanced.`
+    );
   }
 
   return {
