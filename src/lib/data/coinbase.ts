@@ -1,5 +1,5 @@
 import { aggregateCandles } from "../agents/trading-agent/skills/candle-aggregation";
-import type { MarketCandle, MarketQuote } from "./market-data-types";
+import type { MarketBidAsk, MarketCandle, MarketQuote } from "./market-data-types";
 
 /**
  * Crypto price history from Coinbase Exchange's public market-data API (no key, real exchange trades, 24/7). Symbols
@@ -113,4 +113,14 @@ export async function fetchQuote(symbol: string): Promise<MarketQuote> {
   const price = Number(j.price);
   if (!Number.isFinite(price) || price <= 0) throw new Error(`Coinbase returned no price for ${product}.`);
   return { symbol: product, lastPrice: price, totalVolume: Number(j.volume) || 0 };
+}
+
+/** Live best bid and ask from the same ticker endpoint; null when Coinbase returns no usable two-sided book. */
+export async function fetchBidAsk(symbol: string): Promise<MarketBidAsk | null> {
+  const product = symbol.trim().toUpperCase();
+  const j = (await getJson(`/products/${encodeURIComponent(product)}/ticker`, 5)) as { bid?: string; ask?: string };
+  const bid = Number(j.bid);
+  const ask = Number(j.ask);
+  if (!Number.isFinite(bid) || !Number.isFinite(ask) || bid <= 0 || ask <= 0 || ask < bid) return null;
+  return { datetime: Date.now(), bid, ask };
 }

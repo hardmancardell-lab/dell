@@ -161,7 +161,7 @@ export const ASSISTANT_TOOLS: LlmToolSchema[] = [
       type: "object",
       properties: {
         symbol: { type: "string", description: "Underlying ticker or forex pair, e.g. 'AAPL' or 'EUR/USD'." },
-        assetClass: { type: "string", enum: ["equity", "forex", "commodity", "future", "option"] },
+        assetClass: { type: "string", enum: ["equity", "forex", "commodity", "future", "option", "crypto"] },
         optionRight: { type: "string", enum: ["call", "put"], description: "Only for assetClass 'option'." },
         strikePrice: { type: "number", description: "Only for assetClass 'option'." },
         expirationDate: { type: "string", description: "YYYY-MM-DD. Only for assetClass 'option'." },

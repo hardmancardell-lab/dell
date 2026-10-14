@@ -191,6 +191,16 @@ export async function fetchLatestForexBidAsk(symbol: string): Promise<MarketBidA
   return null;
 }
 
+/**
+ * Live bid/ask for a crypto product from Coinbase — used by the paper trading engine so a crypto fill prices off the
+ * real spread. Null when the book is not two-sided; mock mode uses the same synthetic half-spread as forex's mock.
+ */
+export async function fetchLatestCryptoBidAsk(symbol: string): Promise<MarketBidAsk | null> {
+  if (isMockMode()) return generateMockBidAsk(symbol);
+  if (coinbase.isCryptoSymbol(symbol)) return coinbase.fetchBidAsk(symbol);
+  return null;
+}
+
 function hasTradierToken(): boolean {
   return Boolean(process.env.TRADIER_ACCESS_TOKEN);
 }

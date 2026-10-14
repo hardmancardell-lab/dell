@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { formatOptionLabel } from "@/lib/agents/trading-agent/skills/option-symbol";
+import { CRYPTO_PAPER_DISCLOSURE } from "@/lib/agents/trading-agent/crypto-paper";
+import { normalizeCryptoSymbol } from "@/lib/agents/trading-agent/crypto-symbol";
 import type { AssetClass, PaperOptionRight, PaperOrderAttribution, PaperOrderSide, PaperOrderType } from "@/lib/agents/trading-agent/types";
 
 const ORDER_TYPES: { value: PaperOrderType; label: string }[] = [
@@ -67,7 +69,7 @@ export function PaperOrderForm({
   const [assetClass, setAssetClass] = useState<AssetClass>(prefillAssetClass ?? "equity");
   const [side, setSide] = useState<PaperOrderSide>("buy");
   const [orderType, setOrderType] = useState<PaperOrderType>("market");
-  const [quantity, setQuantity] = useState(isOption ? "1" : "10");
+  const [quantity, setQuantity] = useState(isOption ? "1" : prefillAssetClass === "crypto" ? "0.01" : "10");
   const [limitPrice, setLimitPrice] = useState(prefillPrice !== undefined ? String(prefillPrice) : "");
   const [stopPrice, setStopPrice] = useState("");
   const [trailAmount, setTrailAmount] = useState("");
@@ -84,6 +86,9 @@ export function PaperOrderForm({
   const [manualStrike, setManualStrike] = useState("");
   const [manualRight, setManualRight] = useState<PaperOptionRight>("call");
   const isManualOption = !isOption && assetClass === "option";
+  const isCrypto = !isOption && assetClass === "crypto";
+  // Crypto prices run from five figures down to fractions of a cent, so its price boxes take any decimals.
+  const priceStep = isCrypto ? "any" : "0.01";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -117,7 +122,7 @@ export function PaperOrderForm({
               strikePrice: Number(manualStrike),
             }
           : {
-              symbol: symbol.trim().toUpperCase(),
+              symbol: (assetClass === "crypto" ? normalizeCryptoSymbol(symbol) : null) ?? symbol.trim().toUpperCase(),
               assetClass,
               side,
               orderType,
@@ -169,6 +174,11 @@ export function PaperOrderForm({
           . Market order only.
         </p>
       )}
+      {isCrypto && (
+        <p className="text-sm mb-3" style={{ color: "var(--text-2)" }}>
+          {CRYPTO_PAPER_DISCLOSURE}
+        </p>
+      )}
       {isManualOption && (
         <p className="text-sm mb-3" style={{ color: "var(--text-2)" }}>
           Fills against the contract&apos;s real live quote — market order only (this app has no historical
@@ -180,19 +190,31 @@ export function PaperOrderForm({
           <input
             value={isManualOption ? manualUnderlying : symbol}
             onChange={(e) => (isManualOption ? setManualUnderlying(e.target.value) : setSymbol(e.target.value))}
-            placeholder={isManualOption ? "Underlying, e.g. AAPL" : "Ticker, e.g. AAPL"}
+            placeholder={isManualOption ? "Underlying, e.g. AAPL" : isCrypto ? "Coin, e.g. BTC-USD" : "Ticker, e.g. AAPL"}
             required
             className="px-3 py-2 text-sm"
             style={inputStyle}
           />
         )}
         {!isOption && (
-          <select value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)} className="px-3 py-2 text-sm" style={selectStyle}>
+          <select
+            value={assetClass}
+            onChange={(e) => {
+              const next = e.target.value as AssetClass;
+              setAssetClass(next);
+              // The stock default of 10 would be ten whole coins.
+              if (next === "crypto" && quantity === "10") setQuantity("0.01");
+              if (next !== "crypto" && quantity === "0.01") setQuantity("10");
+            }}
+            className="px-3 py-2 text-sm"
+            style={selectStyle}
+          >
             <option value="equity">Equity</option>
             <option value="option">Option</option>
             <option value="commodity">Commodity</option>
             <option value="future">Future</option>
             <option value="forex">Forex</option>
+            <option value="crypto">Crypto</option>
           </select>
         )}
         {isManualOption && (
@@ -231,9 +253,9 @@ export function PaperOrderForm({
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
           type="number"
-          min="1"
-          step="1"
-          placeholder={isOption || isManualOption ? "Contracts" : "Quantity"}
+          min={isCrypto ? "0.00000001" : "1"}
+          step={isCrypto ? "any" : "1"}
+          placeholder={isOption || isManualOption ? "Contracts" : isCrypto ? "Coins, e.g. 0.01" : "Quantity"}
           required
           className="px-3 py-2 text-sm"
           style={inputStyle}
@@ -248,13 +270,13 @@ export function PaperOrderForm({
           </select>
         )}
         {!isOption && !isManualOption && (orderType === "limit" || orderType === "stop_limit") && (
-          <input value={limitPrice} onChange={(e) => setLimitPrice(e.target.value)} type="number" step="0.01" placeholder="Limit price" required className="px-3 py-2 text-sm" style={inputStyle} />
+          <input value={limitPrice} onChange={(e) => setLimitPrice(e.target.value)} type="number" step={priceStep} placeholder="Limit price" required className="px-3 py-2 text-sm" style={inputStyle} />
         )}
         {!isOption && !isManualOption && (orderType === "stop" || orderType === "stop_limit") && (
-          <input value={stopPrice} onChange={(e) => setStopPrice(e.target.value)} type="number" step="0.01" placeholder="Stop price" required className="px-3 py-2 text-sm" style={inputStyle} />
+          <input value={stopPrice} onChange={(e) => setStopPrice(e.target.value)} type="number" step={priceStep} placeholder="Stop price" required className="px-3 py-2 text-sm" style={inputStyle} />
         )}
         {!isOption && !isManualOption && orderType === "trailing_stop" && (
-          <input value={trailAmount} onChange={(e) => setTrailAmount(e.target.value)} type="number" step="0.01" placeholder="Trail amount ($)" required className="px-3 py-2 text-sm" style={inputStyle} />
+          <input value={trailAmount} onChange={(e) => setTrailAmount(e.target.value)} type="number" step={priceStep} placeholder="Trail amount ($)" required className="px-3 py-2 text-sm" style={inputStyle} />
         )}
         <button type="submit" disabled={submitting} className="px-4 py-2 text-sm font-medium disabled:opacity-50" style={{ background: "var(--signal)", color: "var(--ink-950)" }}>
           {submitting ? "Placing…" : "Place Order"}

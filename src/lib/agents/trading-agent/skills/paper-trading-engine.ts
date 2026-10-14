@@ -1,6 +1,16 @@
-import { fetchLatestForexBidAsk, fetchMinuteBars, fetchOptionsChain, fetchQuote } from "@/lib/data/market-data";
+import { fetchBarsForTimeframe, fetchLatestCryptoBidAsk, fetchLatestForexBidAsk, fetchMinuteBars, fetchOptionsChain, fetchQuote } from "@/lib/data/market-data";
 import { buildOccSymbol } from "./option-symbol";
 import { sanitizeAttribution } from "./paper-attribution";
+import { normalizeCryptoSymbol, roundCryptoQuantity } from "../crypto-symbol";
+import {
+  CRYPTO_ORDER_CHECK_TIMEFRAME,
+  CRYPTO_PAPER_FEE_RATE,
+  cryptoBuyCashNeeded,
+  cryptoFee,
+  cryptoMarketFill,
+  cryptoMarketableLimitFill,
+  cryptoTriggeredFill,
+} from "../crypto-paper";
 import {
   cancelOcoSiblings,
   cancelOrder as dbCancelOrder,
@@ -85,12 +95,44 @@ export function notionalMultiplier(assetClass: AssetClass): number {
   return assetClass === "option" ? OPTIONS_CONTRACT_MULTIPLIER : 1;
 }
 
+/**
+ * Crypto is the one class whose quantity is fractional and whose market never closes, so it gets its own pricing: fills
+ * come from the live Coinbase bid/ask (see crypto-paper.ts) and an assumed flat fee is charged on both sides.
+ */
+export function prepareCryptoOrder(input: PaperOrderInput): PaperOrderInput {
+  const symbol = normalizeCryptoSymbol(input.symbol);
+  if (!symbol) throw new Error(`${input.symbol.trim().toUpperCase()} is not a Coinbase USD pair — use a symbol like BTC-USD.`);
+  const quantity = roundCryptoQuantity(input.quantity);
+  if (!(quantity > 0)) throw new Error("Quantity is below one satoshi (0.00000001) once rounded to 8 decimals.");
+  return { ...input, symbol, quantity };
+}
+
+async function requireCryptoBidAsk(symbol: string): Promise<{ bid: number; ask: number }> {
+  const bidAsk = await fetchLatestCryptoBidAsk(symbol);
+  if (!bidAsk) throw new Error(`No live two-sided bid/ask for ${symbol} right now, so a fair simulated fill is not possible.`);
+  return bidAsk;
+}
+
+/** A schema that predates fractional crypto (integer quantity, an asset_class check) fails at the database; say which migration fixes it. */
+function explainCryptoDbError(err: unknown): Error {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/integer|22P02|check constraint|23514|invalid input/i.test(message)) {
+    return new Error(
+      `The paper-trading tables rejected a crypto order (${message.slice(0, 160)}). Apply db/migrations/2026-10-14_crypto_paper_trading.sql in the Supabase SQL editor to allow fractional quantities and the crypto asset class.`
+    );
+  }
+  return err instanceof Error ? err : new Error(message);
+}
+
 function computeFees(
   assetClass: AssetClass,
   side: PaperOrderSide,
   quantity: number,
   fillPrice: number
 ): { secFee: number; finraFee: number; occFee: number; totalFees: number } {
+  if (assetClass === "crypto") {
+    return { secFee: 0, finraFee: 0, occFee: 0, totalFees: cryptoFee(quantity, fillPrice) };
+  }
   if (assetClass === "option") {
     const occFee = quantity * OCC_CLEARING_FEE_PER_CONTRACT; // both sides
     if (side !== "sell") return { secFee: 0, finraFee: 0, occFee, totalFees: occFee };
@@ -139,6 +181,9 @@ async function applyFill(params: { order: PaperOrder; fillPrice: number; slippag
   let newQty: number;
   let newAvgCost: number;
 
+  // Crypto: the fee on a buy is part of what the coins cost (the usual cost-basis treatment), so unrealized P&L is not overstated.
+  const buyFeeIntoBasis = order.assetClass === "crypto" ? totalFees : 0;
+
   if (order.side === "buy") {
     if (existingQty < 0) {
       // buy-to-close a short options position
@@ -147,7 +192,7 @@ async function applyFill(params: { order: PaperOrder; fillPrice: number; slippag
       newAvgCost = existingCost; // unchanged basis for any remaining short
     } else {
       newQty = existingQty + order.quantity;
-      newAvgCost = (existingQty * existingCost + order.quantity * fillPrice) / newQty;
+      newAvgCost = (existingQty * existingCost + order.quantity * fillPrice + buyFeeIntoBasis) / newQty;
     }
   } else {
     if (existingQty > 0) {
@@ -162,6 +207,9 @@ async function applyFill(params: { order: PaperOrder; fillPrice: number; slippag
       newAvgCost = (existingShortQty * existingCost + order.quantity * fillPrice) / Math.abs(newQty);
     }
   }
+
+  // Fractional coins leave float noise (0.3 - 0.1 - 0.2 is not 0) that would strand an unsellable dust position.
+  if (order.assetClass === "crypto") newQty = roundCryptoQuantity(newQty);
 
   if (newQty === 0) {
     await deletePosition(order.accountId, order.symbol, order.assetClass);
@@ -230,10 +278,12 @@ export interface PlaceOrderResult {
  * job, so there is no continuous background matching). Options are handled
  * entirely by placeOptionOrder — they're always market-only and never rest.
  */
-export async function placeOrder(sessionId: string, input: PaperOrderInput): Promise<PlaceOrderResult> {
-  if (input.quantity <= 0 || !Number.isFinite(input.quantity)) {
+export async function placeOrder(sessionId: string, rawInput: PaperOrderInput): Promise<PlaceOrderResult> {
+  if (rawInput.quantity <= 0 || !Number.isFinite(rawInput.quantity)) {
     throw new Error("Quantity must be a positive number.");
   }
+  const isCrypto = rawInput.assetClass === "crypto";
+  const input = isCrypto ? prepareCryptoOrder(rawInput) : rawInput;
 
   if (input.assetClass === "option") {
     return placeOptionOrder(sessionId, input);
@@ -252,6 +302,7 @@ export async function placeOrder(sessionId: string, input: PaperOrderInput): Pro
   const account = await getOrCreateAccount(sessionId);
   const symbol = input.symbol.trim().toUpperCase();
   const quote = await fetchQuote(symbol);
+  const cryptoBook = isCrypto ? await requireCryptoBidAsk(symbol) : null;
 
   if (input.side === "sell") {
     const position = await getPosition(account.id, symbol, input.assetClass);
@@ -261,19 +312,27 @@ export async function placeOrder(sessionId: string, input: PaperOrderInput): Pro
     }
   } else {
     const worstCasePrice = input.orderType === "limit" ? input.limitPrice! : input.orderType === "market" ? quote.lastPrice : (input.limitPrice ?? input.stopPrice ?? quote.lastPrice);
-    const estimatedCost = worstCasePrice * input.quantity;
+    // Crypto market buys are worst-cased at the live ask, and the assumed fee is part of the cash an order needs.
+    const pricedWorstCase = cryptoBook && input.orderType === "market" ? cryptoBook.ask : worstCasePrice;
+    const estimatedCost = isCrypto ? cryptoBuyCashNeeded(input.quantity, pricedWorstCase) : worstCasePrice * input.quantity;
     if (estimatedCost > account.cashBalance) {
-      throw new Error(`Insufficient cash: order needs an estimated $${estimatedCost.toFixed(2)}, account has $${account.cashBalance.toFixed(2)} available.`);
+      throw new Error(
+        `Insufficient cash: order needs an estimated $${estimatedCost.toFixed(2)}${isCrypto ? " (including the assumed fee)" : ""}, account has $${account.cashBalance.toFixed(2)} available.`
+      );
     }
   }
 
   const ocoGroupId = input.ocoGroupId ?? null;
+  // Crypto compares a limit against the side of the book it would trade on; everything else against the last price.
+  const buyReference = cryptoBook ? cryptoBook.ask : quote.lastPrice;
+  const sellReference = cryptoBook ? cryptoBook.bid : quote.lastPrice;
   const isImmediatelyMarketable =
     input.orderType === "market" ||
-    (input.orderType === "limit" && input.side === "buy" && input.limitPrice! >= quote.lastPrice) ||
-    (input.orderType === "limit" && input.side === "sell" && input.limitPrice! <= quote.lastPrice);
+    (input.orderType === "limit" && input.side === "buy" && input.limitPrice! >= buyReference) ||
+    (input.orderType === "limit" && input.side === "sell" && input.limitPrice! <= sellReference);
 
-  const order = await dbCreateOrder({
+  const createOrder = isCrypto ? (o: Parameters<typeof dbCreateOrder>[0]) => dbCreateOrder(o).catch((err) => { throw explainCryptoDbError(err); }) : dbCreateOrder;
+  const order = await createOrder({
     accountId: account.id,
     symbol,
     assetClass: input.assetClass,
@@ -297,7 +356,12 @@ export async function placeOrder(sessionId: string, input: PaperOrderInput): Pro
   let fillPrice: number;
   let slippagePerShare: number;
 
-  if (input.orderType === "market" && input.assetClass === "forex") {
+  if (cryptoBook) {
+    // Real two-sided book: a market order crosses the spread; an already-marketable limit fills at the book price when
+    // that beats the limit. The spread is the slippage.
+    fillPrice = input.orderType === "market" ? cryptoMarketFill(input.side, cryptoBook) : cryptoMarketableLimitFill(input.side, input.limitPrice!, cryptoBook);
+    slippagePerShare = Math.abs(fillPrice - (cryptoBook.bid + cryptoBook.ask) / 2);
+  } else if (input.orderType === "market" && input.assetClass === "forex") {
     const bidAsk = await fetchLatestForexBidAsk(symbol);
     if (bidAsk) {
       fillPrice = input.side === "buy" ? bidAsk.ask : bidAsk.bid;
@@ -314,7 +378,14 @@ export async function placeOrder(sessionId: string, input: PaperOrderInput): Pro
     slippagePerShare = 0;
   }
 
-  await applyFill({ order: { ...order, quantity: input.quantity }, fillPrice, slippagePerShare });
+  try {
+    await applyFill({ order: { ...order, quantity: input.quantity }, fillPrice, slippagePerShare });
+  } catch (err) {
+    if (!isCrypto) throw err;
+    // The order row was already written as filled; do not leave it claiming a fill that never reached the position.
+    await dbCancelOrder(order.id).catch(() => undefined);
+    throw explainCryptoDbError(err);
+  }
 
   return { order: { ...order, status: "filled" }, filled: true, rejected: null };
 }
@@ -441,6 +512,12 @@ async function resolveTriggeredFillPrice(
       return { fillPrice, slippagePerShare: Math.abs(fillPrice - (bidAsk.bid + bidAsk.ask) / 2) };
     }
   }
+  if (assetClass === "crypto") {
+    // The flat $0.02 per share would be meaningless for a coin priced anywhere from $0.00001 to $100,000, so a triggered
+    // stop gives up half the current relative spread instead. No live book means the order stays pending, not a guess.
+    const fillPrice = cryptoTriggeredFill(side, triggerPrice, await requireCryptoBidAsk(symbol));
+    return { fillPrice, slippagePerShare: Math.abs(fillPrice - triggerPrice) };
+  }
   return { fillPrice: applySlippage(side, triggerPrice, MARKET_SLIPPAGE_PER_SHARE), slippagePerShare: MARKET_SLIPPAGE_PER_SHARE };
 }
 
@@ -466,7 +543,11 @@ async function evaluateOrder(order: PaperOrder): Promise<{ filled: boolean; canc
   const startMs = Math.max(createdMs, Date.now() - STOP_LOOKBACK_CAP_MS);
   const endMs = Date.now();
 
-  const rawBars = await fetchMinuteBars(order.symbol, startMs, endMs, 60);
+  // Crypto resting orders are checked against 5-minute candles: a 30-day lookback in 1-minute candles would be ~144 requests.
+  const rawBars =
+    order.assetClass === "crypto"
+      ? await fetchBarsForTimeframe(order.symbol, CRYPTO_ORDER_CHECK_TIMEFRAME, startMs, endMs, 60)
+      : await fetchMinuteBars(order.symbol, startMs, endMs, 60);
   const bars = [...rawBars].sort((a, b) => a.datetime - b.datetime);
 
   let fillPrice: number | null = null;
@@ -608,6 +689,11 @@ export async function getAccountSummary(sessionId: string): Promise<PaperAccount
     "No margin or short selling outside of fully-collateralized options — covered calls require already holding the underlying shares, cash-secured puts require reserving the strike value in cash. This simulator has no margin/borrow model, so anything beyond that is rejected rather than faked.",
     "No bid/ask spread data is available for equities/commodities/futures, so their market and triggered-stop fills use a flat $0.02/share slippage approximation. Options (Tradier) and forex (OANDA) fill at real bid/ask instead — no separate slippage constant for those two.",
     "Options only support market orders — no historical intraday bar feed exists for individual option contracts in this app, so a resting limit/stop order would have nothing real to evaluate against.",
+    ...(positions.some((p) => p.assetClass === "crypto") || openOrders.some((o) => o.assetClass === "crypto") || recentFills.some((f) => f.symbol.endsWith("-USD"))
+      ? [
+          `Crypto fills use Coinbase's live bid/ask in fractional coins around the clock, with an assumed flat ${(CRYPTO_PAPER_FEE_RATE * 100).toFixed(2)}% fee per fill (not your actual Coinbase tier; the buy-side fee is added to cost basis). Resting crypto limit and stop orders are checked against 5-minute candles, so a brief spike inside one candle can be missed or ordered differently from the real market.`,
+        ]
+      : []),
     "Cash and share/contract availability are checked at order placement, not reserved across multiple simultaneously-pending orders — placing several orders that together exceed available cash, shares, or collateral is possible and resolved on a first-fill-wins basis as each is evaluated, not blocked upfront.",
   ];
 

@@ -19,6 +19,13 @@ function fmtUsd(n: number | null): string {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 }
 
+/** A per-unit price: sub-dollar coins keep their precision (DOGE at $0.1234 must not read as $0.12); other prices read as before. */
+function fmtPx(n: number | null): string {
+  if (n === null || !Number.isFinite(n)) return "N/A";
+  const digits = Math.abs(n) >= 1 || n === 0 ? 2 : Math.abs(n) >= 0.01 ? 4 : 8;
+  return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: digits });
+}
+
 function fmtPct(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "N/A";
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
@@ -187,8 +194,8 @@ export function PaperTradingTab() {
                   <tr key={`${p.symbol}-${p.assetClass}`}>
                     <td className="font-medium">{displaySymbol(p)}</td>
                     <td className="jv-num">{p.quantity}</td>
-                    <td className="jv-num">{fmtUsd(p.avgCostBasis)}</td>
-                    <td className="jv-num">{fmtUsd(p.currentPrice)}</td>
+                    <td className="jv-num">{fmtPx(p.avgCostBasis)}</td>
+                    <td className="jv-num">{fmtPx(p.currentPrice)}</td>
                     <td className="jv-num">{fmtUsd(p.marketValue)}</td>
                     <td className={`jv-num ${pnlClass(p.unrealizedPnl)}`}>{fmtUsd(p.unrealizedPnl)}</td>
                     <td className={`jv-num ${pnlClass(p.unrealizedPnlPct)}`}>{fmtPct(p.unrealizedPnlPct)}</td>
@@ -247,8 +254,8 @@ export function PaperTradingTab() {
                     <td style={{ textTransform: "capitalize" }}>{o.side}</td>
                     <td style={{ textTransform: "capitalize" }}>{o.orderType.replace("_", " ")}</td>
                     <td className="jv-num">{o.quantity}</td>
-                    <td className="jv-num">{o.limitPrice !== null ? fmtUsd(o.limitPrice) : "—"}</td>
-                    <td className="jv-num">{o.stopPrice !== null ? fmtUsd(o.stopPrice) : "—"}</td>
+                    <td className="jv-num">{o.limitPrice !== null ? fmtPx(o.limitPrice) : "—"}</td>
+                    <td className="jv-num">{o.stopPrice !== null ? fmtPx(o.stopPrice) : "—"}</td>
                     <td className="jv-num">{o.trailAmount !== null ? fmtUsd(o.trailAmount) : "—"}</td>
                     <td className="text-xs" style={{ color: "var(--text-2)" }}>
                       {new Date(o.createdAt).toLocaleString()}
@@ -294,7 +301,7 @@ export function PaperTradingTab() {
                     <td className="font-medium">{displaySymbol(f)}</td>
                     <td style={{ textTransform: "capitalize" }}>{f.side}</td>
                     <td className="jv-num">{f.quantity}</td>
-                    <td className="jv-num">{fmtUsd(f.fillPrice)}</td>
+                    <td className="jv-num">{fmtPx(f.fillPrice)}</td>
                     <td className="jv-num">{fmtUsd(f.totalFees)}</td>
                     <td className={`jv-num ${pnlClass(f.realizedPnl)}`}>{f.realizedPnl !== null ? fmtUsd(f.realizedPnl) : "—"}</td>
                     <td className="text-xs" style={{ color: "var(--text-2)" }}>

@@ -137,7 +137,7 @@ export function AssetChartsTab({
 
       {symbol ? (
         <div className="mt-3">
-          <PriceChart key={assetClass === "crypto" ? symbol : undefined} symbol={symbol} assetClass={assetClass} readOnly={assetClass === "crypto"} />
+          <PriceChart key={assetClass === "crypto" ? symbol : undefined} symbol={symbol} assetClass={assetClass} />
           {assetClass !== "crypto" && <TickerNewsPanel symbol={symbol} assetClass={assetClass} />}
         </div>
       ) : (
