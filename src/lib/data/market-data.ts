@@ -2,6 +2,7 @@ import * as alpaca from "./alpaca";
 import * as schwab from "./schwab";
 import * as tradier from "./tradier";
 import * as oanda from "./oanda";
+import * as coinbase from "./coinbase";
 import {
   generateMockDailyBars,
   generateMockMinuteBars,
@@ -77,6 +78,7 @@ export async function fetchMinuteBars(
   revalidateSeconds: number
 ): Promise<MarketCandle[]> {
   if (isMockMode()) return generateMockMinuteBars(symbol, startDateMs, endDateMs);
+  if (coinbase.isCryptoSymbol(symbol)) return coinbase.fetchMinuteBars(symbol, startDateMs, endDateMs, revalidateSeconds);
   if (isForexSymbol(symbol) && hasOandaToken()) {
     return oanda.fetchMinuteBars(symbol, startDateMs, endDateMs, revalidateSeconds);
   }
@@ -92,6 +94,7 @@ export async function fetchDailyBars(
   revalidateSeconds: number
 ): Promise<MarketCandle[]> {
   if (isMockMode()) return generateMockDailyBars(symbol, startDateMs, endDateMs);
+  if (coinbase.isCryptoSymbol(symbol)) return coinbase.fetchDailyBars(symbol, startDateMs, endDateMs, revalidateSeconds);
   if (isForexSymbol(symbol) && hasOandaToken()) {
     return oanda.fetchDailyBars(symbol, startDateMs, endDateMs, revalidateSeconds);
   }
@@ -129,6 +132,10 @@ export async function fetchBarsForTimeframe(
     return aggregateCandles(raw, bucketMs);
   }
 
+  if (coinbase.isCryptoSymbol(symbol)) {
+    return coinbase.fetchBarsForBucket(symbol, bucketMs, startMs, endMs, revalidateSeconds);
+  }
+
   if (isForexSymbol(symbol) && hasOandaToken()) {
     return oanda.fetchBarsForTimeframe(symbol, timeframe, startMs, endMs, revalidateSeconds);
   }
@@ -148,6 +155,7 @@ export async function fetchBarsForTimeframe(
 
 export async function fetchQuote(symbol: string): Promise<MarketQuote> {
   if (isMockMode()) return generateMockQuote(symbol);
+  if (coinbase.isCryptoSymbol(symbol)) return coinbase.fetchQuote(symbol);
   if (isForexSymbol(symbol) && hasOandaToken()) return oanda.fetchQuote(symbol);
   return getProvider() === "alpaca" ? alpaca.fetchQuote(symbol) : schwab.fetchQuote(symbol);
 }

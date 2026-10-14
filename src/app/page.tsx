@@ -15,6 +15,7 @@ import { FomcReactionStudyTab } from "@/components/FomcReactionStudyTab";
 import { FomcWeekVarianceTab } from "@/components/FomcWeekVarianceTab";
 import { CatalystCalendarTab } from "@/components/CatalystCalendarTab";
 import { CryptoRegimeTab } from "@/components/CryptoRegimeTab";
+import { CryptoChartsTab } from "@/components/CryptoChartsTab";
 import { QuadWitchingStudyTab } from "@/components/QuadWitchingStudyTab";
 import { WeekStartMomentumTab } from "@/components/WeekStartMomentumTab";
 import { OvernightIntradayPatternTab } from "@/components/OvernightIntradayPatternTab";
@@ -1001,6 +1002,12 @@ export default async function Home() {
                             size="tertiary"
                             tabs={[
                               { id: "regime", label: "Regime", content: <CryptoRegimeTab /> },
+                              { id: "charts", label: "Charts", content: <CryptoChartsTab /> },
+                              {
+                                id: "backtest",
+                                label: "Backtest",
+                                content: <HistoricalBacktestTab key="crypto-backtest" defaultTicker="BTC-USD" crypto />,
+                              },
                             ]}
                           />
                         </div>

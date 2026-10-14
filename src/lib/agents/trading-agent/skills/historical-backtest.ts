@@ -1,4 +1,5 @@
 import { getDailyBars } from "./daily-bars";
+import { isCryptoSymbol } from "@/lib/data/coinbase";
 import { computeMomentum, computeVolumeDisplacement } from "./scan-signals";
 import { computeMeanReversion } from "./mean-reversion";
 import { benjaminiHochberg, bootstrapCi, zTestPValue } from "./stats-tests";
@@ -351,6 +352,12 @@ export async function runBacktest(
     "Significance uses a z-test approximation, not an exact Student's t-test (see stats-tests.ts) — the difference is small at the larger sample sizes a multi-year daily backtest typically produces, and grows for small samples.",
     "This backtest walks daily bars only, which carry no intraday timestamp — the trade log's day high/low and overnight gap % are real, but the time each high/low occurred isn't available here (dayHighTimeClock/dayLowTimeClock are always null). Getting that would require a separate minute-bar fetch per occurrence; see the ORB and Calendar Effects Time-of-Day backtests, which already pull minute bars and report it.",
   ];
+
+  if (isCryptoSymbol(symbol)) {
+    dataLimitations.unshift(
+      "Crypto: the 'days' here are UTC calendar days (candles open at 00:00 UTC), and the market never closes, so every day is a bar, weekends included, and the horizons are calendar days. Prices and volume are Coinbase's own (one exchange, volume in coins, not dollars). The 'overnight gap' is not meaningful for a 24/7 market and is left out. Crypto history is short and dominated by a few large regimes, so a result that holds across a whole sample can still be one trend; read the out-of-sample column before the headline mean."
+    );
+  }
 
   // Time-based split on occurrences (not raw calendar days) — matches
   // backtest_engine.py's reasoning: nearby occurrences are correlated, so a

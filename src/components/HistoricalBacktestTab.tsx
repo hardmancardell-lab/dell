@@ -35,7 +35,7 @@ function fmtDays(v: number | null): string {
   return v !== null ? `${v}d` : "N/A";
 }
 
-function fmtDayContext(row: {
+function fmtDayContext(crypto: boolean, row: {
   overnightGapPct: number | null;
   dayHigh: number | null;
   dayLow: number | null;
@@ -43,13 +43,13 @@ function fmtDayContext(row: {
   dayLowTimeClock: string | null;
 }): string {
   const parts: string[] = [];
-  if (row.overnightGapPct !== null) parts.push(`Gap: ${fmtPct(row.overnightGapPct)}`);
+  if (!crypto && row.overnightGapPct !== null) parts.push(`Gap: ${fmtPct(row.overnightGapPct)}`);
   if (row.dayHigh !== null) parts.push(`High: $${row.dayHigh.toFixed(2)}${row.dayHighTimeClock ? ` @ ${row.dayHighTimeClock}` : ""}`);
   if (row.dayLow !== null) parts.push(`Low: $${row.dayLow.toFixed(2)}${row.dayLowTimeClock ? ` @ ${row.dayLowTimeClock}` : ""}`);
   return parts.length > 0 ? parts.join(" · ") : "N/A";
 }
 
-function toChartProps(result: EquityBacktestResult) {
+function toChartProps(result: EquityBacktestResult, crypto: boolean) {
   const horizons: ChartHorizon[] = result.horizons.map((h) => ({
     label: `${h.horizonDays}d`,
     n: h.sampleSize,
@@ -70,7 +70,7 @@ function toChartProps(result: EquityBacktestResult) {
     returns: Object.fromEntries(r.returnsByHorizon.map((x) => [`${x.horizonDays}d`, x.returnPct])),
   }));
   const revert = result.reversionStats
-    ? { days: result.tradeLog.map((r) => r.daysToRevert), unit: "trading days", maxDay: result.reversionStats.maxTrackingDays }
+    ? { days: result.tradeLog.map((r) => r.daysToRevert), unit: crypto ? "days" : "trading days", maxDay: result.reversionStats.maxTrackingDays }
     : null;
 
   const stoppedPct = (c: { stoppedOutCount: number; sampleSize: number }) =>
@@ -110,7 +110,16 @@ const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-norm
 const TD_CLASS = "py-2 pr-4 whitespace-nowrap";
 
 /** Reused across Equities/Currency/Futures/Commodities' own Backtest tabs — a single .jarvis island here upgrades all four. */
-export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "equity" }: { defaultTicker?: string; assetClass?: AssetClass }) {
+export function HistoricalBacktestTab({
+  defaultTicker = "AAPL",
+  assetClass = "equity",
+  crypto = false,
+}: {
+  defaultTicker?: string;
+  assetClass?: AssetClass;
+  /** Crypto product ids (BTC-USD): 24/7 UTC-day bars, so the equity-only overnight pieces are hidden. */
+  crypto?: boolean;
+}) {
   const [ticker, setTicker] = useState(defaultTicker);
   const [signal, setSignal] = useState<EquityBacktestSignalType>("momentum");
   const [years, setYears] = useState(3);
@@ -179,7 +188,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
 
   return (
     <div className="jarvis">
-      <MacroRegimeBanner />
+      {!crypto && <MacroRegimeBanner />}
       <p className="jv-lede">
         Walks real historical daily bars, computing the chosen signal at each past day (using only data
         available as of that day) and measuring what actually happened afterward at several horizons — with
@@ -188,7 +197,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
       </p>
 
       <form onSubmit={runBacktest} className="flex flex-wrap gap-3 mb-6">
-        <input value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="Ticker, e.g. AAPL" className="jv-input w-32" />
+        <input value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder={crypto ? "Coin, e.g. BTC-USD" : "Ticker, e.g. AAPL"} className="jv-input w-32" />
         <select value={signal} onChange={(e) => setSignal(e.target.value as EquityBacktestSignalType)} className="jv-select">
           {SIGNAL_OPTIONS.map((s) => (
             <option key={s.value} value={s.value}>
@@ -230,7 +239,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
         <div className="flex flex-col gap-6">
           <div className="text-sm" style={{ color: "var(--text-2)" }}>
             {result.ticker} — {SIGNAL_OPTIONS.find((s) => s.value === result.signalType)?.label} over{" "}
-            {result.lookbackYears} year(s): {result.tradingDaysScanned} trading days scanned,{" "}
+            {result.lookbackYears} year(s): {result.tradingDaysScanned} {crypto ? "days" : "trading days"} scanned,{" "}
             {result.signalOccurrences} signal occurrence(s) found.
           </div>
 
@@ -240,7 +249,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
             </div>
           ))}
 
-          <BacktestChartsPanel {...toChartProps(result)} />
+          <BacktestChartsPanel {...toChartProps(result, crypto)} />
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
@@ -392,6 +401,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
             </div>
           )}
 
+          {!crypto && (
           <div className="jv-card">
             <div className="jv-br-b" />
             <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>
@@ -463,6 +473,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
               </div>
             )}
           </div>
+          )}
 
           {result.reversionStats && (
             <div className="jv-card">
@@ -473,7 +484,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
               <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
                 Of {result.reversionStats.occurrencesTracked} occurrence(s), {result.reversionStats.occurrencesReverted}{" "}
                 reverted back to the (day-by-day recomputed) rolling mean within {result.reversionStats.maxTrackingDays}{" "}
-                trading days; {result.reversionStats.occurrencesNeverReverted} did not.
+                {crypto ? "days" : "trading days"}; {result.reversionStats.occurrencesNeverReverted} did not.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4 text-sm">
                 <div>
@@ -536,7 +547,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
                 </button>
               </div>
               {/* PriceChart itself is still on the old light/dark theme — a dedicated redesign pass, not yet done. */}
-              <PriceChart key={focusedDate} symbol={result.ticker} focusDate={focusedDate} assetClass={assetClass} />
+              <PriceChart key={focusedDate} symbol={result.ticker} focusDate={focusedDate} assetClass={assetClass} readOnly={crypto} />
             </div>
           )}
 
@@ -553,7 +564,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
                     <th className={TH_CLASS}>Entry Close</th>
                     <th className={TH_CLASS}>Returns by Horizon</th>
                     <th className={TH_CLASS}>Win/Loss</th>
-                    <th className={TH_CLASS}>Overnight Gap / Day Range</th>
+                    <th className={TH_CLASS}>{crypto ? "Day Range" : "Overnight Gap / Day Range"}</th>
                     <th className={TH_CLASS}>Days to Revert</th>
                     <th className={TH_CLASS}>Max Further Move</th>
                   </tr>
@@ -581,7 +592,7 @@ export function HistoricalBacktestTab({ defaultTicker = "AAPL", assetClass = "eq
                           <span className={`jv-badge ${row.isWin ? "c-signal" : "c-danger"}`}>{row.isWin ? "win" : "loss"}</span>
                         )}
                       </td>
-                      <td className={`${TD_CLASS} text-xs`} style={{ color: "var(--text-2)" }}>{fmtDayContext(row)}</td>
+                      <td className={`${TD_CLASS} text-xs`} style={{ color: "var(--text-2)" }}>{fmtDayContext(crypto, row)}</td>
                       <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{fmtDays(row.daysToRevert)}</td>
                       <td className={`${TD_CLASS} font-mono`} style={{ color: "var(--text-2)" }}>{fmtPct(row.maxAdverseExcursionPct)}</td>
                     </tr>
