@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { normalizeSymbolForClass } from "./crypto-symbol";
 import type { AssetClass, WatchlistEntry, WatchlistMeta } from "./types";
 
 const ENTRIES_KEY = "trading-agent-watchlist";
@@ -55,7 +56,8 @@ interface WatchlistContextValue {
   deleteWatchlist: (id: string) => void;
   entries: WatchlistEntry[]; // pre-filtered to activeWatchlistId
   hydrated: boolean;
-  addEntry: (symbol: string, assetClass: AssetClass) => void;
+  /** False when the symbol is empty or, for crypto, is not a Coinbase USD pair; nothing is stored then. Crypto symbols are stored as product ids (BTC -> BTC-USD). */
+  addEntry: (symbol: string, assetClass: AssetClass) => boolean;
   removeEntry: (symbol: string, assetClass: AssetClass) => void;
 }
 
@@ -131,9 +133,9 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addEntry = useCallback(
-    (symbol: string, assetClass: AssetClass) => {
-      const trimmed = symbol.trim().toUpperCase();
-      if (!trimmed) return;
+    (symbol: string, assetClass: AssetClass): boolean => {
+      const trimmed = normalizeSymbolForClass(symbol, assetClass);
+      if (!trimmed) return false;
       setAllEntries((current) => {
         // Deduped by (watchlistId, symbol, assetClass) — not symbol alone.
         // The same symbol can legitimately sit in one list under two asset
@@ -149,6 +151,7 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
         window.localStorage.setItem(ENTRIES_KEY, JSON.stringify(next));
         return next;
       });
+      return true;
     },
     [activeWatchlistId]
   );

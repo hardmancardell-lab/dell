@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
+import { normalizeSymbolForClass } from "@/lib/agents/trading-agent/crypto-symbol";
 import { WatchlistSelector } from "./WatchlistSelector";
 import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { WatchlistNewsPanel } from "./WatchlistNewsPanel";
@@ -10,7 +11,7 @@ import { StatCard } from "./StatCard";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { AssetClass, WatchlistScanSummary } from "@/lib/agents/trading-agent/types";
 
-const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
+const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity", "crypto"];
 
 /**
  * Reused across every asset class's own Dashboard tab (Equities directly,
@@ -23,6 +24,7 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
   const { entries, hydrated, addEntry, removeEntry } = useWatchlist();
   const [symbolInput, setSymbolInput] = useState("");
   const [assetClass, setAssetClass] = useState<AssetClass>(filterAssetClass ?? "equity");
+  const [addError, setAddError] = useState<string | null>(null);
 
   const [summary, setSummary] = useState<WatchlistScanSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +37,12 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const cls = filterAssetClass ?? assetClass;
-    addEntry(symbolInput, cls);
-    track("watchlist_entry_added", { tab: "Dashboard", symbol: symbolInput.trim().toUpperCase(), metadata: { assetClass: cls } });
+    if (!addEntry(symbolInput, cls)) {
+      if (symbolInput.trim()) setAddError("Crypto symbols must be Coinbase USD pairs, for example BTC-USD or ETH.");
+      return;
+    }
+    setAddError(null);
+    track("watchlist_entry_added", { tab: "Dashboard", symbol: normalizeSymbolForClass(symbolInput, cls) ?? symbolInput.trim().toUpperCase(), metadata: { assetClass: cls } });
     setSymbolInput("");
   }
 
@@ -98,7 +104,7 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
         <input
           value={symbolInput}
           onChange={(e) => setSymbolInput(e.target.value)}
-          placeholder="Symbol, e.g. AAPL, /ES, EUR/USD"
+          placeholder="Symbol, e.g. AAPL, /ES, EUR/USD, BTC-USD"
           className="jv-input flex-1 min-w-[180px]"
         />
         {!filterAssetClass && (
@@ -114,6 +120,12 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
           Add
         </button>
       </form>
+
+      {addError && (
+        <p className="text-sm mb-4" style={{ color: "var(--danger)" }}>
+          {addError}
+        </p>
+      )}
 
       {hydrated && filteredEntries.length === 0 && (
         <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>

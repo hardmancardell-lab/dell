@@ -182,6 +182,16 @@ export function PriceChart({
   const [clickedPrice, setClickedPrice] = useState<number | undefined>(undefined);
   const [positionRefreshKey, setPositionRefreshKey] = useState(0);
 
+  // Sub-dollar coins (DOGE at $0.1234, SHIB far smaller) need more than two decimals in the readout and on the axis.
+  const fmtPx = (v: number) => (assetClass === "crypto" && Math.abs(v) < 1 ? String(Number(v.toPrecision(5))) : v.toFixed(2));
+  useEffect(() => {
+    const series = candleSeriesRef.current;
+    const last = data?.candles[data.candles.length - 1];
+    if (!series || assetClass !== "crypto" || !last) return;
+    const precision = last.close >= 1 ? 2 : last.close >= 0.01 ? 4 : 8;
+    series.applyOptions({ priceFormat: { type: "price", precision, minMove: 1 / 10 ** precision } });
+  }, [data, assetClass]);
+
   useEffect(() => {
     setSessionId(getOrCreateSessionId());
   }, []);
@@ -625,7 +635,7 @@ export function PriceChart({
             lineWidth: 2,
             lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
-            title: `Cost Basis ${position.avgCostBasis.toFixed(2)}`,
+            title: `Cost Basis ${fmtPx(position.avgCostBasis)}`,
           });
         }
 
@@ -775,13 +785,13 @@ export function PriceChart({
             >
               <span style={{ color: "var(--text-0)" }}>{info.dateKey}</span>
               {"  O "}
-              {info.open.toFixed(2)}
+              {fmtPx(info.open)}
               {"  H "}
-              {info.high.toFixed(2)}
+              {fmtPx(info.high)}
               {"  L "}
-              {info.low.toFixed(2)}
+              {fmtPx(info.low)}
               {"  C "}
-              {info.close.toFixed(2)}
+              {fmtPx(info.close)}
               {"  "}
               <span style={{ color: changeColor }}>
                 {info.changePct !== null ? `${info.changePct >= 0 ? "+" : ""}${info.changePct.toFixed(2)}%` : "N/A"}
@@ -829,7 +839,7 @@ export function PriceChart({
                     className={floatingTab === "trade" ? "jv-btn text-xs px-3 py-1" : "jv-btn-outline text-xs px-3 py-1"}
                   >
                     Trade {symbol}
-                    {clickedPrice !== undefined ? ` @ ${clickedPrice.toFixed(2)}` : ""}
+                    {clickedPrice !== undefined ? ` @ ${fmtPx(clickedPrice)}` : ""}
                   </button>
                   {assetClass === "equity" && (
                     <button
