@@ -5,7 +5,8 @@ import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
 import type { AdvisorClient, AssetClass, PortfolioHolding, RealizedSale } from "@/lib/agents/trading-agent/types";
 import type { WashSaleFlag } from "@/lib/agents/trading-agent/skills/wash-sale-check";
 
-const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity", "crypto"];
+// Crypto is deliberately not offered on advisor-managed client books until the securities attorney has weighed in.
+const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
 
 function fmtUsd(v: number): string {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
