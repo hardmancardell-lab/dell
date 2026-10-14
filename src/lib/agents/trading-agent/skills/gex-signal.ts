@@ -316,7 +316,7 @@ function toDateKey(ms: number): string {
 }
 
 /** Fetches option chains for the given expirations, a few at a time. A failed fetch is returned as null rather than thrown. */
-async function fetchChains(symbol: string, expirations: string[]): Promise<Map<string, MarketOptionsChain | null>> {
+export async function fetchChains(symbol: string, expirations: string[]): Promise<Map<string, MarketOptionsChain | null>> {
   const out = new Map<string, MarketOptionsChain | null>();
   for (let i = 0; i < expirations.length; i += GEX_FETCH_BATCH) {
     const batch = expirations.slice(i, i + GEX_FETCH_BATCH);

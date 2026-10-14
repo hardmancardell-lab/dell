@@ -51,6 +51,7 @@ import { BondDashboardTab } from "@/components/BondDashboardTab";
 import { YieldCurveTab } from "@/components/YieldCurveTab";
 import { YieldAlertThresholdTab } from "@/components/YieldAlertThresholdTab";
 import { OptionsDashboardTab } from "@/components/OptionsDashboardTab";
+import { GammaHeatMapTab } from "@/components/GammaHeatMapTab";
 import { OptionsStrategiesTab } from "@/components/OptionsStrategiesTab";
 import { OptionsChainTradeTab } from "@/components/OptionsChainTradeTab";
 import { PaperBacktestLogTab } from "@/components/PaperBacktestLogTab";
@@ -443,7 +444,6 @@ export default async function Home() {
                               { id: "fomc-reaction", label: "FOMC Reaction Study", content: <FomcReactionStudyTab /> },
                               { id: "fomc-week-variance", label: "FOMC Week Variance", content: <FomcWeekVarianceTab /> },
                               { id: "catalyst-calendar", label: "Catalyst Calendar", content: <CatalystCalendarTab /> },
-                              { id: "crypto-regime", label: "Crypto Regime", content: <CryptoRegimeTab /> },
                             ]}
                           />
                         </div>
@@ -739,6 +739,7 @@ export default async function Home() {
                             size="tertiary"
                             tabs={[
                               { id: "dashboard", label: "Dashboard", content: <OptionsDashboardTab /> },
+                              { id: "gamma-heat-map", label: "Gamma Heat Map", content: <GammaHeatMapTab /> },
                               {
                                 id: "strategy-guide",
                                 label: "Strategy Guide",
@@ -982,6 +983,24 @@ export default async function Home() {
                                 label: "Research Sources",
                                 content: <FuturesCommoditiesResearchSourcesTab assetLabel="commodities" />,
                               },
+                            ]}
+                          />
+                        </div>
+                      ),
+                    },
+                    {
+                      id: "crypto",
+                      label: "Crypto",
+                      content: (
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">
+                            Trading Agent &middot; Crypto
+                          </div>
+                          <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Crypto</h1>
+                          <Tabs
+                            size="tertiary"
+                            tabs={[
+                              { id: "regime", label: "Regime", content: <CryptoRegimeTab /> },
                             ]}
                           />
                         </div>

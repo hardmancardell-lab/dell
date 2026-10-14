@@ -148,10 +148,10 @@ export function CryptoRegimeTab() {
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "Unknown error");
-        track("api_error", { tab: "Macro", metadata: { endpoint: "crypto-regime", status: res.status } });
+        track("api_error", { tab: "Crypto", metadata: { endpoint: "crypto-regime", status: res.status } });
       } else {
         setResult(json as CryptoRegimeResult);
-        track("backtest_run", { tab: "Macro", metadata: { study: "crypto-regime" } });
+        track("backtest_run", { tab: "Crypto", metadata: { study: "crypto-regime" } });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
