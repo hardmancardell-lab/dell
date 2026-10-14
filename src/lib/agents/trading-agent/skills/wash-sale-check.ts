@@ -30,7 +30,9 @@ export function checkWashSaleRisk(sales: RealizedSale[], holdings: PortfolioHold
 
   for (const sale of lossSales) {
     const saleTime = Date.parse(sale.saleDate);
-    const sameSymbolHoldings = holdings.filter((h) => h.symbol.toUpperCase() === sale.symbol.toUpperCase());
+    // Crypto lots are skipped: the wash-sale rule is written for stocks and securities and the IRS treats crypto as
+    // property, so a quick repurchase is not flagged here. Confirm treatment with a tax professional.
+    const sameSymbolHoldings = holdings.filter((h) => h.assetClass !== "crypto" && h.symbol.toUpperCase() === sale.symbol.toUpperCase());
     for (const holding of sameSymbolHoldings) {
       const acquiredTime = Date.parse(holding.acquiredDate);
       const daysBetween = Math.round((acquiredTime - saleTime) / MS_PER_DAY);

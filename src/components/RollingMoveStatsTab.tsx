@@ -58,6 +58,7 @@ export function RollingMoveStatsTab({ defaultTicker = "EUR/USD", defaultAssetCla
           <option value="commodity">Commodity</option>
           <option value="future">Future</option>
           <option value="bond">Bond</option>
+          <option value="crypto">Crypto</option>
         </select>
         <button
           type="submit"

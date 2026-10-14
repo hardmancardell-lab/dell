@@ -142,7 +142,7 @@ export const ASSISTANT_TOOLS: LlmToolSchema[] = [
       type: "object",
       properties: {
         ticker: { type: "string" },
-        assetClass: { type: "string", enum: ["equity", "forex", "commodity", "future", "bond", "option"], description: "Defaults to 'equity' if omitted." },
+        assetClass: { type: "string", enum: ["equity", "forex", "commodity", "future", "bond", "option", "crypto"], description: "Defaults to 'equity' if omitted. Use 'crypto' with a Coinbase USD product id such as BTC-USD." },
       },
       required: ["ticker"],
     },

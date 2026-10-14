@@ -15,6 +15,11 @@ import type { AlertEvaluation, AlertRule } from "../types";
 const DAILY_BAR_LOOKBACK_DAYS = 60;
 const ORB_LOOKBACK_MONTHS = 1;
 
+/** Two decimals from $1 up; below $1 (sub-dollar coins) keep four significant digits so DOGE at $0.1234 does not read as $0.12. */
+function fmtAlertPrice(v: number): string {
+  return Math.abs(v) >= 1 ? v.toFixed(2) : String(Number(v.toPrecision(4)));
+}
+
 /**
  * Dispatches one alert rule to the real signal computation it names, per the
  * reuse map: price_threshold -> fetchQuote, volume_displacement/momentum ->
@@ -26,6 +31,10 @@ const ORB_LOOKBACK_MONTHS = 1;
  */
 export async function evaluateAlertRule(rule: AlertRule): Promise<AlertEvaluation> {
   const ticker = rule.ticker.trim().toUpperCase();
+
+  if (rule.assetClass === "crypto" && (rule.conditionType === "orb_breakout" || rule.conditionType === "unusual_options")) {
+    throw new Error(`${rule.conditionType} does not apply to crypto: it trades 24/7 with no exchange open, and this app has no crypto options chain.`);
+  }
 
   switch (rule.conditionType) {
     case "price_threshold": {
@@ -39,7 +48,7 @@ export async function evaluateAlertRule(rule: AlertRule): Promise<AlertEvaluatio
       const proximity = targetPrice !== 0 ? Math.abs(quote.lastPrice - targetPrice) / Math.abs(targetPrice) : null;
       return {
         triggered,
-        message: `${ticker} is at $${quote.lastPrice.toFixed(2)} (target: ${direction} $${targetPrice.toFixed(2)}).`,
+        message: `${ticker} is at $${fmtAlertPrice(quote.lastPrice)} (target: ${direction} $${fmtAlertPrice(targetPrice)}).`,
         proximity,
       };
     }

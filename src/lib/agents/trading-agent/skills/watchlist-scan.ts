@@ -44,9 +44,14 @@ async function scanVwapReversion(symbol: string): Promise<{ signal: VwapMeanReve
   }
 }
 
+// Crypto trades 24/7 with no exchange open, so a session VWAP anchored at 9:30am ET and a premarket window both have no
+// meaning for it. Those two signals are reported as not applicable rather than computed from an arbitrary slice of the day.
+const CRYPTO_NO_SESSION = "Not applicable to crypto: it trades 24/7, so there is no session open or premarket to measure against.";
+
 async function scanOne(entry: WatchlistEntry): Promise<ScanResult> {
-  const pmVolume = await scanPmVolume(entry.symbol);
-  const vwapReversion = await scanVwapReversion(entry.symbol);
+  const isCrypto = entry.assetClass === "crypto";
+  const pmVolume = isCrypto ? { snapshot: null, error: CRYPTO_NO_SESSION } : await scanPmVolume(entry.symbol);
+  const vwapReversion = isCrypto ? { signal: null, error: CRYPTO_NO_SESSION } : await scanVwapReversion(entry.symbol);
   try {
     const bars = await getDailyBars(entry.symbol, LOOKBACK_DAYS);
     if (bars.length === 0) {
@@ -106,8 +111,9 @@ export async function scanWatchlist(entries: WatchlistEntry[]): Promise<Watchlis
       r.pmVolume?.isAnomaly
   ).length;
   const failedCount = results.filter((r) => r.error !== null).length;
-  const pmVolumeFailedCount = results.filter((r) => r.pmVolumeError !== null).length;
-  const vwapReversionFailedCount = results.filter((r) => r.vwapMeanReversionError !== null).length;
+  // "Not applicable" for crypto is not a failure, so it stays out of the failure counts below.
+  const pmVolumeFailedCount = results.filter((r) => r.pmVolumeError !== null && r.assetClass !== "crypto").length;
+  const vwapReversionFailedCount = results.filter((r) => r.vwapMeanReversionError !== null && r.assetClass !== "crypto").length;
 
   const dataLimitations: string[] = [
     "Watchlist-only scan — scanning the broader market isn't feasible on the free data sources this app uses (would need a paid screener API and heavy quota spend).",
@@ -115,6 +121,9 @@ export async function scanWatchlist(entries: WatchlistEntry[]): Promise<Watchlis
     "VWAP Mean Reversion is computed from today's real regular-session (9:30am-4:00pm ET) minute bars against a session-anchored VWAP — a live intraday reading, not a backtest; see the VWAP Reversion Backtest tab for whether reversion actually followed historically.",
     "PM-Volume Anomaly compares today's real premarket (4am-9:30am ET) volume against a rolling average of prior days — a session concept built around a single NYSE/Nasdaq open, so it's most meaningful for equities/ETF proxies and reads as an approximation for anything without that same session structure.",
   ];
+  if (results.some((r) => r.assetClass === "crypto")) {
+    dataLimitations.push("Crypto entries are scanned on Volume Displacement, Momentum and Mean Reversion only (daily candles, UTC days, Coinbase volume from one exchange). VWAP Mean Reversion and PM-Volume Anomaly are session concepts and are not applicable to a 24/7 market.");
+  }
   if (failedCount > 0) {
     dataLimitations.push(`${failedCount} of ${entries.length} symbol(s) failed to fetch — see individual error messages below.`);
   }

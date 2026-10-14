@@ -69,6 +69,10 @@ export async function getTickerNewsPanel(ticker: string, assetClass: AssetClass)
     } catch (error) {
       dataLimitations.push(`Sector/macro news unavailable: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
+  } else if (assetClass === "crypto") {
+    // No crypto news source is wired up: FMP company news and SEC filings are equity-only, and the macro-news keyword
+    // maps cover currency pairs, commodities and futures, not coins. Say so instead of showing unrelated equity news.
+    dataLimitations.push("News is not available for crypto in this app. Company news and SEC filings cover equities only, and no macro-news keyword mapping exists for coins.");
   } else {
     const kw = assetClass === "forex" ? MAJOR_PAIR_KEYWORDS.find((p) => p.pair === symbol) : COMMODITY_FUTURES_NEWS_KEYWORDS[symbol];
     if (kw) {

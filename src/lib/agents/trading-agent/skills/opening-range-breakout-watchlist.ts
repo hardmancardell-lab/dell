@@ -31,10 +31,15 @@ export async function scanWatchlistOrb(
   lookbackMonths: number,
   allowedAssetClasses: AssetClass[] = DEFAULT_ALLOWED_ASSET_CLASSES
 ): Promise<OrbWatchlistSummary> {
-  const scopedEntries = entries.filter((e) => allowedAssetClasses.includes(e.assetClass));
+  // Crypto is never scanned: it trades around the clock with no exchange open, so there is no opening range to measure.
+  const scannable: AssetClass[] = allowedAssetClasses.filter((c) => c !== "crypto");
+  if (scannable.length === 0 && allowedAssetClasses.length > 0) {
+    throw new Error("Opening Range Breakout does not apply to crypto: it trades 24/7 and has no exchange open to anchor an opening range.");
+  }
+  const scopedEntries = entries.filter((e) => scannable.includes(e.assetClass));
   if (scopedEntries.length === 0) {
     throw new Error(
-      `No ${allowedAssetClasses.join("/")} symbols on this watchlist — add some on the Dashboard tab first.`
+      `No ${scannable.join("/")} symbols on this watchlist — add some on the Dashboard tab first.`
     );
   }
 

@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 import { getOrCreateSessionId, useTrackEvent } from "@/lib/analytics/use-track";
+import { normalizeCryptoSymbol } from "@/lib/agents/trading-agent/crypto-symbol";
 import type { AlertChannel, AlertConditionType, AlertRuleInput, AssetClass } from "@/lib/agents/trading-agent/types";
 
-const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
+const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity", "crypto"];
+
+// Session- and options-based conditions have nothing to measure on a 24/7 coin with no exchange open or options chain here.
+const NOT_FOR_CRYPTO: AlertConditionType[] = ["orb_breakout", "unusual_options"];
 
 const CONDITION_TYPES: { value: AlertConditionType; label: string }[] = [
   { value: "price_threshold", label: "Price Threshold" },
@@ -41,8 +45,16 @@ function newRow(): RuleRow {
 }
 
 function toRuleInput(row: RuleRow): AlertRuleInput | { error: string } {
-  const ticker = row.ticker.trim().toUpperCase();
+  let ticker = row.ticker.trim().toUpperCase();
   if (!ticker) return { error: "Every row needs a ticker." };
+  if (row.assetClass === "crypto") {
+    const pair = normalizeCryptoSymbol(ticker);
+    if (!pair) return { error: `${ticker}: enter a Coinbase USD pair such as BTC-USD.` };
+    if (NOT_FOR_CRYPTO.includes(row.conditionType)) {
+      return { error: `${pair}: that condition does not apply to crypto (24/7 market, no exchange open, no options chain here).` };
+    }
+    ticker = pair;
+  }
 
   let params: Record<string, unknown> = {};
   if (row.conditionType === "price_threshold") {
@@ -208,7 +220,11 @@ export function AlertsSubscribeTab() {
                     <span className="jv-label" style={{ marginBottom: 0 }}>Asset Class</span>
                     <select
                       value={row.assetClass}
-                      onChange={(e) => updateRow(row.key, { assetClass: e.target.value as AssetClass })}
+                      onChange={(e) => {
+                        const next = e.target.value as AssetClass;
+                        // Switching to crypto while an unsupported condition is selected would leave the select showing a missing option.
+                        updateRow(row.key, next === "crypto" && NOT_FOR_CRYPTO.includes(row.conditionType) ? { assetClass: next, conditionType: "price_threshold" } : { assetClass: next });
+                      }}
                       className="jv-select"
                     >
                       {ASSET_CLASSES.map((a) => (
@@ -223,7 +239,7 @@ export function AlertsSubscribeTab() {
                       onChange={(e) => updateRow(row.key, { conditionType: e.target.value as AlertConditionType })}
                       className="jv-select"
                     >
-                      {CONDITION_TYPES.map((c) => (
+                      {CONDITION_TYPES.filter((c) => row.assetClass !== "crypto" || !NOT_FOR_CRYPTO.includes(c.value)).map((c) => (
                         <option key={c.value} value={c.value}>{c.label}</option>
                       ))}
                     </select>

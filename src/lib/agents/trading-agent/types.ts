@@ -175,7 +175,7 @@ export interface OptionsChainSummary {
   dataLimitations: string[];
 }
 
-export type AssetClass = "equity" | "bond" | "option" | "future" | "forex" | "commodity";
+export type AssetClass = "equity" | "bond" | "option" | "future" | "forex" | "commodity" | "crypto";
 
 export interface WatchlistEntry {
   watchlistId: string;

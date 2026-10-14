@@ -1,4 +1,5 @@
 import { getDailyBars } from "./daily-bars";
+import { normalizeCryptoSymbol } from "../crypto-symbol";
 import type { AssetClass, RollingMoveStatsResult, RollingMoveWindow, RollingMoveWindowStats } from "../types";
 
 const DEFAULT_WINDOWS: RollingMoveWindow[] = [20, 40, 100];
@@ -14,7 +15,7 @@ export async function getRollingMoveStats(
   assetClass: AssetClass,
   windows: RollingMoveWindow[] = DEFAULT_WINDOWS
 ): Promise<RollingMoveStatsResult> {
-  const symbol = ticker.trim().toUpperCase();
+  const symbol = assetClass === "crypto" ? (normalizeCryptoSymbol(ticker) ?? ticker.trim().toUpperCase()) : ticker.trim().toUpperCase();
   const maxWindow = Math.max(...windows);
   // Pull comfortably more calendar days than the largest trading-day window
   // needs, so weekends/holidays don't leave the window short.
@@ -29,6 +30,9 @@ export async function getRollingMoveStats(
   }
 
   const dataLimitations: string[] = [];
+  if (assetClass === "crypto") {
+    dataLimitations.push("Crypto trades every day, so each window counts calendar days (UTC, 00:00 to 24:00) rather than exchange sessions. Prices are Coinbase's own trades.");
+  }
   const windowStats: RollingMoveWindowStats[] = windows.map((windowDays) => {
     const slice = dailyReturnsPct.slice(-windowDays);
     if (slice.length < windowDays) {

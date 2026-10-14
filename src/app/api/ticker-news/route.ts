@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getTickerNewsPanel } from "@/lib/agents/trading-agent/skills/ticker-news-panel";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
 
-const VALID_ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
+const VALID_ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity", "crypto"];
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

@@ -18,5 +18,7 @@ export function assetClassLabel(assetClass: AssetClass): string {
       return "Forex";
     case "commodity":
       return "Commodity";
+    case "crypto":
+      return "Crypto";
   }
 }
