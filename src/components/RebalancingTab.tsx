@@ -15,6 +15,12 @@ function fmtUsd(v: number): string {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+/** Share counts to two decimals, but fractions under 1 (a slice of a coin) keep enough digits to not read as 0.00. */
+function fmtQty(v: number): string {
+  if (Math.abs(v) >= 1 || v === 0) return v.toFixed(2);
+  return v.toFixed(8).replace(/0+$/, "").replace(/[.]$/, "");
+}
+
 function TaxLotImpactPanel({ symbol, dollarAmount, summary }: { symbol: string; dollarAmount: number; summary: PortfolioSummary }) {
   const impact = useMemo(
     () => computeTaxLotImpact(symbol, Math.abs(dollarAmount), summary.valuations),
@@ -29,7 +35,7 @@ function TaxLotImpactPanel({ symbol, dollarAmount, summary }: { symbol: string; 
       </div>
       {impact.exceedsAvailableShares && (
         <p className="text-xs mb-2" style={{ color: "var(--verdict)" }}>
-          This sell amount exceeds total shares held ({impact.totalSharesAvailable.toFixed(2)} available) — showing what selling everything would look like.
+          This sell amount exceeds total shares held ({fmtQty(impact.totalSharesAvailable)} available) — showing what selling everything would look like.
         </p>
       )}
       <table className="jv-table text-xs">
@@ -46,7 +52,7 @@ function TaxLotImpactPanel({ symbol, dollarAmount, summary }: { symbol: string; 
           {impact.lots.map((l) => (
             <tr key={l.holdingId}>
               <td>{l.acquiredDate}</td>
-              <td className="jv-num">{l.sharesFromLot.toFixed(2)}</td>
+              <td className="jv-num">{fmtQty(l.sharesFromLot)}</td>
               <td className="jv-num" style={{ color: "var(--text-2)" }}>{l.holdingPeriodDays}d</td>
               <td style={{ color: l.isLongTerm ? "var(--signal)" : "var(--verdict)" }}>{l.isLongTerm ? "Long-term" : "Short-term"}</td>
               <td className={`jv-num ${l.estimatedGainLoss >= 0 ? "jv-pnl-up" : "jv-pnl-down"}`}>{fmtUsd(l.estimatedGainLoss)}</td>
@@ -252,7 +258,7 @@ function RebalancingSection({ summary }: { summary: PortfolioSummary | null }) {
                   <td className={`jv-num ${r.deltaValue > 0 ? "jv-pnl-up" : r.deltaValue < 0 ? "jv-pnl-down" : "jv-pnl-flat"}`}>
                     {fmtUsd(r.deltaValue)}
                   </td>
-                  <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.deltaShares !== null ? r.deltaShares.toFixed(2) : "N/A"}</td>
+                  <td className="jv-num" style={{ color: "var(--text-2)" }}>{r.deltaShares !== null ? fmtQty(r.deltaShares) : "N/A"}</td>
                   <td>
                     <span
                       className="jv-badge"

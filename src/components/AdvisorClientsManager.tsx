@@ -5,7 +5,7 @@ import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
 import type { AdvisorClient, AssetClass, PortfolioHolding, RealizedSale } from "@/lib/agents/trading-agent/types";
 import type { WashSaleFlag } from "@/lib/agents/trading-agent/skills/wash-sale-check";
 
-const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
+const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity", "crypto"];
 
 function fmtUsd(v: number): string {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -648,7 +648,7 @@ export function AdvisorClientsManager() {
                       <input
                         value={symbol}
                         onChange={(e) => setSymbol(e.target.value)}
-                        placeholder="Symbol"
+                        placeholder={assetClass === "crypto" ? "BTC-USD" : "Symbol"}
                         className="text-sm border border-zinc-700 rounded px-2 py-1.5 bg-transparent w-24"
                       />
                       <select

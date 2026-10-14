@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { normalizeSymbolForClass } from "@/lib/agents/trading-agent/crypto-symbol";
 import { isAdminSessionValid } from "@/lib/admin-auth";
 import { createClientHolding, getAdvisorClientBySlug, listClientHoldings } from "@/lib/data/advisor-clients-db";
 
@@ -26,8 +27,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   try {
     const client = await getAdvisorClientBySlug(slug);
     if (!client) return NextResponse.json({ error: "Client not found." }, { status: 404 });
+    // Crypto symbols are stored as Coinbase product ids (BTC -> BTC-USD); other classes keep the plain upper-cased symbol.
+    const symbol = normalizeSymbolForClass(body.symbol, body.assetClass);
+    if (!symbol) {
+      return NextResponse.json({ error: "Crypto holdings need a Coinbase USD pair, for example BTC-USD." }, { status: 400 });
+    }
     const holding = await createClientHolding(client.id, {
-      symbol: body.symbol.trim().toUpperCase(),
+      symbol,
       assetClass: body.assetClass,
       shares: Number(body.shares),
       costBasisPerShare: Number(body.costBasisPerShare),

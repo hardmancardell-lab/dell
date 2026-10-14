@@ -1,9 +1,8 @@
 "use client";
 
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { allocationSliceColor } from "@/lib/agents/trading-agent/allocation-colors";
 import type { AllocationSlice } from "@/lib/agents/trading-agent/types";
-
-const CHART_COLORS = ["#4fe8d0", "#f0a868", "#7c9eff", "#e8637a", "#c792ea", "#82e0aa", "#ffd166", "#5eead4"];
 
 /** Adds a Cash slice (uninvested reserve) so the chart reflects total funds, not just holdings. */
 export function withCashSlice(slices: AllocationSlice[], cashBalance: number, grandTotal: number): AllocationSlice[] {
@@ -28,7 +27,7 @@ export function AllocationPieChart({ title, slices }: { title: string; slices: A
         <PieChart>
           <Pie data={chartData} dataKey="value" nameKey="displayName" cx="50%" cy="45%" outerRadius={80} paddingAngle={2}>
             {chartData.map((s, i) => (
-              <Cell key={s.label} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="var(--ink-950)" />
+              <Cell key={s.label} fill={allocationSliceColor(chartData.map((c) => c.label), i)} stroke="var(--ink-950)" />
             ))}
           </Pie>
           <Tooltip

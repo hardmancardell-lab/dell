@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { normalizeSymbolForClass, roundCryptoQuantity } from "./crypto-symbol";
 import type { AssetClass, PortfolioHolding, RealizedSale } from "./types";
 
 const STORAGE_KEY = "trading-agent-portfolio";
@@ -83,14 +84,16 @@ export function usePortfolio() {
       costBasisPerShare: number,
       acquiredDate: string,
       extra?: Pick<PortfolioHolding, "optionRight" | "strikePrice" | "expirationDate" | "underlyingSymbol" | "contractMultiplier">
-    ) => {
-      const trimmed = symbol.trim().toUpperCase();
-      if (!trimmed || !Number.isFinite(shares) || shares <= 0 || !Number.isFinite(costBasisPerShare)) return;
+    ): boolean => {
+      // Crypto symbols are stored as Coinbase product ids (BTC -> BTC-USD) and may be fractional; everything else is
+      // trimmed and upper-cased exactly as before. False means nothing was stored.
+      const trimmed = normalizeSymbolForClass(symbol, assetClass);
+      if (!trimmed || !Number.isFinite(shares) || shares <= 0 || !Number.isFinite(costBasisPerShare)) return false;
       const holding: PortfolioHolding = {
         id: crypto.randomUUID(),
         symbol: trimmed,
         assetClass,
-        shares,
+        shares: assetClass === "crypto" ? roundCryptoQuantity(shares) : shares,
         costBasisPerShare,
         acquiredDate,
         ...extra,
@@ -99,6 +102,7 @@ export function usePortfolio() {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       setHoldings(next);
       announcePortfolioChanged();
+      return true;
     },
     []
   );
@@ -140,7 +144,10 @@ export function usePortfolio() {
       const nextSales = [sale, ...readStoredRealizedPnl()];
       window.localStorage.setItem(REALIZED_PNL_STORAGE_KEY, JSON.stringify(nextSales));
 
-      const remaining = holding.shares - sharesSold;
+      // Fractional coins leave float noise behind (0.3 - 0.1 - 0.2 is not 0), which would strand a dust lot that can
+      // never be sold; crypto quantities are kept to 8 decimals.
+      const remainingRaw = holding.shares - sharesSold;
+      const remaining = holding.assetClass === "crypto" ? roundCryptoQuantity(remainingRaw) : remainingRaw;
       const next =
         remaining === 0
           ? readStoredPortfolio().filter((h) => h.id !== holdingId)

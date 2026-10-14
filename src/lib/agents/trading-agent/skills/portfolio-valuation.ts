@@ -1,9 +1,30 @@
 import { fetchQuote } from "@/lib/data/market-data";
 import { fetchProfile } from "@/lib/data/fmp";
 import { assetClassLabel } from "../asset-class-label";
+import { normalizeCryptoSymbol } from "../crypto-symbol";
 import { notionalMultiplier, getOptionContractQuote } from "./paper-trading-engine";
 import { THEMATIC_ETF_SECTOR_OVERRIDES } from "./sector-lookup";
 import type { AllocationSlice, PortfolioHolding, PortfolioSummary, PortfolioValuation } from "../types";
+
+/** The figures that follow from a price: pure, so the fractional-quantity maths can be tested without any network call. */
+export function computeValuationFigures(holding: PortfolioHolding, currentPrice: number, holdingPeriodDays: number) {
+  const multiplier =
+    holding.assetClass === "future" && holding.contractMultiplier ? holding.contractMultiplier : notionalMultiplier(holding.assetClass);
+  const costBasisTotal = holding.shares * holding.costBasisPerShare * multiplier;
+  const currentValue = currentPrice * holding.shares * multiplier;
+  const unrealizedPL = currentValue - costBasisTotal;
+  // Holding Period Return — total return over the holding period, no
+  // dividends/income factored in (this app has no dividend-history source).
+  const unrealizedPLPercent = costBasisTotal !== 0 ? (unrealizedPL / costBasisTotal) * 100 : null;
+  // HPR compounded to a 365-day basis (CAGR-style) — undefined for
+  // same-day holdings (division by zero) or a negative-100% HPR (total
+  // wipeout, (1+hpr) would be 0 or negative, undefined fractional power).
+  const annualizedReturnPercent =
+    unrealizedPLPercent !== null && holdingPeriodDays > 0 && unrealizedPLPercent > -100
+      ? (Math.pow(1 + unrealizedPLPercent / 100, 365 / holdingPeriodDays) - 1) * 100
+      : null;
+  return { costBasisTotal, currentValue, unrealizedPL, unrealizedPLPercent, annualizedReturnPercent };
+}
 
 /**
  * Per-holding valuation, same scanOne-style isolation as watchlist-scan.ts —
@@ -12,9 +33,7 @@ import type { AllocationSlice, PortfolioHolding, PortfolioSummary, PortfolioValu
  * already proven in paper-trading-engine.ts, rather than duplicating them.
  */
 async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation> {
-  const multiplier =
-    holding.assetClass === "future" && holding.contractMultiplier ? holding.contractMultiplier : notionalMultiplier(holding.assetClass);
-  const costBasisTotal = holding.shares * holding.costBasisPerShare * multiplier;
+  const costBasisTotal = computeValuationFigures(holding, 0, 0).costBasisTotal;
 
   let currentPrice: number | null = null;
   let sector: string | null = null;
@@ -30,6 +49,12 @@ async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation
       const contract = await getOptionContractQuote(holding.underlyingSymbol, holding.expirationDate, holding.strikePrice, holding.optionRight);
       if (!contract) throw new Error(`No matching contract found for ${holding.symbol} (may have expired).`);
       currentPrice = (contract.bid + contract.ask) / 2;
+    } else if (holding.assetClass === "crypto") {
+      // A crypto holding is priced only from Coinbase. A symbol that is not a USD product id (for example a stock ticker
+      // entered under Crypto) must not fall through to the equity quote path and come back with an unrelated price.
+      const pair = normalizeCryptoSymbol(holding.symbol);
+      if (!pair) throw new Error(`${holding.symbol} is not a Coinbase USD pair (use a symbol like BTC-USD).`);
+      currentPrice = (await fetchQuote(pair)).lastPrice;
     } else {
       const quote = await fetchQuote(holding.symbol);
       currentPrice = quote.lastPrice;
@@ -68,18 +93,7 @@ async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation
     }
   }
 
-  const currentValue = currentPrice * holding.shares * multiplier;
-  const unrealizedPL = currentValue - costBasisTotal;
-  // Holding Period Return — total return over the holding period, no
-  // dividends/income factored in (this app has no dividend-history source).
-  const unrealizedPLPercent = costBasisTotal !== 0 ? (unrealizedPL / costBasisTotal) * 100 : null;
-  // HPR compounded to a 365-day basis (CAGR-style) — undefined for
-  // same-day holdings (division by zero) or a negative-100% HPR (total
-  // wipeout, (1+hpr) would be 0 or negative, undefined fractional power).
-  const annualizedReturnPercent =
-    unrealizedPLPercent !== null && holdingPeriodDays > 0 && unrealizedPLPercent > -100
-      ? (Math.pow(1 + unrealizedPLPercent / 100, 365 / holdingPeriodDays) - 1) * 100
-      : null;
+  const { currentValue, unrealizedPL, unrealizedPLPercent, annualizedReturnPercent } = computeValuationFigures(holding, currentPrice, holdingPeriodDays);
 
   return {
     holding,
@@ -96,7 +110,13 @@ async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation
   };
 }
 
-function buildAllocation(
+/** Sector-chart bucket for a holding with no sector: crypto gets its own "Crypto" slice, matching the asset-class chart. */
+export function sectorBucketLabel(v: { sector: string | null; holding: { assetClass: PortfolioHolding["assetClass"] } }): string {
+  if (v.sector) return v.sector;
+  return v.holding.assetClass === "crypto" ? assetClassLabel("crypto") : `${assetClassLabel(v.holding.assetClass)} (no sector data)`;
+}
+
+export function buildAllocation(
   valuations: PortfolioValuation[],
   keyFn: (v: PortfolioValuation) => string,
   totalValue: number
@@ -131,7 +151,7 @@ export async function valuatePortfolio(holdings: PortfolioHolding[]): Promise<Po
   );
   const allocationBySector = buildAllocation(
     valuations,
-    (v) => v.sector ?? `${assetClassLabel(v.holding.assetClass)} (no sector data)`,
+    sectorBucketLabel,
     totalValue
   );
 
@@ -141,6 +161,11 @@ export async function valuatePortfolio(holdings: PortfolioHolding[]): Promise<Po
     "Equity prices come from Alpaca's free-tier IEX-only feed — a single exchange, not the full consolidated tape. For lower-volume symbols, the last IEX print of the day can differ from the official closing price you'd see on a broker like Webull by anywhere from a penny to tens of cents.",
     "Market cap is FMP's own /profile figure — some ETFs report $0/no figure there (they don't have a traditional market cap the way an individual company does), which shows as N/A rather than a guessed number.",
   ];
+  if (holdings.some((h) => h.assetClass === "crypto")) {
+    dataLimitations.push(
+      "Crypto is priced at Coinbase's last trade (one exchange, 24/7, so the value moves outside market hours), in whole and fractional coins. It has no sector or market-cap figure here and sits in its own Crypto slice in both allocation charts."
+    );
+  }
   if (failedCount > 0) {
     dataLimitations.push(`${failedCount} of ${holdings.length} holding(s) failed to price — see individual error messages below.`);
   }

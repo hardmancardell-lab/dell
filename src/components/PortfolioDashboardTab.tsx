@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { usePortfolio, useRealizedPnl } from "@/lib/agents/trading-agent/portfolio-storage";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
+import { normalizeSymbolForClass } from "@/lib/agents/trading-agent/crypto-symbol";
 import { StatCard } from "./StatCard";
 import { PriceChart } from "./PriceChart";
 import { AllocationPieChart, withCashSlice } from "./AllocationPieChart";
@@ -12,10 +13,16 @@ import { checkWashSaleRisk } from "@/lib/agents/trading-agent/skills/wash-sale-c
 import type { AssetClass, PortfolioHolding, PortfolioShockScanResult, PortfolioSummary, RealizedSale } from "@/lib/agents/trading-agent/types";
 import type { WashSaleFlag } from "@/lib/agents/trading-agent/skills/wash-sale-check";
 
-const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity"];
+const ASSET_CLASSES: AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity", "crypto"];
 
 function fmtUsd(v: number | null): string {
   return v !== null ? v.toLocaleString("en-US", { style: "currency", currency: "USD" }) : "N/A";
+}
+
+/** A per-unit price: sub-dollar coins keep their precision (DOGE at $0.1234 must not read as $0.12); everything else is unchanged. */
+function fmtUnitPrice(v: number | null, assetClass: AssetClass): string {
+  if (v === null || assetClass !== "crypto" || Math.abs(v) >= 1) return fmtUsd(v);
+  return v.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: Math.abs(v) >= 0.01 ? 4 : 8 });
 }
 
 function fmtPct(v: number | null): string {
@@ -137,6 +144,14 @@ export function PortfolioDashboardTab() {
     const sharesNum = Number(shares);
     const costBasisNum = Number(costBasis);
     if (!symbolInput.trim() || !Number.isFinite(sharesNum) || sharesNum <= 0 || !Number.isFinite(costBasisNum)) return;
+    // Crypto symbols are stored as Coinbase product ids (BTC -> BTC-USD); anything that is not a USD pair is refused here
+    // rather than saved and then priced as something else.
+    const normalizedSymbol = normalizeSymbolForClass(symbolInput, assetClass);
+    if (!normalizedSymbol) {
+      setError("Crypto holdings need a Coinbase USD pair, for example BTC-USD (or just BTC).");
+      return;
+    }
+    setError(null);
     const extra =
       assetClass === "option"
         ? {
@@ -156,7 +171,7 @@ export function PortfolioDashboardTab() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            symbol: symbolInput.trim(),
+            symbol: normalizedSymbol,
             assetClass,
             shares: sharesNum,
             costBasisPerShare: costBasisNum,
@@ -174,7 +189,7 @@ export function PortfolioDashboardTab() {
         setError(err instanceof Error ? err.message : "Unknown error");
       }
     } else {
-      local.addHolding(symbolInput, assetClass, sharesNum, costBasisNum, acquiredDate, extra);
+      local.addHolding(normalizedSymbol, assetClass, sharesNum, costBasisNum, acquiredDate, extra);
       clearAddForm();
     }
   }
@@ -276,7 +291,7 @@ export function PortfolioDashboardTab() {
       ) : (
         <p className="jv-lede" style={{ marginBottom: 0 }}>
           Manually track real holdings — shares, cost basis, and acquisition date — valued against live market data
-          (same real providers as the rest of this app: Alpaca for equities, OANDA for forex). No brokerage account
+          (same real providers as the rest of this app: Alpaca for equities, OANDA for forex, Coinbase for crypto, which can be held in fractions). No brokerage account
           linking; this is a read-only tracker, consistent with the rest of this app&apos;s data-and-analysis-only scope.
         </p>
       )}
@@ -285,8 +300,8 @@ export function PortfolioDashboardTab() {
         <input
           value={symbolInput}
           onChange={(e) => setSymbolInput(e.target.value)}
-          placeholder="Symbol, e.g. AAPL"
-          className="jv-input w-32"
+          placeholder={assetClass === "crypto" ? "Coin, e.g. BTC-USD" : "Symbol, e.g. AAPL"}
+          className="jv-input w-36"
         />
         <select
           value={assetClass}
@@ -344,7 +359,7 @@ export function PortfolioDashboardTab() {
         <input
           value={shares}
           onChange={(e) => setShares(e.target.value)}
-          placeholder={assetClass === "option" ? "Contracts" : "Shares"}
+          placeholder={assetClass === "option" ? "Contracts" : assetClass === "crypto" ? "Coins" : "Shares"}
           type="number"
           step="any"
           className="jv-input w-28"
@@ -352,7 +367,7 @@ export function PortfolioDashboardTab() {
         <input
           value={costBasis}
           onChange={(e) => setCostBasis(e.target.value)}
-          placeholder="Cost basis / share"
+          placeholder={assetClass === "crypto" ? "Cost basis / coin" : "Cost basis / share"}
           type="number"
           step="any"
           className="jv-input w-40"
@@ -407,7 +422,7 @@ export function PortfolioDashboardTab() {
               <tr>
                 <th className="text-left">Symbol</th>
                 <th className="text-left">Class</th>
-                <th className="text-right">Shares</th>
+                <th className="text-right">{holdings.some((h) => h.assetClass === "crypto") ? "Shares / Coins" : "Shares"}</th>
                 <th className="text-right">Cost/Share</th>
                 <th className="text-right">Price</th>
                 <th className="text-right">Value</th>
@@ -437,8 +452,8 @@ export function PortfolioDashboardTab() {
                       </td>
                       <td style={{ color: "var(--text-2)" }}>{assetClassLabel(h.assetClass)}</td>
                       <td className="jv-num">{h.shares}</td>
-                      <td className="jv-num">{fmtUsd(h.costBasisPerShare)}</td>
-                      <td className="jv-num">{v?.error ? <span className="text-xs" style={{ color: "var(--danger)" }}>{v.error}</span> : fmtUsd(v?.currentPrice ?? null)}</td>
+                      <td className="jv-num">{fmtUnitPrice(h.costBasisPerShare, h.assetClass)}</td>
+                      <td className="jv-num">{v?.error ? <span className="text-xs" style={{ color: "var(--danger)" }}>{v.error}</span> : fmtUnitPrice(v?.currentPrice ?? null, h.assetClass)}</td>
                       <td className="jv-num">{fmtUsd(v?.currentValue ?? null)}</td>
                       <td className="jv-num" style={{ color: "var(--text-2)" }}>{fmtMarketCap(v?.marketCapUsd ?? null)}</td>
                       <td className={`jv-num ${pnlClass}`}>

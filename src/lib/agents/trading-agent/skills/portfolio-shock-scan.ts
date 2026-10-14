@@ -40,6 +40,8 @@ async function resolveQueryForHolding(holding: PortfolioHolding): Promise<{ quer
     const match = COMMODITY_FUTURES_NEWS_KEYWORDS[holding.symbol];
     return match ?? null;
   }
+  // Crypto has no keyword mapping either: the maps cover equity sectors, currency pairs, commodities and futures, and
+  // inventing a query for a coin would not be a real supply/demand read.
   // Bonds have no direct GDELT keyword mapping built — a real, disclosed gap
   // rather than a guessed query.
   return null;
@@ -50,6 +52,9 @@ export async function runPortfolioShockScan(holdings: PortfolioHolding[]): Promi
     "GDELT is a global news-coverage index, not a curated 'this caused that' feed — a coverage spike means a topic is suddenly getting more attention, which correlates with market-moving events but isn't a guaranteed causal signal.",
     "Bond holdings have no direct news-query mapping built and are skipped — a real, disclosed gap, not a guessed query.",
   ];
+  if (holdings.some((h) => h.assetClass === "crypto")) {
+    dataLimitations.push("Crypto holdings are not part of this scan: no news-query mapping exists for coins, so they are skipped rather than matched to a guessed query.");
+  }
 
   const targetsByQuery = new Map<string, QueryTarget>();
   for (const holding of holdings) {

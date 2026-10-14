@@ -369,8 +369,9 @@ export function FayeChatWidget() {
     let ok = true;
     if (action.type === "add_holding") {
       const p = action.params;
-      addHolding(p.symbol, p.assetClass as AssetClass, p.shares, p.costBasisPerShare, p.acquiredDate);
-      resultText = `Added ${p.shares} share(s) of ${p.symbol}.`;
+      const added = addHolding(p.symbol, p.assetClass as AssetClass, p.shares, p.costBasisPerShare, p.acquiredDate);
+      ok = added;
+      resultText = added ? `Added ${p.shares} share(s) of ${p.symbol}.` : `Could not add ${p.symbol} -- nothing changed (crypto needs a Coinbase USD pair like BTC-USD).`;
     } else {
       const matches = holdings.filter((h) => h.symbol === action.params.symbol);
       if (matches.length === 0) {

@@ -109,7 +109,17 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
     `Risk tier is a stated heuristic on annualized volatility (Low <=${RISK_TIER_LOW_MAX}%, Medium <=${RISK_TIER_MEDIUM_MAX}%, High above), not a universal standard.`,
   ];
 
-  const uniqueSymbols = [...new Set(holdings.map((h) => h.symbol))];
+  // Crypto is left out of beta, correlation and the frontier on purpose. It trades 365 days a year and its daily candles
+  // close at 00:00 UTC, so lining its returns up against SPY's weekday, 4pm ET closes would compare different horizons
+  // (a Monday stock move spans the weekend, a Monday crypto move does not) and the 252-day annualisation would also
+  // understate its volatility. Showing a number that looks precise but is not comparable is worse than showing none.
+  const cryptoSymbols = [...new Set(holdings.filter((h) => h.assetClass === "crypto").map((h) => h.symbol))];
+  const uniqueSymbols = [...new Set(holdings.filter((h) => h.assetClass !== "crypto").map((h) => h.symbol))];
+  if (cryptoSymbols.length > 0) {
+    dataLimitations.push(
+      `Crypto holdings (${cryptoSymbols.join(", ")}) are excluded from beta, correlation, the efficient frontier and the portfolio risk figures: crypto trades every day with UTC closes, so its returns do not line up with SPY's weekday closes and the 252-day annualisation does not fit it. The "current" point and risk figures below cover the non-crypto holdings only.`
+    );
+  }
 
   const [benchmarkReturns, riskFreeRateResult, ...symbolReturnsList] = await Promise.all([
     fetchReturnsFor(BENCHMARK),
@@ -137,6 +147,16 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
   // Per-holding beta vs SPY, aligned by dateKey (not array position), plus
   // annualized volatility / a simple risk-tier read (independent of the
   // benchmark, computed straight from the symbol's own return series).
+  const cryptoBetaRows: HoldingBeta[] = cryptoSymbols.map((symbol) => ({
+    symbol,
+    beta: null,
+    alpha: null,
+    rSquared: null,
+    n: 0,
+    volatilityAnnualizedPercent: null,
+    riskTier: null,
+    error: "Excluded: crypto trades 24/7, so its returns do not line up with SPY's weekday closes.",
+  }));
   const betas: HoldingBeta[] = symbolReturnsList.map((s) => {
     if (s.error) {
       return {
@@ -309,7 +329,7 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
   return {
     benchmark: BENCHMARK,
     lookbackDays: LOOKBACK_DAYS,
-    betas,
+    betas: [...betas, ...cryptoBetaRows],
     correlationMatrix,
     frontier,
     portfolioSortinoRatioAnnualized,
