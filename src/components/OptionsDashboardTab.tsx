@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { classifyPutCallSkew, type SkewLabel } from "@/lib/agents/trading-agent/skills/options-flow-skew";
 import { recommendStrategies } from "@/lib/agents/trading-agent/skills/strategy-scanner";
+import { applyDealerSign, DEALER_SIGN_LABELS, type DealerSignMode } from "@/lib/agents/trading-agent/skills/gex-sign";
 import { TradingDashboardTab } from "./TradingDashboardTab";
 import { WatchlistSelector } from "./WatchlistSelector";
 import type {
@@ -61,6 +62,8 @@ export function OptionsDashboardTab() {
   const [gexRows, setGexRows] = useState<GexRow[]>([]);
   const [gexLoading, setGexLoading] = useState(false);
   const [gexChecked, setGexChecked] = useState(false);
+  // Which side dealers are assumed to hold. "app" is how the signal is computed and logged; "standard" is the reverse.
+  const [dealerMode, setDealerMode] = useState<DealerSignMode>("app");
 
   const runCheck = useCallback(async () => {
     if (optionEntries.length === 0) return;
@@ -132,10 +135,16 @@ export function OptionsDashboardTab() {
   // Pure derivation from state already fetched by the two checks above — no
   // new network requests. Combines each ticker's GEX signal with its flow
   // skew (both already in memory) into a rule-based strategy suggestion.
+  // The same fetched signals, read under the chosen dealer assumption (a no-op for "app").
+  const viewGexRows = useMemo(
+    () => gexRows.map((g) => (g.signal ? { ...g, signal: applyDealerSign(g.signal, dealerMode) } : g)),
+    [gexRows, dealerMode]
+  );
+
   const strategyRows = useMemo(
     () =>
       optionEntries.map((e) => {
-        const gexRow = gexRows.find((g) => g.ticker === e.symbol);
+        const gexRow = viewGexRows.find((g) => g.ticker === e.symbol);
         const skewRow = rows.find((r) => r.ticker === e.symbol);
         return {
           ticker: e.symbol,
@@ -143,7 +152,7 @@ export function OptionsDashboardTab() {
           gexError: gexRow?.error ?? null,
         };
       }),
-    [optionEntries, gexRows, rows]
+    [optionEntries, viewGexRows, rows]
   );
 
   function handleQuickAdd(e: React.FormEvent) {
@@ -178,6 +187,30 @@ export function OptionsDashboardTab() {
           Tradier). Each check here also logs a row to the forward paper backtest (see the Paper Backtest Log
           tab) so real outcomes accumulate over time.
         </p>
+        <div className="mb-4 flex flex-col gap-2">
+          <div className="text-xs uppercase tracking-wider" style={{ color: "var(--text-2)" }}>Dealer positioning (regime, quadrant and strategy ideas)</div>
+          <div role="radiogroup" aria-label="Dealer positioning" className="inline-flex max-w-full overflow-x-auto self-start rounded-md" style={{ border: "1px solid var(--line-bright)" }}>
+            {(Object.keys(DEALER_SIGN_LABELS) as DealerSignMode[]).map((m, i) => {
+              const on = m === dealerMode;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => setDealerMode(m)}
+                  className="px-3 py-1.5 text-sm whitespace-nowrap"
+                  style={{ background: on ? "var(--signal)" : "transparent", color: on ? "var(--ink-950)" : "var(--text-1)", fontWeight: on ? 600 : 400, borderLeft: i === 0 ? "none" : "1px solid var(--line-bright)" }}
+                >
+                  {DEALER_SIGN_LABELS[m]}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs" style={{ color: "var(--text-2)" }}>
+            A customer who buys a put leaves the dealer short it, which is short gamma. If customers mostly buy puts and sell calls, the second setting applies and put-heavy names read negative. Public data cannot show who holds which side, so neither is confirmed. The setting changes the regime, the quadrant and the strategy ideas; walls and the gamma flip are the same either way, and the paper-backtest log always records the first setting.
+          </p>
+        </div>
         {optionEntries.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-2)" }}>
             Add an underlying to your Options watchlist below to see this signal.
@@ -186,7 +219,7 @@ export function OptionsDashboardTab() {
           <p className="text-sm" style={{ color: "var(--text-2)" }}>{gexLoading ? "Checking…" : "No data yet."}</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {gexRows.map((r) => (
+            {viewGexRows.map((r) => (
               <div key={r.ticker} className="jv-card">
                 <div className="jv-br-b" />
                 <div className="flex items-center justify-between mb-2">
@@ -198,7 +231,7 @@ export function OptionsDashboardTab() {
                 ) : r.signal ? (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                     <div>
-                      <div className="jv-label" title="Positive or negative follows an assumption about which side dealers hold: here, short the calls and long the puts. Call-heavy gamma therefore reads negative. The assumption cannot be checked from public data.">Regime</div>
+                      <div className="jv-label" title={dealerMode === "app" ? "Positive or negative follows an assumption about which side dealers hold: here, short the calls and long the puts. Call-heavy gamma therefore reads negative. The assumption cannot be checked from public data." : "Positive or negative follows an assumption about which side dealers hold: here, long the calls and short the puts. Put-heavy gamma therefore reads negative. The assumption cannot be checked from public data."}>Regime</div>
                       <div className="font-mono" style={{ color: "var(--text-1)" }}>{r.signal.gexRegime.balanced ? "balanced" : r.signal.gexRegime.regime}</div>
                       {r.signal.gexRegime.netToGrossPct !== null && r.signal.gexRegime.netToGrossPct !== undefined && (
                         <div className="text-xs" style={{ color: "var(--text-2)" }}>

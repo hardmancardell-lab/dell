@@ -5,6 +5,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as G from "../src/lib/agents/trading-agent/skills/gex-signal.ts";
+import * as SG from "../src/lib/agents/trading-agent/skills/gex-sign.ts";
 
 let bad = 0;
 const t = (name: string, ok: boolean, detail = "") => {
@@ -161,6 +162,35 @@ t("the window length is honoured", !G.windowExpirations(exps, NOW, 10).includes(
   // the call-heavy-by-gamma effect behind the dashboard's mostly-negative readings: calls near the money outweigh far-out puts
   const skew = G.classifyGexRegime(G.computeWindowRows([{ expiration: "2026-11-06", chain: chain([contract(100, 1000), contract(105, 1000)], [contract(80, 3000), contract(90, 3000)]) }], 100, NOW), 100);
   t("more put OI than call OI can still be call-heavy by gamma when the puts sit far out of the money, so the label reads negative", skew.callGamma > skew.putGamma && skew.regime === "negative" && skew.netToGrossPct < 0, JSON.stringify([skew.callGamma, skew.putGamma]));
+}
+
+// ---------------------------------------------------------------- reading the signal under the other dealer assumption
+{
+  const mkSignal = (calls: number, puts: number, term: any = null, flow = { callWallFlowRatio: 0.2, putWallFlowRatio: 0.1 }) => {
+    const rows = G.computeStrikeGex(chain([contract(100, calls)], [contract(100, puts)]), 100, NOW, Date.parse("2026-11-06T20:00:00Z"), 100, true, false);
+    const gexRegime = G.classifyGexRegime(rows, 100);
+    return { underlying: "TST", asOfDateKey: "2026-10-08", nearExpiration: "2026-11-06", farExpiration: null, gexRegime, termStructure: term, flowAtWalls: flow, quadrant: G.classifyQuadrant(gexRegime, term, flow), dataLimitations: ["base note"] };
+  };
+  const putHeavy = mkSignal(1000, 3000);   // app sign: puts count positive, so the label reads positive
+  t("app setting leaves the signal exactly as computed", SG.applyDealerSign(putHeavy, "app") === putHeavy);
+  const flipped = SG.applyDealerSign(putHeavy, "standard");
+  t("put-heavy reads positive under the app convention and negative with dealers long calls, short puts", putHeavy.gexRegime.regime === "positive" && flipped.gexRegime.regime === "negative");
+  t("net gamma and net-to-gross change sign and nothing else about the size", near(flipped.gexRegime.totalNetGex, -putHeavy.gexRegime.totalNetGex, 1e-6) && near(flipped.gexRegime.netToGrossPct, -putHeavy.gexRegime.netToGrossPct, 1e-9) && near(Math.abs(flipped.gexRegime.netToGrossPct), 50, 1e-6));
+  t("the label that was shown becomes the opposite-convention label", flipped.gexRegime.regimeOppositeConvention === "positive");
+  t("balanced, walls, flip and gross do not depend on the setting", flipped.gexRegime.balanced === putHeavy.gexRegime.balanced && flipped.gexRegime.callWall === putHeavy.gexRegime.callWall && flipped.gexRegime.putWall === putHeavy.gexRegime.putWall && flipped.gexRegime.gammaFlip === putHeavy.gexRegime.gammaFlip && flipped.gexRegime.grossGex === putHeavy.gexRegime.grossGex);
+  t("the quadrant's volatility half follows the flipped regime (stable becomes volatile) and the direction stays", putHeavy.quadrant === "bullish-stable" && flipped.quadrant === "bullish-volatile", `${putHeavy.quadrant} -> ${flipped.quadrant}`);
+  const callHeavy = mkSignal(3000, 1000);
+  t("call-heavy goes the other way: volatile becomes stable", callHeavy.quadrant === "bullish-volatile" && SG.applyDealerSign(callHeavy, "standard").quadrant === "bullish-stable");
+  const back = mkSignal(1000, 3000, { ivNear: 0.5, ivFar: 0.4, spread: 0.1, shape: "backwardation" });
+  t("backwardation keeps the quadrant volatile under either setting", back.quadrant === "bullish-volatile" && SG.applyDealerSign(back, "standard").quadrant === "bullish-volatile");
+  const bearish = mkSignal(1000, 3000, null, { callWallFlowRatio: 0.1, putWallFlowRatio: 0.4 });
+  t("direction still comes from wall flow", SG.applyDealerSign(bearish, "standard").quadrant === "bearish-volatile");
+  const noQuad = { ...putHeavy, quadrant: null };
+  t("a signal with no quadrant stays without one", SG.applyDealerSign(noQuad, "standard").quadrant === null);
+  const withNull = { ...putHeavy, gexRegime: { ...putHeavy.gexRegime, netToGrossPct: null } };
+  t("a missing net-to-gross stays missing and does not throw", SG.applyDealerSign(withNull, "standard").gexRegime.netToGrossPct === null);
+  t("the input is not modified and a note about the setting is added", putHeavy.gexRegime.regime === "positive" && putHeavy.dataLimitations.length === 1 && flipped.dataLimitations.length === 2 && /long the calls and short the puts/.test(flipped.dataLimitations[1]));
+  t("the gex-signal module still exports classifyQuadrant and it is the same rule", G.classifyQuadrant === SG.classifyQuadrant);
 }
 
 console.log(bad ? `\n${bad} FAILED` : "\nall checks passed");

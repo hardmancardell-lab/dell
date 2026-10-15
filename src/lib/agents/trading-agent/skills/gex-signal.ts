@@ -1,4 +1,5 @@
 import { blackScholesGreeks } from "../black-scholes";
+import { classifyQuadrant } from "./gex-sign";
 import { fetchOptionsChain, fetchQuote } from "@/lib/data/market-data";
 import * as tradier from "@/lib/data/tradier";
 import type { MarketOptionsChain } from "@/lib/data/market-data-types";
@@ -281,22 +282,8 @@ export function flowDirectionAtWalls(rows: StrikeGexRow[], regime: GexRegime): F
   };
 }
 
-export function classifyQuadrant(
-  regime: GexRegime,
-  term: TermStructureSignal | null,
-  flow: FlowAtWalls
-): QuadrantLabel {
-  const callScore = flow.callWallFlowRatio ?? 0;
-  const putScore = flow.putWallFlowRatio ?? 0;
-  const direction = callScore >= putScore ? "bullish" : "bearish";
-
-  let volRegime: "stable" | "volatile" = regime.regime === "positive" ? "stable" : "volatile";
-  // Backwardation nudges toward "volatile" even in positive GEX, since it
-  // signals the market is pricing a near-term catalyst.
-  if (term?.shape === "backwardation" && volRegime === "stable") volRegime = "volatile";
-
-  return `${direction}-${volRegime}` as QuadrantLabel;
-}
+// The quadrant rule lives in gex-sign.ts (pure and client-safe) so the dashboard can re-read it under the other dealer assumption.
+export { classifyQuadrant };
 
 function findAtmIv(chain: MarketOptionsChain, spot: number): number {
   const all = [...chain.calls, ...chain.puts];
