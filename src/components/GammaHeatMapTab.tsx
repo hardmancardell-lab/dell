@@ -6,12 +6,20 @@ import { useTrackEvent } from "@/lib/analytics/use-track";
 
 type View = "net" | "call" | "put" | "gross";
 type Scale = "shared" | "each";
+/** Which side dealers hold. "standard": dealers long the calls and short the puts customers trade (customers buy puts to hedge, sell calls to earn income). "app": the Options dashboard's assumption, the reverse. */
+type Sign = "standard" | "app";
+/** Net gamma within this percent of gross is a near coin flip. A judgement threshold, same value as BALANCED_BAND_PCT in gex-signal.ts (not imported: that module pulls in server-only code). */
+const BALANCED_BAND_PCT = 10;
 
 const VIEWS: [View, string][] = [
-  ["net", "Net (calls +, puts −)"],
+  ["net", "Net dealer gamma"],
   ["call", "Calls only"],
   ["put", "Puts only"],
   ["gross", "Gross"],
+];
+const SIGNS: [Sign, string][] = [
+  ["standard", "Dealers long calls, short puts"],
+  ["app", "Dealers short calls, long puts (Options dashboard)"],
 ];
 const WINDOWS: [number, string][] = [
   [7, "Next 7 days"],
@@ -81,7 +89,7 @@ function cellFill(view: View, v: number, max: number): string | null {
   return `color-mix(in srgb, ${baseColor(view, v)} ${Math.round(8 + a * 86)}%, var(--ink-800))`;
 }
 
-function HeatMap({ data, view, windowDays, scale, rangeDollars }: { data: GammaHeatMapResult; view: View; windowDays: number; scale: Scale; rangeDollars: number }) {
+function HeatMap({ data, view, sign, windowDays, scale, rangeDollars }: { data: GammaHeatMapResult; view: View; sign: 1 | -1; windowDays: number; scale: Scale; rangeDollars: number }) {
   const { spot } = data;
   const colIdx = data.expirations.map((e, j) => [e, j] as const).filter(([e]) => e.days <= windowDays);
   const rowIdx = data.strikes.map((k, i) => [k, i] as const).filter(([k]) => Math.abs(k - spot) <= rangeDollars + 1e-9);
@@ -90,7 +98,7 @@ function HeatMap({ data, view, windowDays, scale, rangeDollars }: { data: GammaH
 
   const val = (i: number, j: number) => {
     const c = data.call[i][j], p = data.put[i][j];
-    return view === "net" ? c - p : view === "call" ? c : view === "put" ? p : c + p;
+    return view === "net" ? sign * (c - p) : view === "call" ? c : view === "put" ? p : c + p;
   };
 
   const rh = Math.max(4, Math.min(16, Math.floor(560 / n)));
@@ -202,6 +210,7 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
   const [view, setView] = useState<View>("net");
   const [windowDays, setWindowDays] = useState(99);
   const [scale, setScale] = useState<Scale>("shared");
+  const [signMode, setSignMode] = useState<Sign>("standard");
   const [rangeIdx, setRangeIdx] = useState(2);
   const { track } = useTrackEvent();
 
@@ -233,6 +242,10 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
 
   const shownCols = data ? data.expirations.filter((e) => e.days <= windowDays).length : 0;
   const gross = data ? data.callTotalM + data.putTotalM : 0;
+  const sign: 1 | -1 = signMode === "standard" ? 1 : -1;
+  // Net dealer gamma under the chosen assumption, as a share of gross. Positive: dealers long gamma (hedging dampens moves).
+  const netPct = data && gross > 0 ? (sign * (data.callTotalM - data.putTotalM) / gross) * 100 : null;
+  const balanced = netPct !== null && Math.abs(netPct) <= BALANCED_BAND_PCT;
   const rangeDollars = ranges[rangeIdx] ?? 0;
 
   return (
@@ -273,6 +286,7 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
             <div className="jv-br-b" />
             <div className="flex flex-wrap gap-x-6 gap-y-3 items-end">
               <Seg label="View" items={VIEWS} value={view} onChange={setView} />
+              <Seg label="Dealer positioning (Net view and regime)" items={SIGNS} value={signMode} onChange={setSignMode} />
               <Seg label="Expirations" items={WINDOWS} value={windowDays} onChange={setWindowDays} />
               <Seg label="Strike range (dollars from spot)" items={ranges.map((r, i) => [i, `±$${r}`] as [number, string])} value={rangeIdx} onChange={setRangeIdx} />
               <Seg label="Colour scale" items={SCALES} value={scale} onChange={setScale} />
@@ -285,6 +299,10 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
               [money(data.callTotalM), "call gamma per 1% move"],
               [money(data.putTotalM), "put gamma per 1% move"],
               [money(gross), "gross (calls + puts)"],
+              [
+                netPct === null ? "N/A" : balanced ? "balanced" : netPct > 0 ? "positive" : "negative",
+                netPct === null ? "regime" : `regime: net ${netPct >= 0 ? "+" : "−"}${Math.abs(netPct).toFixed(0)}% of gross under this assumption${balanced ? ", too close to call" : netPct > 0 ? ", dealers long gamma, hedging dampens moves" : ", dealers short gamma, hedging amplifies moves"}`,
+              ],
               [data.callWalls.length ? data.callWalls.join(", ") : "N/A", "largest call gamma above spot (call walls)"],
               [data.putWalls.length ? data.putWalls.join(", ") : "N/A", "largest put gamma below spot (put walls)"],
               [data.flip === null ? "none in ±15%" : `$${data.flip.toFixed(2)}`, "zero-gamma level, all expirations"],
@@ -305,9 +323,9 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
             <div className="flex items-center gap-2 text-xs mb-3" style={{ color: "var(--text-1)" }}>
               {view === "net" ? (
                 <>
-                  <span>puts dominate</span>
+                  <span>negative gamma (dealers short)</span>
                   <i style={{ display: "inline-block", height: 10, width: 140, borderRadius: 2, background: `linear-gradient(90deg, ${PUT_COLOR}, var(--ink-800), ${CALL_COLOR})` }} />
-                  <span>calls dominate</span>
+                  <span>positive gamma (dealers long)</span>
                 </>
               ) : (
                 <>
@@ -317,7 +335,7 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
                 </>
               )}
             </div>
-            <HeatMap data={data} view={view} windowDays={windowDays} scale={scale} rangeDollars={rangeDollars} />
+            <HeatMap data={data} view={view} sign={sign} windowDays={windowDays} scale={scale} rangeDollars={rangeDollars} />
             <p className="text-xs mt-3" style={{ color: "var(--text-2)" }}>
               Units: dollars of stock a 1% move in {data.underlying} would require hedging, per strike and date, from open interest. Colours use a
               square-root scale. Showing strikes within ${rangeDollars} of the ${data.spot.toFixed(2)} spot; the totals, walls and zero-gamma level use every
@@ -329,7 +347,7 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
             <div className="jv-br-b" />
             <div className="text-sm font-medium mb-2" style={{ color: "var(--text-0)" }}>How to read this, and what it cannot tell you</div>
             <ul className="text-sm flex flex-col gap-2 pl-5 list-disc" style={{ color: "var(--text-1)" }}>
-              <li><b style={{ color: "var(--text-0)" }}>The sign is an assumption.</b> Net assumes market makers are long the calls and short the puts customers trade against. Public data cannot confirm who holds which side, so Calls only and Puts only show where the gamma sits without assuming anything. The zero-gamma level is the same under either sign.</li>
+              <li><b style={{ color: "var(--text-0)" }}>The sign is an assumption, so it is a switch.</b> A customer who buys a put leaves the dealer short that put, which is short gamma; a customer who sells a call leaves the dealer long it. If customers net buy puts and sell calls, the first setting applies and put-heavy names read negative. The Options dashboard assumes the reverse. Public data cannot show who holds which side or whether a trade was a purchase or a sale, so neither is confirmed. It changes the Net view and the regime tile only: Calls only, Puts only, Gross, the walls and the zero-gamma level are the same under either.</li>
               <li><b style={{ color: "var(--text-0)" }}>Near expirations dominate.</b> Gamma per contract rises sharply as expiry approaches, so the leftmost columns carry most of the heat. Switch the colour scale to Each expiry to see the later dates on their own scale.</li>
               <li><b style={{ color: "var(--text-0)" }}>Gross is a ceiling, not a forecast.</b> It adds every contract as if dealers held all of it. Real net dealer positions are smaller.</li>
               <li><b style={{ color: "var(--text-0)" }}>Walls</b> are the strikes with the most call gamma above spot and the most put gamma below spot, the same definition as the Options dashboard (method gex-v2).</li>
