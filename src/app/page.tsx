@@ -55,6 +55,7 @@ import { YieldCurveTab } from "@/components/YieldCurveTab";
 import { YieldAlertThresholdTab } from "@/components/YieldAlertThresholdTab";
 import { OptionsDashboardTab } from "@/components/OptionsDashboardTab";
 import { GammaHeatMapTab } from "@/components/GammaHeatMapTab";
+import { OptionFlowTab } from "@/components/OptionFlowTab";
 import { OptionsStrategiesTab } from "@/components/OptionsStrategiesTab";
 import { OptionsChainTradeTab } from "@/components/OptionsChainTradeTab";
 import { PaperBacktestLogTab } from "@/components/PaperBacktestLogTab";
@@ -748,6 +749,7 @@ export default async function Home() {
                             tabs={[
                               { id: "dashboard", label: "Dashboard", content: <OptionsDashboardTab /> },
                               { id: "gamma-heat-map", label: "Gamma Heat Map", content: <GammaHeatMapTab /> },
+                              { id: "intraday-put-call", label: "Intraday Put/Call", content: <OptionFlowTab /> },
                               {
                                 id: "strategy-guide",
                                 label: "Strategy Guide",
