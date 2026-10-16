@@ -26,8 +26,8 @@ export const OPTION_FLOW_CONFIG = {
   contractBandPct: 0.1,
   contractExpirations: 3,
   /** Retention: the per-contract jsonb is the bulk of each row, so it is dropped first; the scalar columns are kept much longer. */
-  detailRetentionDays: 30,
-  rowRetentionDays: 730,
+  detailRetentionDays: 14,
+  rowRetentionDays: 400,
   /** A snapshot is "running" if the newest row was fetched within this many minutes (one interval plus GitHub Actions slack). */
   runningMaxAgeMinutes: 9,
 } as const;
