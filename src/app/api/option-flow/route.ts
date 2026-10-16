@@ -4,7 +4,7 @@ import { OPTION_FLOW_SYMBOLS, sessionDateET } from "@/lib/agents/trading-agent/s
 
 /**
  * GET /api/option-flow?symbol=SPY&date=2026-10-15
- * The day's logged snapshots for one symbol (raw rows, no labels), plus the recent session dates for the chooser.
+ * The day's logged snapshots for one symbol (raw rows, no labels; each carries data_feed and quote_lag_seconds), plus the recent session dates for the chooser.
  * `date` defaults to today in New York. Add &contracts=1 for the per-contract jsonb (about 30 KB per SPY row).
  */
 export async function GET(request: Request) {

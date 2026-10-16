@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { OPTION_FLOW_SYMBOLS, loggingStatus, sessionDateET } from "@/lib/agents/trading-agent/skills/option-flow-snapshot";
+import { OPTION_FLOW_SYMBOLS, feedBadgeText, feedSummary, loggingStatus, sessionDateET } from "@/lib/agents/trading-agent/skills/option-flow-snapshot";
 import type { OptionFlowRow } from "@/lib/agents/trading-agent/skills/option-flow-snapshot";
 import { toEasternParts } from "@/lib/agents/trading-agent/skills/time-windows";
 
@@ -311,11 +311,18 @@ export function OptionFlowTab() {
     return [...set].sort().reverse();
   }, [data, today, date]);
 
+  const feed = useMemo(() => feedSummary(rows), [rows]);
+  const feedDelayed = feed.latestFeed === "sandbox";
+
   const chip = (() => {
     if (!status) return { cls: "c-neutral", text: "Checking…" };
     const ago = status.minutesAgo;
     switch (status.state) {
-      case "running": return { cls: "c-signal", text: `Logging is running. Last snapshot ${ago} min ago.` };
+      case "running":
+        // Plainly say so when the snapshots are on the delayed feed: a live-looking chip must not imply live data.
+        return feedDelayed
+          ? { cls: "", text: `Logging is running. Last snapshot ${ago} min ago. Data feed is delayed about 15 minutes.`, warn: true }
+          : { cls: "c-signal", text: `Logging is running. Last snapshot ${ago} min ago.` };
       case "delayed": return { cls: "", text: `Last snapshot ${ago} min ago. Logging looks delayed.`, warn: true };
       case "not_running": return { cls: "c-danger", text: "Logging is not running: no snapshots yet for this session." };
       case "closed": return { cls: "c-neutral", text: lastFetchMs === null ? "Market closed. No snapshots for this date." : `Market closed. Last snapshot ${etClock(lastFetchMs)} ET.` };
@@ -360,6 +367,19 @@ export function OptionFlowTab() {
             >
               {chip.text}
             </span>
+            {feed.latestFeed && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span
+                  className={`jv-badge ${feedDelayed ? "" : "c-signal"}`}
+                  data-testid="feed-badge"
+                  style={feedDelayed ? { color: "var(--verdict)", borderColor: "var(--verdict-dim)", background: "rgba(240, 168, 104, 0.08)" } : undefined}
+                >
+                  {feedBadgeText(feed.latestFeed)}
+                </span>
+                {feed.mixed && <span className="text-xs" style={{ color: "var(--verdict)" }}>This session mixes delayed and real-time snapshots.</span>}
+                {feed.ageText && <span className="text-xs" data-testid="quote-age" style={{ color: "var(--text-2)" }}>{feed.ageText}.</span>}
+              </div>
+            )}
           </div>
           <button type="button" className="jv-btn" onClick={() => void load(false)} disabled={loading}>{loading ? "Loading…" : "Refresh"}</button>
         </div>

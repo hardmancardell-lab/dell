@@ -44,6 +44,7 @@ Columns, grouped:
 | Aggressor proxy | `agg_call_buy`, `agg_call_sell`, `agg_put_buy`, `agg_put_sell`, `agg_unclassified` | See the next section. |
 | Vol | `iv_atm_near`, `iv_atm_next` | ATM implied vol (a fraction, 0.21 = 21%) of the nearest and the next flow-window expiration: mean of the call and put IV at the strike nearest spot, within 3% of spot. Null if none. The nearest expiration can be same-day, where IV is unreliable late in the day. |
 | Quality | `stale`, `clamped`, `flags`, `provider_calls`, `expirations_used`, `expirations_failed` | See "Flags". |
+| Data feed | `data_feed`, `quote_lag_seconds` | `data_feed` is `'sandbox'` (delayed about 15 minutes) or `'production'` (real-time): which Tradier environment the row came from. `quote_lag_seconds` is the fetch time minus the newest trade, bid or ask timestamp among near-the-money contracts, null when Tradier sent none. See "Data feed". |
 | Detail | `contracts` | See "Per-contract detail". |
 
 ## The aggressor proxy, and why it is crude
@@ -123,14 +124,60 @@ verified against the live account: expect roughly 10 to 20 seconds per tick, wel
 Expirations and chains are fetched with Next's data cache bypassed (`fresh` option in `src/lib/data/tradier.ts`); the
 default 5-minute cache would otherwise serve consecutive snapshots the same chain.
 
-**Data-delay check needed before trusting any timing.** `tradier.ts` points at the sandbox endpoint and notes that it
-returns live-equivalent data; my recollection of Tradier's public documentation is that sandbox market data is delayed (about 15 minutes), which should be checked against their current docs.
-These two statements conflict and neither has been verified here. If the chains are delayed, option measures describe
-the market 15 minutes before `actual_fetch_time` while `spot` (from another provider) does not, and forward returns
-measured from the fetch time would not be forward of the flow. Before any evaluation, compare the option-implied
-forward (call minus put at the money, plus strike) with `spot` across a session, and compare logged `spot` against
-1-minute bars, to estimate the lag. If a lag exists, either switch to the production endpoint or shift the evaluation
-clock by the estimated lag.
+## Data feed: sandbox (default, delayed) or production (opt-in, real-time)
+
+The logger can read Tradier from two environments, chosen per run by the cron route:
+
+| Mode | How it is selected | Base URL | Token | Data |
+| --- | --- | --- | --- | --- |
+| `sandbox` (default) | `OPTION_FLOW_TRADIER_MODE` unset, empty, or `sandbox` | `https://sandbox.tradier.com/v1` | `TRADIER_ACCESS_TOKEN` | Real market data, **delayed about 15 minutes** (`TRADIER_INTEGRATION_NOTES.md`). |
+| `production` (opt-in) | `OPTION_FLOW_TRADIER_MODE=production` **and** `TRADIER_PRODUCTION_TOKEN` set | `https://api.tradier.com/v1` | `TRADIER_PRODUCTION_TOKEN` | Real-time for brokerage account holders. |
+
+Why it matters: the logger takes a snapshot every five minutes and pairs it with `spot` from another provider. With the
+sandbox feed the option measures describe the market about 15 minutes before `actual_fetch_time` while `spot` does not,
+so forward returns measured from the fetch time would not be forward of the flow, and any live alert built on it would
+be 15 minutes late. The production feed removes that gap.
+
+**Rules the code enforces.**
+
+- Production is used only when both variables are set. If `OPTION_FLOW_TRADIER_MODE=production` and the token is missing,
+  the route answers HTTP 503 naming the missing variable, **before any request**: nothing is fetched and nothing is written.
+  It never falls back to sandbox, because a silent fallback would mix delayed and real-time rows in one log.
+- An unrecognised mode value (for example `prod`) fails the same way, for the same reason: treating it as sandbox would
+  hand you delayed data while you believe you switched. Matching ignores case and surrounding spaces; empty or unset means sandbox.
+- The sandbox token is never used for production or the other way round. In production mode `TRADIER_ACCESS_TOKEN` is not needed.
+- The feed is an explicit argument passed from the route through the service to each Tradier call (no module-level
+  setting), so concurrent requests cannot affect each other. Production requests are always fetched uncached.
+- Nothing else in the app changes: the GEX signal, Gamma Heat Map, options dashboard and strategy features call the
+  Tradier client without a feed and stay on the sandbox. The client also refuses any path other than the two option
+  market-data paths (expirations, chains), so account, order and watchlist endpoints cannot be reached.
+- Every row records `data_feed`. Rows logged before the switch stay `'sandbox'` (including rows written before the column
+  existed: the column defaults to `'sandbox'`). **Analyse one feed at a time**: filter on `data_feed` (for example
+  `where data_feed = 'production'`) and do not pool delayed and real-time rows. If the feed changes during a session, the
+  first row after the change carries the flag `feed_changed`; its new-volume delta spans both feeds (the cumulative totals
+  are still right).
+
+**How to switch.**
+
+1. In Vercel (Project > Settings > Environment Variables, Production): add `TRADIER_PRODUCTION_TOKEN` (your api.tradier.com
+   token) and add `OPTION_FLOW_TRADIER_MODE` = `production`. Do not paste the token into chat or into a committed file.
+2. Redeploy (environment variable changes apply to new deployments only).
+3. To go back, set `OPTION_FLOW_TRADIER_MODE` to `sandbox` or delete it, and redeploy.
+
+**How to verify on the first run.** The Intraday Put/Call tab shows a badge next to the status chip ("Real-time feed" or
+"Delayed feed (about 15 min)") and a line "Newest quote is N minutes old". The same figure is in the database:
+`select symbol, snapshot_time, data_feed, quote_lag_seconds from option_flow_snapshots order by snapshot_time desc limit 10;`.
+`quote_lag_seconds` is the fetch time minus the newest `trade_date`, `bid_date` or `ask_date` among contracts within 3% of
+spot. Expect about 900 or more on the sandbox feed and a few seconds up to roughly a minute on production during active
+trading. If production rows still show about 900, the token or account is not entitled to real-time data: switch back and
+check with Tradier. A null means Tradier did not send those fields (see below).
+
+**Limits of the lag figure.** The three timestamps are fields Tradier's chain response documents (epoch milliseconds), but
+they had not been checked against a live response when this was written; the first run is that check (`quote_lag_seconds`
+null on every row means the fields are absent or named differently, and `tradier.ts` should be adjusted). `bid_date` and
+`ask_date` are when the quote last changed, so a quiet name late in the day can show a large lag on a perfectly
+real-time feed; the newest of the near-the-money contracts is used to limit that. Judge the feed by the SPY or QQQ rows
+mid-session, not by a thinly traded name or the first and last minutes.
 
 ## Storage and retention
 
@@ -152,6 +199,8 @@ first. The delete and the null-out are two `prune(olderThanDateKey, {detailOnly}
 1. Run `db/migrations/2026-10-15_option_flow_snapshots.sql` once in the Supabase SQL editor.
 2. Vercel environment variables: `CRON_SECRET`, `TRADIER_ACCESS_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
    plus the market-data keys `fetchQuote` already needs (Alpaca or Schwab).
+   Optional, for real-time option data: `OPTION_FLOW_TRADIER_MODE=production` and `TRADIER_PRODUCTION_TOKEN` (see "Data feed").
+   Without them the logger uses the delayed sandbox feed, as before.
 3. GitHub repository secrets: `APP_URL` and `CRON_SECRET` (the alerts workflow already uses both).
 4. Enable the "Option Flow Snapshots (Intraday)" workflow (it must be on the default branch) and run it once by hand
    with "Run workflow" during a session to confirm a row appears.
