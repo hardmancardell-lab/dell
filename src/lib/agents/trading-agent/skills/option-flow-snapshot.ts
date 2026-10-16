@@ -62,6 +62,9 @@ export function isRegularSession(ms: number): boolean {
 /** [expIdx, strike, right, volume, openInterest, bid, ask, last, iv]. expIdx indexes expirations_used; iv is a fraction (0.2134), null when the provider gave none. */
 export type ContractTuple = [number, number, "c" | "p", number, number, number, number, number, number | null];
 
+/** Which Tradier environment a row's data came from. 'sandbox' is delayed about 15 minutes; 'production' is real-time. */
+export type DataFeed = "sandbox" | "production";
+
 export interface OptionFlowRow {
   symbol: string;
   /** Start of the 5-minute bucket (ISO, UTC). */
@@ -119,6 +122,10 @@ export interface OptionFlowRow {
   clamped: boolean;
   flags: string[];
   provider_calls: number | null;
+  /** The Tradier environment this row was fetched from. Rows logged before the column existed are 'sandbox'. Filter on this before analysis: delayed and real-time rows must not be mixed. */
+  data_feed: DataFeed;
+  /** Seconds between the fetch and the newest trade / bid / ask timestamp among near-the-money contracts. Null when the provider sent no timestamps. See quoteLagSeconds. */
+  quote_lag_seconds: number | null;
   /** Near-the-money contracts for re-analysis. Dropped after detailRetentionDays. */
   contracts: ContractTuple[] | null;
 }
@@ -143,6 +150,8 @@ export interface SnapshotInput {
   /** Last snapshot of the previous session; only consulted when `previous` is null, to catch holidays serving yesterday's volume. */
   priorSessionFinal?: OptionFlowRow | null;
   providerCalls?: number | null;
+  /** Which Tradier environment the chains came from. Required (no default) so a row can never be labelled by accident. */
+  dataFeed: DataFeed;
 }
 
 // ---------------------------------------------------------------- small maths
@@ -188,6 +197,29 @@ export function atmIv(chain: MarketOptionsChain, spot: number): number | null {
   const nearest = all.reduce((best, c) => (Math.abs(c.strikePrice - spot) < Math.abs(best - spot) ? c.strikePrice : best), all[0].strikePrice);
   const ivs = all.filter((c) => c.strikePrice === nearest).map((c) => c.volatility / 100);
   return round(ivs.reduce((a, b) => a + b, 0) / ivs.length, 6);
+}
+
+// ---------------------------------------------------------------- quote age
+
+/**
+ * How old the newest quote is at fetch time, in whole seconds: fetch time minus the newest `quoteTimeMs` (Tradier's
+ * trade_date / bid_date / ask_date) among near-the-money contracts (strike within 3% of spot, the same band atmIv
+ * uses) of the loaded flow chains. The newest one is used because individual contracts can sit unchanged for a long
+ * time; the most active near-ATM contract tracks the feed's delay. Null when no near-the-money contract carries a
+ * timestamp. A timestamp slightly in the future (clock skew) counts as 0. With the 15-minute-delayed sandbox feed
+ * expect roughly 900 or more; with the production feed during active trading, a few seconds to a minute or so.
+ * A large value late in the day or on a quiet name can also mean "nothing traded near the money", not a slow feed.
+ */
+export function quoteLagSeconds(chains: { chain: MarketOptionsChain }[], spot: number, fetchedAtMs: number): number | null {
+  let newest: number | null = null;
+  for (const { chain } of chains) {
+    for (const c of [...chain.calls, ...chain.puts]) {
+      const q = c.quoteTimeMs;
+      if (typeof q !== "number" || !Number.isFinite(q) || Math.abs(c.strikePrice - spot) > spot * 0.03) continue;
+      if (newest === null || q > newest) newest = q;
+    }
+  }
+  return newest === null ? null : Math.max(0, Math.round((fetchedAtMs - newest) / 1000));
 }
 
 // ---------------------------------------------------------------- per-contract jsonb
@@ -260,6 +292,7 @@ const loadedOnly = (chains: FlowChain[]) => chains.flatMap((c) => (c.chain ? [{ 
 /** Builds one snapshot row. Throws only on an unusable spot; everything else degrades to null fields and flags. */
 export function buildOptionFlowRow(input: SnapshotInput): OptionFlowRow {
   const { symbol, spot, fetchedAtMs } = input;
+  if (input.dataFeed !== "sandbox" && input.dataFeed !== "production") throw new Error(`Option-flow row for ${symbol} needs dataFeed "sandbox" or "production".`);
   if (!(spot > 0) || !Number.isFinite(spot)) throw new Error(`No usable spot price for ${symbol}.`);
   const bucketMs = bucketStartMs(fetchedAtMs);
   const sessionDate = sessionDateET(fetchedAtMs);
@@ -314,6 +347,8 @@ export function buildOptionFlowRow(input: SnapshotInput): OptionFlowRow {
       if (same && totals.callVol + totals.putVol > 0) { stale = true; flags.push("same_as_prior_session"); }
     }
   }
+  // A mid-session switch of feed makes the volume delta span both feeds: cumulative totals stay right, the delta is lumpy.
+  if (prev && prev.data_feed !== input.dataFeed) flags.push("feed_changed");
   if (stale) flags.push("stale");
   if (clamped) flags.push("volume_dropped");
 
@@ -400,6 +435,8 @@ export function buildOptionFlowRow(input: SnapshotInput): OptionFlowRow {
     clamped,
     flags,
     provider_calls: input.providerCalls ?? null,
+    data_feed: input.dataFeed,
+    quote_lag_seconds: quoteLagSeconds(loaded, spot, fetchedAtMs),
     contracts,
   };
 }
@@ -420,4 +457,29 @@ export function loggingStatus(opts: { lastFetchMs: number | null; nowMs: number;
   if (!isRegularSession(nowMs)) return { state: "closed", minutesAgo };
   if (lastFetchMs === null) return { state: "not_running", minutesAgo };
   return { state: minutesAgo !== null && minutesAgo <= OPTION_FLOW_CONFIG.runningMaxAgeMinutes ? "running" : "delayed", minutesAgo };
+}
+
+// ---------------------------------------------------------------- UI text for the data feed
+
+/** Badge text for one feed. The sandbox feed is the delayed one. */
+export function feedBadgeText(feed: DataFeed): string {
+  return feed === "production" ? "Real-time feed" : "Delayed feed (about 15 min)";
+}
+
+/** "Newest quote is 14 minutes old", or null when the row carries no quote timestamp. Under 90 s it is shown in seconds. */
+export function quoteAgeText(lagSeconds: number | null | undefined): string | null {
+  if (lagSeconds === null || lagSeconds === undefined || !Number.isFinite(lagSeconds)) return null;
+  if (lagSeconds < 90) return `Newest quote is ${Math.round(lagSeconds)} second${Math.round(lagSeconds) === 1 ? "" : "s"} old`;
+  const m = Math.round(lagSeconds / 60);
+  return `Newest quote is ${m} minute${m === 1 ? "" : "s"} old`;
+}
+
+/**
+ * What the tab shows about the feed for one session's rows: the newest row's feed and quote age, plus whether the
+ * session mixes feeds (a switch part way through the day). Rows from before the column existed read as 'sandbox'.
+ */
+export function feedSummary(rows: readonly Pick<OptionFlowRow, "data_feed" | "quote_lag_seconds">[]): { latestFeed: DataFeed | null; mixed: boolean; ageText: string | null } {
+  if (rows.length === 0) return { latestFeed: null, mixed: false, ageText: null };
+  const latest = rows[rows.length - 1];
+  return { latestFeed: latest.data_feed, mixed: new Set(rows.map((r) => r.data_feed)).size > 1, ageText: quoteAgeText(latest.quote_lag_seconds) };
 }

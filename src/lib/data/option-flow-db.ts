@@ -23,6 +23,7 @@ const SCALAR_COLUMNS = [
   "new_call_volume", "new_put_volume", "pc_new_volume", "minutes_since_prev", "first_pc_volume", "first_pc_premium",
   "pc_volume_chg", "pc_premium_chg", "agg_call_buy", "agg_call_sell", "agg_put_buy", "agg_put_sell", "agg_unclassified",
   "iv_atm_near", "iv_atm_next", "stale", "clamped", "flags", "provider_calls",
+  "data_feed", "quote_lag_seconds",
 ].join(",");
 
 async function request<T>(path: string, init: { method: string; body?: unknown; prefer?: string }): Promise<T> {
@@ -93,6 +94,9 @@ export function fromRow(r: Record<string, unknown>): OptionFlowRow {
     clamped: Boolean(o.clamped),
     flags: o.flags ?? [],
     provider_calls: n(o.provider_calls),
+    // Rows written before the column existed (or an unrecognised value) read as 'sandbox', which is what they were.
+    data_feed: o.data_feed === "production" ? "production" : "sandbox",
+    quote_lag_seconds: n(o.quote_lag_seconds),
     contracts: o.contracts ?? null,
   };
 }

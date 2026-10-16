@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import * as tradier from "@/lib/data/tradier";
+import { resolveOptionFlowFeed } from "@/lib/data/tradier";
 import { fetchQuote } from "@/lib/data/market-data";
 import {
   OptionFlowDbUnavailable,
@@ -39,17 +40,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, skipped: true, reason: "Outside the regular session (9:30am-4:00pm ET, weekdays)." });
   }
 
+  // Which Tradier feed this run uses. Production only when OPTION_FLOW_TRADIER_MODE=production AND TRADIER_PRODUCTION_TOKEN
+  // is set. A request for production without the token (or a mode value that is not recognised) stops here, before any
+  // provider or database call: never a silent fallback to sandbox, which would mix delayed and real-time rows in the log.
+  const choice = resolveOptionFlowFeed();
+  if (!choice.ok) {
+    return NextResponse.json({ ok: false, error: `Option-flow logging is not configured: ${choice.error}` }, { status: 503 });
+  }
+  const feed = choice.feed;
+
   const missing: string[] = [];
   if (!isOptionFlowDbConfigured()) missing.push("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
-  if (!process.env.TRADIER_ACCESS_TOKEN) missing.push("TRADIER_ACCESS_TOKEN (Tradier is the only provider with real option volume and open interest)");
+  if (feed === "sandbox" && !process.env.TRADIER_ACCESS_TOKEN) missing.push("TRADIER_ACCESS_TOKEN (Tradier is the only provider with real option volume and open interest)");
   if (missing.length > 0) {
     return NextResponse.json({ ok: false, error: `Option-flow logging is not configured: missing ${missing.join("; ")}.` }, { status: 503 });
   }
 
   const deps: OptionFlowDeps = {
     // Expirations and chains bypass Next's 5-minute data cache: a cached chain would make consecutive snapshots identical.
-    getExpirations: (symbol) => tradier.getExpirations(symbol, { fresh: true }),
-    fetchChain: (symbol, expiration) => tradier.fetchOptionsChain(symbol, expiration, { fresh: true }),
+    getExpirations: (symbol, f) => tradier.getExpirations(symbol, { fresh: true, feed: f }),
+    fetchChain: (symbol, expiration, f) => tradier.fetchOptionsChain(symbol, expiration, { fresh: true, feed: f }),
     fetchQuote,
     getPrevious: getPreviousSnapshot,
     getPriorSessionFinal: getLastSnapshotBeforeSession,
@@ -57,7 +67,7 @@ export async function GET(request: Request) {
   };
 
   try {
-    const tick = await runOptionFlowTick({ nowMs, symbols: OPTION_FLOW_SYMBOLS, deps, concurrency: 2, maxOiPassesPerRun: 2 });
+    const tick = await runOptionFlowTick({ nowMs, symbols: OPTION_FLOW_SYMBOLS, deps, feed, concurrency: 2, maxOiPassesPerRun: 2 });
 
     // Retention, once per session on the opening bucket: drop per-contract detail first, whole rows much later.
     let pruned: string | null = null;
@@ -78,6 +88,7 @@ export async function GET(request: Request) {
       ok: anyOk,
       snapshotTime: tick.snapshotTime,
       sessionDate: sessionDateET(nowMs),
+      dataFeed: feed,
       okCount: tick.results.filter((r) => r.ok).length,
       failedCount: tick.results.filter((r) => !r.ok).length,
       tradierCalls: tick.results.reduce((s, r) => s + r.tradierCalls, 0),

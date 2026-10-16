@@ -42,6 +42,8 @@ export interface MarketOptionContract {
   gamma: number;
   theta: number;
   vega: number;
+  /** Newest of the provider's trade / bid / ask timestamps for this contract (epoch ms). Only Tradier sets it; absent when the provider gave none. */
+  quoteTimeMs?: number;
 }
 
 export interface MarketOptionsChain {

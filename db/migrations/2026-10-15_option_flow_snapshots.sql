@@ -57,6 +57,12 @@ create table if not exists option_flow_snapshots (
   flags jsonb not null default '[]'::jsonb,
   provider_calls integer,
 
+  -- Which Tradier environment the row was fetched from: 'sandbox' (delayed about 15 minutes) or 'production' (real-time).
+  -- Filter on this before analysis; do not mix the two.
+  data_feed text not null default 'sandbox' check (data_feed in ('sandbox', 'production')),
+  -- Seconds between the fetch and the newest trade/bid/ask timestamp among near-the-money contracts; null when the provider sent none.
+  quote_lag_seconds numeric,
+
   -- [expIdx, strike, right, volume, oi, bid, ask, last, iv] for strikes within +-10% of spot, first 3 expirations.
   -- About 30 KB per row for SPY/QQQ; nulled after the detail retention period (14 days, OPTION_FLOW_CONFIG) by the prune job.
   contracts jsonb,
@@ -70,3 +76,7 @@ create index if not exists option_flow_snapshots_session_idx on option_flow_snap
 -- The app reads and writes with the service-role key (which bypasses RLS).
 -- RLS on with no policies keeps the public anon key out entirely.
 alter table option_flow_snapshots enable row level security;
+
+-- Safe either way: if an earlier copy of this file already created the table without the feed columns, this adds them.
+alter table option_flow_snapshots add column if not exists data_feed text not null default 'sandbox' check (data_feed in ('sandbox', 'production'));
+alter table option_flow_snapshots add column if not exists quote_lag_seconds numeric;

@@ -4,6 +4,7 @@
 // service that the cron route runs (with stubbed provider and database, no network).
 import * as F from "../src/lib/agents/trading-agent/skills/option-flow-snapshot.ts";
 import { runOptionFlowTick } from "../src/lib/agents/trading-agent/skills/option-flow-service.ts";
+import * as tradier from "../src/lib/data/tradier.ts";
 
 let bad = 0;
 const t = (name: string, ok: boolean, detail = "") => {
@@ -54,7 +55,7 @@ const chain1 = chainOf(
   [c(100, 60, 800, 1.4, 1.6, 1.5), c(95, 40, 300, 0.2, 0.4, 0.3)],
 );
 const chain2 = chainOf([c(100, 30, 500, 3.0, 3.2, 3.1, 24, E2)], [c(100, 20, 600, 2.9, 3.1, 3.0, 26, E2)]);
-const build = (over = {}) => F.buildOptionFlowRow({
+const build = (over = {}) => F.buildOptionFlowRow({ dataFeed: "sandbox",
   symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: null,
   flowChains: [{ expiration: E1, chain: chain1 }, { expiration: E2, chain: chain2 }], ...over,
 });
@@ -83,7 +84,7 @@ const build = (over = {}) => F.buildOptionFlowRow({
   t("no bid: last is used", F.contractPrice({ bid: 0, ask: 2, last: 1.2 }).source === "last");
   t("crossed quote: last is used", F.contractPrice({ bid: 3, ask: 2, last: 1.2 }).source === "last");
   t("nothing usable: unpriced, price 0", F.contractPrice({ bid: 0, ask: 0, last: 0 }).source === "none");
-  const r = F.buildOptionFlowRow({
+  const r = F.buildOptionFlowRow({ dataFeed: "sandbox",
     symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: null,
     flowChains: [{ expiration: E1, chain: chainOf([c(100, 10, 1, 0, 0, 2.0), c(101, 5, 1, 0, 0, 0)], [c(100, 10, 1, 1, 1.2, 0)]) }],
   });
@@ -92,15 +93,15 @@ const build = (over = {}) => F.buildOptionFlowRow({
 
 // ---------------------------------------------------------------- zero denominators
 {
-  const noCalls = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: null, flowChains: [{ expiration: E1, chain: chainOf([], [c(100, 10, 5, 1, 1.2, 1.1)]) }] });
+  const noCalls = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: null, flowChains: [{ expiration: E1, chain: chainOf([], [c(100, 10, 5, 1, 1.2, 1.1)]) }] });
   t("zero call volume gives P/C null, not Infinity", noCalls.pc_volume === null && noCalls.pc_premium === null);
-  const empty = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: [{ expiration: E1, chain: chainOf([], []) }], flowChains: [{ expiration: E1, chain: chainOf([], []) }] });
+  const empty = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: [{ expiration: E1, chain: chainOf([], []) }], flowChains: [{ expiration: E1, chain: chainOf([], []) }] });
   t("an empty chain gives null ratios and a zero_volume flag", empty.pc_volume === null && empty.pc_oi === null && empty.flags.includes("zero_volume") && empty.call_volume === 0);
   t("pcRatio never returns Infinity or NaN", F.pcRatio(5, 0) === null && F.pcRatio(0, 0) === null && F.pcRatio(NaN, 3) === null && F.pcRatio(0, 3) === 0);
-  const allNull = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: null, flowChains: [{ expiration: E1, chain: null }] });
+  const allNull = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: null, flowChains: [{ expiration: E1, chain: null }] });
   t("a chain that failed to load is reported, not counted", allNull.expirations_failed.join() === E1 && allNull.expirations_used.length === 0 && allNull.flags.includes("chain_load_failed"));
   let threw = false;
-  try { F.buildOptionFlowRow({ symbol: "TST", spot: 0, fetchedAtMs: T0, previous: null, oiChains: null, flowChains: [] }); } catch { threw = true; }
+  try { F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 0, fetchedAtMs: T0, previous: null, oiChains: null, flowChains: [] }); } catch { threw = true; }
   t("an unusable spot throws", threw);
 }
 
@@ -117,7 +118,7 @@ const first = build({ oiChains: [{ expiration: E1, chain: chain1 }, { expiration
   );
   const chain2b = chainOf([c(100, 35, 500, 3.0, 3.2, 3.1, 24, E2)], [c(100, 20, 600, 2.9, 3.1, 3.0, 26, E2)]);
   const T1 = T0 + 5 * MIN + 3000;
-  const second = F.buildOptionFlowRow({ symbol: "TST", spot: 100.5, fetchedAtMs: T1, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1b }, { expiration: E2, chain: chain2b }] });
+  const second = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100.5, fetchedAtMs: T1, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1b }, { expiration: E2, chain: chain2b }] });
   t("new volume is the like-for-like difference per side", second.new_call_volume === 25 && second.new_put_volume === 40, `${second.new_call_volume}/${second.new_put_volume}`);
   t("P/C on only the new volume", close(second.pc_new_volume, 40 / 25), String(second.pc_new_volume));
   t("minutes since previous uses the actual fetch times", close(second.minutes_since_prev, 5.05, 0.01), String(second.minutes_since_prev));
@@ -134,38 +135,38 @@ const first = build({ oiChains: [{ expiration: E1, chain: chain1 }, { expiration
   t("buy + sell + unclassified add back to the new volume", second.agg_call_buy + second.agg_call_sell + second.agg_put_buy + second.agg_put_sell + second.agg_unclassified === 65);
 
   // Stale: nothing moved
-  const same = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T1, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1 }, { expiration: E2, chain: chain2 }] });
+  const same = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T1, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1 }, { expiration: E2, chain: chain2 }] });
   t("unchanged cumulative volume is flagged stale, with zero new volume and null new P/C", same.stale && same.new_call_volume === 0 && same.new_put_volume === 0 && same.pc_new_volume === null && same.flags.includes("stale"));
 
   // A bucket that is not later than the previous one, or another session, is not a usable "previous".
-  const sameBucket = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0 + 20_000, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1b }, { expiration: E2, chain: chain2b }] });
+  const sameBucket = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0 + 20_000, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1b }, { expiration: E2, chain: chain2b }] });
   t("a re-run inside the same bucket does not use that bucket's own row as previous", sameBucket.new_call_volume === null && sameBucket.flags.includes("first_of_session"));
-  const nextDay = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0 + 86_400_000, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1b }, { expiration: E2, chain: chain2b }] });
+  const nextDay = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0 + 86_400_000, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1b }, { expiration: E2, chain: chain2b }] });
   t("a previous row from another session is ignored (volumes reset daily)", nextDay.new_call_volume === null && nextDay.oi_call === null);
 }
 
 // ---------------------------------------------------------------- clamping when cumulative volume drops
 {
   const lower = chainOf([c(100, 70, 1000, 1.9, 2.1, 2.0), c(105, 50, 400, 0.4, 0.6, 0.5)], [c(100, 60, 800, 1.4, 1.6, 1.5), c(95, 55, 300, 0.2, 0.4, 0.3)]);
-  const r = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0 + 5 * MIN, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: lower }, { expiration: E2, chain: chain2 }] });
+  const r = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0 + 5 * MIN, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: lower }, { expiration: E2, chain: chain2 }] });
   // E1 calls fell 150 -> 120 (clamped to 0), puts rose 100 -> 115 (+15); E2 unchanged
   t("a falling cumulative volume is clamped at 0 and flagged", r.new_call_volume === 0 && r.new_put_volume === 15 && r.clamped && r.flags.includes("volume_dropped"), `${r.new_call_volume}/${r.new_put_volume}/${r.clamped}`);
   t("a clamped snapshot is not marked stale when something else moved", !r.stale);
-  const reset = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0 + 5 * MIN, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chainOf([c(100, 3, 1, 1, 1.2, 1.1)], [c(100, 2, 1, 1, 1.2, 1.1)]) }, { expiration: E2, chain: chainOf([], []) }] });
+  const reset = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0 + 5 * MIN, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chainOf([c(100, 3, 1, 1, 1.2, 1.1)], [c(100, 2, 1, 1, 1.2, 1.1)]) }, { expiration: E2, chain: chainOf([], []) }] });
   t("a full reset (volume restarts from a small number) clamps to 0 on both sides", reset.new_call_volume === 0 && reset.new_put_volume === 0 && reset.clamped);
   // An expiration dropping out of the window must not look like negative volume.
-  const lost = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0 + 5 * MIN, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1 }, { expiration: E2, chain: null }] });
+  const lost = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0 + 5 * MIN, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1 }, { expiration: E2, chain: null }] });
   t("a chain that failed to load is left out of the delta, flagged, and not read as a volume drop", lost.new_call_volume === 0 && !lost.clamped && lost.flags.includes("expirations_changed") && lost.flags.includes("chain_load_failed"));
-  const gap = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0 + 17 * MIN, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1 }, { expiration: E2, chain: chain2 }] });
+  const gap = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0 + 17 * MIN, previous: first, oiChains: null, flowChains: [{ expiration: E1, chain: chain1 }, { expiration: E2, chain: chain2 }] });
   t("a long gap since the previous snapshot is flagged", gap.flags.includes("gap") && close(gap.minutes_since_prev, 17, 0.01));
 }
 
 // ---------------------------------------------------------------- stale on a holiday (first snapshot equals the prior session's close)
 {
   const prior = { ...first, session_date: "2026-10-14", snapshot_time: "2026-10-14T19:55:00.000Z" };
-  const r = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, priorSessionFinal: prior, oiChains: null, flowChains: [{ expiration: E1, chain: chain1 }, { expiration: E2, chain: chain2 }] });
+  const r = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, priorSessionFinal: prior, oiChains: null, flowChains: [{ expiration: E1, chain: chain1 }, { expiration: E2, chain: chain2 }] });
   t("a first snapshot identical to the prior session's final is flagged stale", r.stale && r.flags.includes("same_as_prior_session"));
-  const normal = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, priorSessionFinal: prior, oiChains: null, flowChains: [{ expiration: E1, chain: chainOf([c(100, 2, 1, 1, 1.2, 1.1)], []) }, { expiration: E2, chain: chain2 }] });
+  const normal = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, priorSessionFinal: prior, oiChains: null, flowChains: [{ expiration: E1, chain: chainOf([c(100, 2, 1, 1, 1.2, 1.1)], []) }, { expiration: E2, chain: chain2 }] });
   t("a first snapshot with different volume is not", !normal.stale);
 }
 
@@ -182,13 +183,13 @@ const first = build({ oiChains: [{ expiration: E1, chain: chain1 }, { expiration
 
   // Volume outside the previous snapshot's stored contracts cannot be split: it stays unclassified.
   const wide = chainOf([c(100, 10, 5, 1, 1.2, 1.2), c(150, 10, 5, 1, 1.2, 1.2)], []);
-  const p1 = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: null, flowChains: [{ expiration: E1, chain: wide }] });
+  const p1 = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0, previous: null, oiChains: null, flowChains: [{ expiration: E1, chain: wide }] });
   const wide2 = chainOf([c(100, 15, 5, 1, 1.2, 1.2), c(150, 25, 5, 1, 1.2, 1.2)], []);
-  const p2 = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0 + 5 * MIN, previous: p1, oiChains: null, flowChains: [{ expiration: E1, chain: wide2 }] });
+  const p2 = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0 + 5 * MIN, previous: p1, oiChains: null, flowChains: [{ expiration: E1, chain: wide2 }] });
   t("new volume on a far strike (outside the stored band) is unclassified, near strike classified", p2.new_call_volume === 20 && p2.agg_call_buy === 5 && p2.agg_unclassified === 15, `${p2.agg_call_buy}/${p2.agg_unclassified}`);
   // A near contract that did not exist in the previous snapshot's stored list (no volume or OI then) has a baseline of 0.
   const fresh = chainOf([c(100, 10, 5, 1, 1.2, 1.2), c(101, 8, 0, 1, 1.2, 1.0)], []);
-  const p3 = F.buildOptionFlowRow({ symbol: "TST", spot: 100, fetchedAtMs: T0 + 10 * MIN, previous: p1, oiChains: null, flowChains: [{ expiration: E1, chain: fresh }] });
+  const p3 = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: T0 + 10 * MIN, previous: p1, oiChains: null, flowChains: [{ expiration: E1, chain: fresh }] });
   t("a contract absent from the previous stored list but inside its band counts from 0", p3.agg_call_sell === 8 && p3.agg_call_buy === 0, `${p3.agg_call_sell}/${p3.agg_call_buy}`);
 }
 
@@ -227,6 +228,122 @@ const first = build({ oiChains: [{ expiration: E1, chain: chain1 }, { expiration
   t("contracts with no volume and no open interest are left out", dead.length === 1 && dead[0][1] === 101);
 }
 
+// ---------------------------------------------------------------- data feed label and quote lag (hand-made timestamps)
+{
+  const q = (strike: number, quoteTimeMs?: number, extra = {}) => ({ ...c(strike, 10, 10, 1, 1.2, 1.1), ...(quoteTimeMs !== undefined ? { quoteTimeMs } : {}), ...extra });
+  const L = (chains) => chains.map((ch) => ({ chain: ch }));
+  const fetched = Date.UTC(2026, 9, 15, 14, 0, 7);
+  const lag = (chains, spot = 100) => F.quoteLagSeconds(L(chains), spot, fetched);
+
+  t("quote lag = fetch time minus the newest near-the-money timestamp, in whole seconds", lag([chainOf([q(100, fetched - 900_000), q(101, fetched - 840_000)], [q(100, fetched - 960_000)])]) === 840);
+  t("a far-from-the-money contract with a newer timestamp is ignored (outside 3% of spot)", lag([chainOf([q(100, fetched - 900_000), q(110, fetched - 5_000)], [])]) === 900);
+  t("the boundary strike (exactly 3% away) counts", lag([chainOf([q(103, fetched - 120_000)], [])]) === 120);
+  t("the newest timestamp wins across expirations and calls/puts", lag([chainOf([q(100, fetched - 600_000)], []), chainOf([], [q(100, fetched - 30_000)])]) === 30);
+  t("no timestamps anywhere: null, not 0", lag([chainOf([q(100)], [q(100)])]) === null);
+  t("no chains: null", lag([]) === null);
+  t("a timestamp slightly in the future (clock skew) counts as 0 seconds", lag([chainOf([q(100, fetched + 4_000)], [])]) === 0);
+  t("rounding to whole seconds", lag([chainOf([q(100, fetched - 1_400)], [])]) === 1 && lag([chainOf([q(100, fetched - 1_600)], [])]) === 2);
+
+  const mk = (feed, lagMs) => F.buildOptionFlowRow({ dataFeed: feed, symbol: "TST", spot: 100, fetchedAtMs: fetched, previous: null, oiChains: null, flowChains: [{ expiration: E1, chain: chainOf([q(100, fetched - lagMs)], [q(100, fetched - lagMs - 1000)]) }] });
+  const sb = mk("sandbox", 900_000), pr = mk("production", 4_000);
+  t("rows carry data_feed", sb.data_feed === "sandbox" && pr.data_feed === "production");
+  t("rows carry quote_lag_seconds (sandbox about 900, production a few seconds)", sb.quote_lag_seconds === 900 && pr.quote_lag_seconds === 4, `${sb.quote_lag_seconds}/${pr.quote_lag_seconds}`);
+  t("a chain without timestamps gives quote_lag_seconds null", build().quote_lag_seconds === null);
+
+  let threw = 0;
+  for (const badFeed of [undefined, "live", ""]) { try { F.buildOptionFlowRow({ dataFeed: badFeed, symbol: "TST", spot: 100, fetchedAtMs: fetched, previous: null, oiChains: null, flowChains: [] }); } catch { threw++; } }
+  t("a row can never be built without an explicit, valid feed", threw === 3);
+
+  const next = F.buildOptionFlowRow({ dataFeed: "production", symbol: "TST", spot: 100, fetchedAtMs: fetched + 5 * MIN, previous: sb, oiChains: null, flowChains: [{ expiration: E1, chain: chainOf([q(100)], []) }] });
+  t("switching feed mid-session is flagged feed_changed", next.flags.includes("feed_changed"));
+  const same = F.buildOptionFlowRow({ dataFeed: "sandbox", symbol: "TST", spot: 100, fetchedAtMs: fetched + 5 * MIN, previous: sb, oiChains: null, flowChains: [{ expiration: E1, chain: chainOf([q(100)], []) }] });
+  t("no flag when the feed is unchanged", !same.flags.includes("feed_changed"));
+
+  // UI text
+  t("badge text for production is 'Real-time feed'", F.feedBadgeText("production") === "Real-time feed");
+  t("badge text for sandbox says delayed about 15 min", F.feedBadgeText("sandbox") === "Delayed feed (about 15 min)");
+  t("quote age text: minutes", F.quoteAgeText(840) === "Newest quote is 14 minutes old" && F.quoteAgeText(60 * 91) === "Newest quote is 91 minutes old");
+  t("quote age text: seconds under 90 s, singular, and null", F.quoteAgeText(4) === "Newest quote is 4 seconds old" && F.quoteAgeText(1) === "Newest quote is 1 second old" && F.quoteAgeText(null) === null);
+  const fs = F.feedSummary([{ data_feed: "sandbox", quote_lag_seconds: 900 }, { data_feed: "production", quote_lag_seconds: 3 }]);
+  t("feed summary: newest row's feed, mixed flag, quote age", fs.latestFeed === "production" && fs.mixed === true && fs.ageText === "Newest quote is 3 seconds old");
+  t("feed summary of no rows", F.feedSummary([]).latestFeed === null);
+}
+
+// ---------------------------------------------------------------- Tradier feed selection (pure) and the client (fake fetch, no network)
+{
+  const R = tradier.resolveOptionFlowFeed;
+  const ok = (env, feed) => { const r = R(env); return r.ok === true && r.feed === feed; };
+  const fail = (env, re) => { const r = R(env); return r.ok === false && re.test(r.error); };
+  t("mode table: nothing set -> sandbox", ok({}, "sandbox"));
+  t("mode table: empty mode -> sandbox", ok({ OPTION_FLOW_TRADIER_MODE: "" }, "sandbox"));
+  t("mode table: sandbox -> sandbox", ok({ OPTION_FLOW_TRADIER_MODE: "sandbox" }, "sandbox"));
+  t("mode table: production token set but mode unset -> still sandbox", ok({ TRADIER_PRODUCTION_TOKEN: "x" }, "sandbox"));
+  t("mode table: production token set, mode sandbox -> sandbox", ok({ OPTION_FLOW_TRADIER_MODE: "sandbox", TRADIER_PRODUCTION_TOKEN: "x" }, "sandbox"));
+  t("mode table: production + token -> production", ok({ OPTION_FLOW_TRADIER_MODE: "production", TRADIER_PRODUCTION_TOKEN: "x" }, "production"));
+  t("mode table: ' Production ' (case, spaces) + token -> production", ok({ OPTION_FLOW_TRADIER_MODE: " Production ", TRADIER_PRODUCTION_TOKEN: "x" }, "production"));
+  t("mode table: production without the token FAILS (no sandbox fallback)", fail({ OPTION_FLOW_TRADIER_MODE: "production" }, /TRADIER_PRODUCTION_TOKEN is not set/));
+  t("mode table: production with only the sandbox token FAILS", fail({ OPTION_FLOW_TRADIER_MODE: "production", TRADIER_ACCESS_TOKEN: "sb" }, /TRADIER_PRODUCTION_TOKEN is not set/));
+  t("mode table: production with an empty token FAILS", fail({ OPTION_FLOW_TRADIER_MODE: "production", TRADIER_PRODUCTION_TOKEN: "" }, /TRADIER_PRODUCTION_TOKEN is not set/));
+  t("mode table: an unknown value ('prod') FAILS rather than quietly using sandbox", fail({ OPTION_FLOW_TRADIER_MODE: "prod", TRADIER_PRODUCTION_TOKEN: "x" }, /unrecognised value/));
+  t("mode table: the error never contains a token value", !JSON.stringify(R({ OPTION_FLOW_TRADIER_MODE: "prod", TRADIER_PRODUCTION_TOKEN: "SECRET-VALUE-1" })).includes("SECRET-VALUE-1"));
+
+  const SB = "sandbox-token-fake", PR = "production-token-fake";
+  const saved = { fetch: globalThis.fetch, a: process.env.TRADIER_ACCESS_TOKEN, p: process.env.TRADIER_PRODUCTION_TOKEN };
+  process.env.TRADIER_ACCESS_TOKEN = SB; process.env.TRADIER_PRODUCTION_TOKEN = PR;
+  const seen: { url: URL; auth: string | null; cache: string | undefined }[] = [];
+  const NOW = Date.now();
+  globalThis.fetch = (async (input: any, init: any) => {
+    const url = new URL(String(input));
+    seen.push({ url, auth: init?.headers?.Authorization ?? null, cache: init?.cache });
+    if (url.pathname.endsWith("/markets/options/expirations")) return new Response(JSON.stringify({ expirations: { date: ["2026-10-16"] } }), { status: 200 });
+    return new Response(JSON.stringify({ options: { option: [
+      { strike: 100, expiration_date: "2026-10-16", option_type: "call", bid: 1, ask: 1.2, last: 1.1, volume: 5, open_interest: 9, trade_date: NOW - 700_000, bid_date: NOW - 500_000, ask_date: NOW - 90_000 },
+      { strike: 100, expiration_date: "2026-10-16", option_type: "put", bid: 1, ask: 1.2, last: 1.1, volume: 5, open_interest: 9 },
+    ] } }), { status: 200 });
+  }) as any;
+  try {
+    await tradier.getExpirations("SPY", { fresh: true, feed: "production" });
+    const chP = await tradier.fetchOptionsChain("SPY", "2026-10-16", { fresh: true, feed: "production" });
+    const prodSeen = seen.splice(0);
+    t("production feed requests api.tradier.com/v1 only", prodSeen.length === 2 && prodSeen.every((s) => s.url.host === "api.tradier.com" && s.url.pathname.startsWith("/v1/")), prodSeen.map((s) => s.url.host).join());
+    t("production feed sends the production token (not the sandbox token)", prodSeen.every((s) => s.auth === `Bearer ${PR}`));
+    t("production requests are never cached", prodSeen.every((s) => s.cache === "no-store"));
+
+    await tradier.getExpirations("SPY", { fresh: true, feed: "sandbox" });
+    await tradier.fetchOptionsChain("SPY", "2026-10-16", { fresh: true });
+    await tradier.getExpirations("SPY");
+    await tradier.fetchOptionsChain("SPY", "2026-10-16");
+    const sbSeen = seen.splice(0);
+    t("sandbox feed (explicit, or no feed given at all) requests sandbox.tradier.com/v1 only", sbSeen.length === 4 && sbSeen.every((s) => s.url.host === "sandbox.tradier.com" && s.url.pathname.startsWith("/v1/")), sbSeen.map((s) => s.url.host).join());
+    t("sandbox feed sends the sandbox token (not the production token)", sbSeen.every((s) => s.auth === `Bearer ${SB}`));
+    t("default (no feed) callers keep their 5-minute cache behaviour", sbSeen[2].cache === undefined && sbSeen[3].cache === undefined);
+
+    const allPaths = [...prodSeen, ...sbSeen].map((s) => s.url.pathname.replace(/^\/v1/, ""));
+    t("only the two option market-data paths were ever requested", allPaths.every((p) => tradier.TRADIER_ALLOWED_PATHS.includes(p)) && tradier.TRADIER_ALLOWED_PATHS.length === 2);
+    t("no account, order, watchlist or user path is in the allow-list or was requested", !/account|order|watchlist|user|margin|balances/i.test(JSON.stringify(tradier.TRADIER_ALLOWED_PATHS)) && !allPaths.some((p) => /account|order|watchlist|user/i.test(p)));
+
+    t("contract quote time = the newest of trade_date / bid_date / ask_date", chP.calls[0].quoteTimeMs === NOW - 90_000, String(chP.calls[0].quoteTimeMs));
+    t("a contract with no timestamps has no quoteTimeMs", chP.puts[0].quoteTimeMs === undefined);
+    t("quote time ignores implausible values (0, seconds-epoch, text)", tradier.newestQuoteTimeMs({ trade_date: 0, bid_date: 1_760_000_000, ask_date: "x" as any }) === undefined && tradier.newestQuoteTimeMs({ bid_date: 1_760_000_000_000 }) === 1_760_000_000_000);
+
+    // Failure paths: no request may leave the process.
+    seen.length = 0;
+    delete process.env.TRADIER_PRODUCTION_TOKEN;
+    let msg = "";
+    try { await tradier.getExpirations("SPY", { fresh: true, feed: "production" }); } catch (e) { msg = (e as Error).message; }
+    t("production feed without TRADIER_PRODUCTION_TOKEN throws and sends nothing (no fallback to the sandbox token)", /TRADIER_PRODUCTION_TOKEN/.test(msg) && seen.length === 0 && !msg.includes(SB), msg);
+    process.env.TRADIER_PRODUCTION_TOKEN = PR;
+    delete process.env.TRADIER_ACCESS_TOKEN;
+    msg = "";
+    try { await tradier.getExpirations("SPY"); } catch (e) { msg = (e as Error).message; }
+    t("sandbox feed without TRADIER_ACCESS_TOKEN throws and does not use the production token", /TRADIER_ACCESS_TOKEN/.test(msg) && seen.length === 0);
+  } finally {
+    globalThis.fetch = saved.fetch;
+    if (saved.a === undefined) delete process.env.TRADIER_ACCESS_TOKEN; else process.env.TRADIER_ACCESS_TOKEN = saved.a;
+    if (saved.p === undefined) delete process.env.TRADIER_PRODUCTION_TOKEN; else process.env.TRADIER_PRODUCTION_TOKEN = saved.p;
+  }
+}
+
 // ---------------------------------------------------------------- status chip
 {
   const now = Date.UTC(2026, 9, 15, 15, 0, 0); // 11:00 ET Thursday
@@ -256,7 +373,7 @@ const first = build({ oiChains: [{ expiration: E1, chain: chain1 }, { expiration
     ...over,
   });
 
-  const r1 = await runOptionFlowTick({ nowMs: T0, symbols: ["SPY", "BAD", "QQQ"], deps: mkDeps(), concurrency: 2, maxOiPassesPerRun: 1 });
+  const r1 = await runOptionFlowTick({ feed: "sandbox", nowMs: T0, symbols: ["SPY", "BAD", "QQQ"], deps: mkDeps(), concurrency: 2, maxOiPassesPerRun: 1 });
   t("one failing symbol does not fail the others", r1.results.length === 3 && r1.results.find((x) => x.symbol === "BAD")?.ok === false && r1.results.filter((x) => x.ok).length === 2, JSON.stringify(r1.results.map((x) => [x.symbol, x.ok])));
   t("rows are written per symbol and bucket", stored.has("SPY|2026-10-15T14:00:00.000Z") && stored.has("QQQ|2026-10-15T14:00:00.000Z") && !stored.has("BAD|2026-10-15T14:00:00.000Z"));
   const spy = stored.get("SPY|2026-10-15T14:00:00.000Z");
@@ -265,15 +382,29 @@ const first = build({ oiChains: [{ expiration: E1, chain: chain1 }, { expiration
   t("the OI pass covers the 45-day window", spy.oi_expirations_used.join() === "2026-10-15,2026-10-16,2026-10-23,2026-10-30,2026-11-20", spy.oi_expirations_used.join());
   t("each symbol reports its provider calls", r1.results[0].providerCalls === 1 + 1 + 5 && r1.results[2].providerCalls === 1 + 1 + 3, JSON.stringify(r1.results.map((x) => x.providerCalls)));
 
-  const r2 = await runOptionFlowTick({ nowMs: T0 + 5 * MIN, symbols: ["SPY", "QQQ"], deps: mkDeps(), concurrency: 2, maxOiPassesPerRun: 1 });
+  const r2 = await runOptionFlowTick({ feed: "sandbox", nowMs: T0 + 5 * MIN, symbols: ["SPY", "QQQ"], deps: mkDeps(), concurrency: 2, maxOiPassesPerRun: 1 });
   const spy2 = stored.get("SPY|2026-10-15T14:05:00.000Z"), qqq2 = stored.get("QQQ|2026-10-15T14:05:00.000Z");
   t("the second tick builds on the stored previous row (SPY carries OI, QQQ now gets its OI pass)", spy2.oi_call === spy.oi_call && spy2.new_call_volume === 0 && spy2.stale && qqq2.oi_call !== null, JSON.stringify([spy2.stale, qqq2.oi_call]));
-  const again = await runOptionFlowTick({ nowMs: T0 + 5 * MIN + 20_000, symbols: ["SPY"], deps: mkDeps(), concurrency: 1, maxOiPassesPerRun: 1 });
+  const again = await runOptionFlowTick({ feed: "sandbox", nowMs: T0 + 5 * MIN + 20_000, symbols: ["SPY"], deps: mkDeps(), concurrency: 1, maxOiPassesPerRun: 1 });
   t("re-running the same bucket overwrites it (idempotent key symbol + bucket)", [...stored.keys()].filter((k) => k.startsWith("SPY|")).length === 2 && again.results[0].ok);
 
-  const bad = await runOptionFlowTick({ nowMs: T0, symbols: ["SPY"], deps: mkDeps({ getExpirations: async () => [] }), concurrency: 1, maxOiPassesPerRun: 1 });
+  const bad = await runOptionFlowTick({ feed: "sandbox", nowMs: T0, symbols: ["SPY"], deps: mkDeps({ getExpirations: async () => [] }), concurrency: 1, maxOiPassesPerRun: 1 });
   t("no expirations is reported as an error for that symbol", bad.results[0].ok === false && /expiration/i.test(bad.results[0].error ?? ""));
-  const allFail = await runOptionFlowTick({ nowMs: T0, symbols: ["SPY"], deps: mkDeps({ fetchChain: async () => { throw new Error("boom"); } }), concurrency: 1, maxOiPassesPerRun: 1 });
+  const seenFeeds = new Set<string>();
+  const prodRun = await runOptionFlowTick({ feed: "production", nowMs: T0 + 30 * MIN, symbols: ["SPY", "QQQ"], concurrency: 2, maxOiPassesPerRun: 1,
+    deps: mkDeps({
+      getExpirations: async (_s: string, f: string) => { seenFeeds.add(`exp:${f}`); return ["2026-10-15", "2026-10-16"]; },
+      fetchChain: async (_s: string, exp: string, f: string) => { seenFeeds.add(`chain:${f}`); return chainFor(exp); },
+    }) });
+  const prodRow = stored.get("SPY|2026-10-15T14:30:00.000Z");
+  t("the tick passes its feed to every expirations and chain call", prodRun.results.every((x) => x.ok) && [...seenFeeds].sort().join() === "chain:production,exp:production", [...seenFeeds].join());
+  t("rows written by a production tick are labelled production, earlier sandbox rows stay sandbox", prodRow.data_feed === "production" && stored.get("SPY|2026-10-15T14:00:00.000Z").data_feed === "sandbox");
+  t("the feed switch between ticks is flagged on the first production row", prodRow.flags.includes("feed_changed"));
+  t("every stored row has a data_feed and a quote_lag_seconds field", [...stored.values()].every((r) => (r.data_feed === "sandbox" || r.data_feed === "production") && "quote_lag_seconds" in r));
+  let noFeed = "";
+  try { await runOptionFlowTick({ nowMs: T0, symbols: ["SPY"], deps: mkDeps(), concurrency: 1 } as any); } catch (e) { noFeed = (e as Error).message; }
+  t("a tick cannot be run without an explicit feed", /feed/.test(noFeed));
+  const allFail = await runOptionFlowTick({ feed: "sandbox", nowMs: T0, symbols: ["SPY"], deps: mkDeps({ fetchChain: async () => { throw new Error("boom"); } }), concurrency: 1, maxOiPassesPerRun: 1 });
   t("every chain failing writes nothing and reports an error", allFail.results[0].ok === false);
 }
 
