@@ -5,6 +5,7 @@ import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { classifyPutCallSkew, type SkewLabel } from "@/lib/agents/trading-agent/skills/options-flow-skew";
 import { recommendStrategies } from "@/lib/agents/trading-agent/skills/strategy-scanner";
 import { applyDealerSign, DEALER_SIGN_LABELS, type DealerSignMode } from "@/lib/agents/trading-agent/skills/gex-sign";
+import { useDealerSign } from "@/lib/agents/trading-agent/dealer-sign-storage";
 import { TradingDashboardTab } from "./TradingDashboardTab";
 import { WatchlistSelector } from "./WatchlistSelector";
 import type {
@@ -62,8 +63,8 @@ export function OptionsDashboardTab() {
   const [gexRows, setGexRows] = useState<GexRow[]>([]);
   const [gexLoading, setGexLoading] = useState(false);
   const [gexChecked, setGexChecked] = useState(false);
-  // Which side dealers are assumed to hold. "app" is how the signal is computed and logged; "standard" is the reverse.
-  const [dealerMode, setDealerMode] = useState<DealerSignMode>("app");
+  // Which side dealers are assumed to hold. One setting shared with the Gamma Heat Map, default "standard". The signal is computed and logged as "app"; this only changes how it is read.
+  const [dealerMode, setDealerMode] = useDealerSign();
 
   const runCheck = useCallback(async () => {
     if (optionEntries.length === 0) return;
@@ -208,7 +209,7 @@ export function OptionsDashboardTab() {
             })}
           </div>
           <p className="text-xs" style={{ color: "var(--text-2)" }}>
-            A customer who buys a put leaves the dealer short it, which is short gamma. If customers mostly buy puts and sell calls, the second setting applies and put-heavy names read negative. Public data cannot show who holds which side, so neither is confirmed. The setting changes the regime, the quadrant and the strategy ideas; walls and the gamma flip are the same either way, and the paper-backtest log always records the first setting.
+            A customer who buys a put leaves the dealer short it, which is short gamma. If customers mostly buy puts and sell calls, the first setting applies and put-heavy names read negative. Public data cannot show who holds which side, so neither is confirmed. The setting changes the regime, the quadrant and the strategy ideas; walls and the gamma flip are the same either way. It is shared with the Gamma Heat Map, and the paper-backtest log always records the second setting.
           </p>
         </div>
         {optionEntries.length === 0 ? (

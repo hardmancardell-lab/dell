@@ -12,10 +12,19 @@ import type { FlowAtWalls, GexRegime, GexSignalResult, QuadrantLabel, TermStruct
  */
 export type DealerSignMode = "app" | "standard";
 
+/** The one default for every dealer-positioning toggle (Options dashboard and Gamma Heat Map share a single setting). */
+export const DEFAULT_DEALER_SIGN: DealerSignMode = "standard";
+
+/** Toggle wording and order, shared by every control: "standard" first. "(as logged)" marks the convention the forward paper-backtest log records. */
 export const DEALER_SIGN_LABELS: Record<DealerSignMode, string> = {
-  app: "Dealers short calls, long puts (as before)",
   standard: "Dealers long calls, short puts",
+  app: "Dealers short calls, long puts (as logged)",
 };
+
+/** Validates a stored value. Anything that is not exactly "app" or "standard" (missing, corrupt, from an older build) falls back to the default. */
+export function parseDealerSign(raw: unknown): DealerSignMode {
+  return raw === "app" || raw === "standard" ? raw : DEFAULT_DEALER_SIGN;
+}
 
 /** Direction comes from which wall has seen more of today's flow; the volatility half follows the regime (and backwardation). */
 export function classifyQuadrant(regime: GexRegime, term: TermStructureSignal | null, flow: FlowAtWalls): QuadrantLabel {
@@ -54,7 +63,7 @@ export function applyDealerSign(signal: GexSignalResult, mode: DealerSignMode): 
     quadrant,
     dataLimitations: [
       ...signal.dataLimitations,
-      "Shown with dealers long the calls and short the puts. The strategy ideas below follow this setting. The forward paper-backtest log always records the app's own convention (dealers short calls, long puts).",
+      "Shown with dealers long the calls and short the puts (the dealer-positioning setting). The strategy ideas below follow this setting. The forward paper-backtest log records the other convention (dealers short calls, long puts).",
     ],
   };
 }

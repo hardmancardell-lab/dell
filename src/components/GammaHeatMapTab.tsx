@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import type { GammaHeatMapResult } from "@/lib/agents/trading-agent/skills/gamma-heat-map";
+import { DEALER_SIGN_LABELS, type DealerSignMode } from "@/lib/agents/trading-agent/skills/gex-sign";
+import { useDealerSign } from "@/lib/agents/trading-agent/dealer-sign-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 
 type View = "net" | "call" | "put" | "gross";
 type Scale = "shared" | "each";
-/** Which side dealers hold. "standard": dealers long the calls and short the puts customers trade (customers buy puts to hedge, sell calls to earn income). "app": the Options dashboard's assumption, the reverse. */
-type Sign = "standard" | "app";
 /** Net gamma within this percent of gross is a near coin flip. A judgement threshold, same value as BALANCED_BAND_PCT in gex-signal.ts (not imported: that module pulls in server-only code). */
 const BALANCED_BAND_PCT = 10;
 
@@ -17,10 +17,8 @@ const VIEWS: [View, string][] = [
   ["put", "Puts only"],
   ["gross", "Gross"],
 ];
-const SIGNS: [Sign, string][] = [
-  ["standard", "Dealers long calls, short puts"],
-  ["app", "Dealers short calls, long puts (Options dashboard)"],
-];
+/** Same wording and order as the Options dashboard's control; the setting itself is shared (useDealerSign). */
+const SIGNS: [DealerSignMode, string][] = (Object.keys(DEALER_SIGN_LABELS) as DealerSignMode[]).map((m) => [m, DEALER_SIGN_LABELS[m]]);
 const WINDOWS: [number, string][] = [
   [7, "Next 7 days"],
   [14, "Next 14 days"],
@@ -210,7 +208,7 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
   const [view, setView] = useState<View>("net");
   const [windowDays, setWindowDays] = useState(99);
   const [scale, setScale] = useState<Scale>("shared");
-  const [signMode, setSignMode] = useState<Sign>("standard");
+  const [signMode, setSignMode] = useDealerSign();
   const [rangeIdx, setRangeIdx] = useState(2);
   const { track } = useTrackEvent();
 
@@ -347,7 +345,7 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
             <div className="jv-br-b" />
             <div className="text-sm font-medium mb-2" style={{ color: "var(--text-0)" }}>How to read this, and what it cannot tell you</div>
             <ul className="text-sm flex flex-col gap-2 pl-5 list-disc" style={{ color: "var(--text-1)" }}>
-              <li><b style={{ color: "var(--text-0)" }}>The sign is an assumption, so it is a switch.</b> A customer who buys a put leaves the dealer short that put, which is short gamma; a customer who sells a call leaves the dealer long it. If customers net buy puts and sell calls, the first setting applies and put-heavy names read negative. The Options dashboard assumes the reverse. Public data cannot show who holds which side or whether a trade was a purchase or a sale, so neither is confirmed. It changes the Net view and the regime tile only: Calls only, Puts only, Gross, the walls and the zero-gamma level are the same under either.</li>
+              <li><b style={{ color: "var(--text-0)" }}>The sign is an assumption, so it is a switch.</b> A customer who buys a put leaves the dealer short that put, which is short gamma; a customer who sells a call leaves the dealer long it. If customers net buy puts and sell calls, the first setting applies and put-heavy names read negative. This setting is shared with the Options dashboard, and the paper-backtest log records the second. Public data cannot show who holds which side or whether a trade was a purchase or a sale, so neither is confirmed. It changes the Net view and the regime tile only: Calls only, Puts only, Gross, the walls and the zero-gamma level are the same under either.</li>
               <li><b style={{ color: "var(--text-0)" }}>Near expirations dominate.</b> Gamma per contract rises sharply as expiry approaches, so the leftmost columns carry most of the heat. Switch the colour scale to Each expiry to see the later dates on their own scale.</li>
               <li><b style={{ color: "var(--text-0)" }}>Gross is a ceiling, not a forecast.</b> It adds every contract as if dealers held all of it. Real net dealer positions are smaller.</li>
               <li><b style={{ color: "var(--text-0)" }}>Walls</b> are the strikes with the most call gamma above spot and the most put gamma below spot, the same definition as the Options dashboard (method gex-v2).</li>
