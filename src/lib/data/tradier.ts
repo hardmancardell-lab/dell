@@ -28,7 +28,12 @@ function getToken(): string {
   return token;
 }
 
-async function fetchTradier<T>(path: string, params: Record<string, string>): Promise<T> {
+/** `fresh` skips Next's data cache (the default 5-minute revalidate would make consecutive intraday snapshots return the same cached chain) and bounds the request time. */
+export interface TradierFetchOptions {
+  fresh?: boolean;
+}
+
+async function fetchTradier<T>(path: string, params: Record<string, string>, opts: TradierFetchOptions = {}): Promise<T> {
   const token = getToken();
   const url = new URL(`${BASE_URL}${path}`);
   for (const [key, value] of Object.entries(params)) {
@@ -40,7 +45,7 @@ async function fetchTradier<T>(path: string, params: Record<string, string>): Pr
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
     },
-    next: { revalidate: 300 },
+    ...(opts.fresh ? { cache: "no-store" as const, signal: AbortSignal.timeout(15_000) } : { next: { revalidate: 300 } }),
   });
 
   if (!res.ok) {
@@ -56,11 +61,12 @@ interface TradierExpirationsResponse {
 }
 
 /** Returns available expiration dates for an underlying, soonest first. */
-export async function getExpirations(symbol: string): Promise<string[]> {
-  const data = await fetchTradier<TradierExpirationsResponse>("/markets/options/expirations", {
-    symbol,
-    includeAllRoots: "false",
-  });
+export async function getExpirations(symbol: string, opts: TradierFetchOptions = {}): Promise<string[]> {
+  const data = await fetchTradier<TradierExpirationsResponse>(
+    "/markets/options/expirations",
+    { symbol, includeAllRoots: "false" },
+    opts
+  );
   const raw = data.expirations?.date;
   if (!raw) return [];
   const dates = Array.isArray(raw) ? raw : [raw];
@@ -93,17 +99,17 @@ interface TradierChainResponse {
   options: { option: TradierOptionContract[] | TradierOptionContract } | null;
 }
 
-export async function fetchOptionsChain(symbol: string, expirationDate?: string): Promise<MarketOptionsChain> {
-  const expiration = expirationDate ?? (await getExpirations(symbol))[0];
+export async function fetchOptionsChain(symbol: string, expirationDate?: string, opts: TradierFetchOptions = {}): Promise<MarketOptionsChain> {
+  const expiration = expirationDate ?? (await getExpirations(symbol, opts))[0];
   if (!expiration) {
     return { symbol, calls: [], puts: [] };
   }
 
-  const data = await fetchTradier<TradierChainResponse>("/markets/options/chains", {
-    symbol,
-    expiration,
-    greeks: "true",
-  });
+  const data = await fetchTradier<TradierChainResponse>(
+    "/markets/options/chains",
+    { symbol, expiration, greeks: "true" },
+    opts
+  );
 
   const raw = data.options?.option;
   const contracts: TradierOptionContract[] = !raw ? [] : Array.isArray(raw) ? raw : [raw];

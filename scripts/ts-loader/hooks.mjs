@@ -27,6 +27,8 @@ export async function resolve(specifier, context, next) {
     const f = withExt(fileURLToPath(new URL(specifier, context.parentURL)));
     if (f) return { url: pathToFileURL(f).href, shortCircuit: true };
   }
+  // Next ships CommonJS entry points without an exports map ("next/server" -> next/server.js), which ESM resolution will not guess.
+  if (/^next\/[a-z-]+$/.test(specifier)) return next(specifier + ".js", context);
   return next(specifier, context);
 }
 

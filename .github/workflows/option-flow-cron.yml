@@ -1,0 +1,29 @@
+name: Option Flow Snapshots (Intraday)
+
+# Logs raw put/call flow for SPY, QQQ, NVDA, DELL and GLD every 5 minutes through the US regular session
+# (see OPTION_FLOW_LOG_NOTES.md). Same mechanism as check-alerts-cron.yml: Vercel Hobby allows one daily cron,
+# so this workflow hits the authenticated /api/cron/option-flow route instead.
+#
+# The schedule below is a fixed-UTC superset of 9:30am-4:00pm ET across both EST and EDT (13:30-20:55 UTC).
+# The route itself trims to the exact ET session and returns {skipped:true} outside it, so an extra tick costs one
+# cheap no-op request.
+#
+# BEST EFFORT: GitHub's scheduled workflows can be delayed by many minutes at busy times, and runs can be skipped
+# entirely. Every stored row therefore carries its ACTUAL fetch time (actual_fetch_time), and analysis must use that,
+# never an assumed 5-minute spacing.
+on:
+  schedule:
+    - cron: "30-59/5 13 * * 1-5"
+    - cron: "*/5 14-20 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  option-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/cron/option-flow
+        run: |
+          curl -sf --max-time 75 -X GET "${{ secrets.APP_URL }}/api/cron/option-flow" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -o response.json -w "HTTP %{http_code}\n"
+          cat response.json
