@@ -244,3 +244,7 @@ contribute at most 40 independent days per name, not hundreds of snapshots. With
 enormous effect would show. If the pilot is flat, the honest conclusion is "not detected at this sample size", not
 "no effect", and if one cell clears the bar out of 45 it is as likely noise as signal until the larger evaluation
 repeats it. No trading rule should be built on either reading before then.
+
+## Turning the scheduled job on (added when the workflow was pushed)
+
+The workflow ships switched OFF so that it does not fail every five minutes before the table exists. Order: (1) run `db/migrations/2026-10-15_option_flow_snapshots.sql` in the Supabase SQL editor; (2) confirm the Vercel environment variables and the GitHub secrets `APP_URL` and `CRON_SECRET` (the alert workflow already uses the last two); (3) in GitHub, Settings > Secrets and variables > Actions > Variables, create `OPTION_FLOW_ENABLED` = `true`; (4) run the workflow once by hand during a session (Actions > Option Flow Snapshots > Run workflow) and look at the response; (5) check the Intraday Put/Call tab for the first row. To pause logging, set the variable to anything other than `true`.

@@ -19,6 +19,9 @@ on:
 
 jobs:
   option-flow:
+    # Off until you turn it on: set the repository variable OPTION_FLOW_ENABLED to true (Settings > Secrets and variables >
+    # Actions > Variables) AFTER running db/migrations/2026-10-15_option_flow_snapshots.sql. A skipped job does not fail or send email.
+    if: ${{ vars.OPTION_FLOW_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Hit /api/cron/option-flow
