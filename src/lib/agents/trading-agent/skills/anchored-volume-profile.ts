@@ -578,3 +578,57 @@ export function buildAnchoredProfile(candles: MarketCandle[], anchor: AnchorSpec
   const sel = selectAnchoredCandles(candles, anchor, opts);
   return { ...buildProfile(sel.candles, opts), anchor: sel.anchor, candles: sel.candles };
 }
+
+// ------------------------------------------------------------------------------------------------ request parsing
+
+export const MAX_MULTI_SESSIONS = 20;
+export const MAX_FROM_DATE_DAYS = 60;
+
+export type ParsedAnchor = { ok: true; spec: AnchorSpec } | { ok: false; error: string };
+
+/**
+ * Parses the `anchor` query value: session | previous | multi (with `days` sessions) | date:YYYY-MM-DD | time:ISO-8601.
+ * Dates and times are checked against `nowMs`: nothing in the future, and from-date reaches back at most 60 days.
+ */
+export function parseAnchorParam(raw: string | null | undefined, days: number | null | undefined, nowMs: number): ParsedAnchor {
+  const a = (raw ?? "session").trim();
+  if (a === "session") return { ok: true, spec: { kind: "session" } };
+  if (a === "previous") return { ok: true, spec: { kind: "previousSession" } };
+  if (a === "multi") {
+    const n = days ?? 5;
+    if (!Number.isInteger(n) || n < 2 || n > MAX_MULTI_SESSIONS) return { ok: false, error: `'days' must be a whole number from 2 to ${MAX_MULTI_SESSIONS} for anchor=multi.` };
+    return { ok: true, spec: { kind: "multiDay", sessions: n } };
+  }
+  if (a.startsWith("date:")) {
+    const d = a.slice(5);
+    if (!isDateKey(d)) return { ok: false, error: "anchor=date:YYYY-MM-DD needs a real calendar date, for example date:2026-10-01." };
+    const ms = Date.parse(`${d}T12:00:00Z`);
+    if (ms > nowMs + 86_400_000) return { ok: false, error: "That date is in the future." };
+    if (nowMs - ms > MAX_FROM_DATE_DAYS * 86_400_000) return { ok: false, error: `That date is more than ${MAX_FROM_DATE_DAYS} days back; 5-minute history is limited to that.` };
+    return { ok: true, spec: { kind: "fromDate", date: d } };
+  }
+  if (a.startsWith("time:")) {
+    const ms = Date.parse(a.slice(5));
+    if (!Number.isFinite(ms)) return { ok: false, error: "anchor=time:ISO needs an ISO-8601 time, for example time:2026-10-14T13:30:00Z." };
+    if (ms > nowMs) return { ok: false, error: "That time is in the future." };
+    if (nowMs - ms > MAX_FROM_DATE_DAYS * 86_400_000) return { ok: false, error: `That time is more than ${MAX_FROM_DATE_DAYS} days back; 5-minute history is limited to that.` };
+    return { ok: true, spec: { kind: "fromTimestamp", timestampMs: ms } };
+  }
+  return { ok: false, error: "anchor must be session, previous, multi, date:YYYY-MM-DD or time:ISO." };
+}
+
+/** Where to start fetching bars so the anchor is fully covered (generous: weekends, holidays, and the previous-session lookup). */
+export function fetchStartMs(spec: AnchorSpec, nowMs: number): number {
+  const day = 86_400_000;
+  switch (spec.kind) {
+    case "session":
+    case "previousSession":
+      return nowMs - 10 * day;
+    case "multiDay":
+      return nowMs - (Math.ceil((spec.sessions * 7) / 5) + 6) * day;
+    case "fromDate":
+      return Date.parse(`${spec.date}T00:00:00Z`) - 2 * day;
+    case "fromTimestamp":
+      return spec.timestampMs - day;
+  }
+}

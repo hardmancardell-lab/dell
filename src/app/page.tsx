@@ -38,6 +38,7 @@ import { HistoricalBacktestTab } from "@/components/HistoricalBacktestTab";
 import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
 import { VwapReversionBacktestTab } from "@/components/VwapReversionBacktestTab";
 import { VwapBandStudyTab } from "@/components/VwapBandStudyTab";
+import { AnchoredVolumeProfileTab } from "@/components/AnchoredVolumeProfileTab";
 import { PremarketGapHodLodTab } from "@/components/PremarketGapHodLodTab";
 import { GapCalendarStudyTab } from "@/components/GapCalendarStudyTab";
 import { RequiresPlacementTier } from "@/components/RequiresPlacementTier";
@@ -577,6 +578,11 @@ export default async function Home() {
                                 id: "vwap-band-study",
                                 label: "VWAP Band Study",
                                 content: <VwapBandStudyTab key="equities-vwap-band-study" defaultTicker="SPY" />,
+                              },
+                              {
+                                id: "volume-profile",
+                                label: "Volume Profile",
+                                content: <AnchoredVolumeProfileTab key="equities-volume-profile" defaultTicker="SPY" />,
                               },
                               {
                                 id: "premarket-gaps",

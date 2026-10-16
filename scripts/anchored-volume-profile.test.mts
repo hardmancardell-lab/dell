@@ -177,5 +177,17 @@ function bars5(fromMs: number, toMs: number, base: number) {
   t("date keys validate", P.isDateKey("2026-03-09") && !P.isDateKey("2026-3-9") && !P.isDateKey("2026-13-40") && !P.isDateKey("abc"));
 }
 
+// ---------------------------------------------------------------- request parsing
+{
+  const now = Date.UTC(2026, 9, 15, 15, 0);
+  const ok = (raw, days = null) => P.parseAnchorParam(raw, days, now);
+  t("anchor defaults and keywords", ok(null).spec.kind === "session" && ok("session").spec.kind === "session" && ok("previous").spec.kind === "previousSession");
+  t("multi needs 2..20 whole sessions", ok("multi", 5).spec.sessions === 5 && !ok("multi", 1).ok && !ok("multi", 21).ok && !ok("multi", 2.5).ok);
+  t("date: valid, future and too-old are handled", ok("date:2026-10-01").spec.date === "2026-10-01" && !ok("date:2026-12-01").ok && !ok("date:2026-01-01").ok && !ok("date:nonsense").ok);
+  t("time: valid ISO parses, future and junk are rejected", ok("time:2026-10-14T13:30:00Z").spec.timestampMs === Date.UTC(2026, 9, 14, 13, 30) && !ok("time:2027-01-01T00:00:00Z").ok && !ok("time:soon").ok);
+  t("unknown anchor is rejected", !ok("yesterday").ok);
+  t("fetch window reaches back far enough for each anchor", P.fetchStartMs({ kind: "previousSession" }, now) <= now - 9 * 86_400_000 && P.fetchStartMs({ kind: "fromDate", date: "2026-10-01" }, now) < Date.UTC(2026, 9, 1) && P.fetchStartMs({ kind: "multiDay", sessions: 20 }, now) <= now - 30 * 86_400_000);
+}
+
 console.log(bad === 0 ? "\nALL PASS" : `\n${bad} FAILED`);
 process.exit(bad === 0 ? 0 : 1);
