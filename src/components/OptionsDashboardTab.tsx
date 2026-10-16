@@ -63,7 +63,7 @@ export function OptionsDashboardTab() {
   const [gexRows, setGexRows] = useState<GexRow[]>([]);
   const [gexLoading, setGexLoading] = useState(false);
   const [gexChecked, setGexChecked] = useState(false);
-  // Which side dealers are assumed to hold. One setting shared with the Gamma Heat Map, default "standard". The signal is computed and logged as "app"; this only changes how it is read.
+  // Which side dealers are assumed to hold. One setting shared with the Gamma Heat Map, default "app". The signal is computed and logged as "app"; this only changes how it is read.
   const [dealerMode, setDealerMode] = useDealerSign();
 
   const runCheck = useCallback(async () => {
@@ -209,7 +209,7 @@ export function OptionsDashboardTab() {
             })}
           </div>
           <p className="text-xs" style={{ color: "var(--text-2)" }}>
-            A customer who buys a put leaves the dealer short it, which is short gamma. If customers mostly buy puts and sell calls, the first setting applies and put-heavy names read negative. Public data cannot show who holds which side, so neither is confirmed. The setting changes the regime, the quadrant and the strategy ideas; walls and the gamma flip are the same either way. It is shared with the Gamma Heat Map, and the paper-backtest log always records the second setting.
+            A customer who buys a put leaves the dealer short it, which is short gamma. If customers mostly buy puts and sell calls, "Dealers long calls, short puts" applies and put-heavy names read negative; the default assumes the reverse. Public data cannot show who holds which side, so neither is confirmed. The setting changes the regime, the quadrant and the strategy ideas; walls and the gamma flip are the same either way. It is shared with the Gamma Heat Map, and the paper-backtest log always records the default.
           </p>
         </div>
         {optionEntries.length === 0 ? (

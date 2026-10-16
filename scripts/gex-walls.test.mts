@@ -193,5 +193,12 @@ t("the window length is honoured", !G.windowExpirations(exps, NOW, 10).includes(
   t("the gex-signal module still exports classifyQuadrant and it is the same rule", G.classifyQuadrant === SG.classifyQuadrant);
 }
 
+// ---------------------------------------------------------------- the shared default (set by the user, 2026-10-15)
+{
+  t("the shared dealer-positioning default is the app convention (dealers short calls, long puts)", SG.DEFAULT_DEALER_SIGN === "app");
+  t("stored values: only app and standard are accepted, anything else falls back to the default", SG.parseDealerSign("standard") === "standard" && SG.parseDealerSign("app") === "app" && [null, undefined, "", "Standard", "x", 1, {}].every((v) => SG.parseDealerSign(v) === "app"));
+  t("the default is listed first and marked as the logged convention; both controls share the wording", Object.keys(SG.DEALER_SIGN_LABELS)[0] === "app" && /default, as logged/.test(SG.DEALER_SIGN_LABELS.app) && SG.DEALER_SIGN_LABELS.standard === "Dealers long calls, short puts");
+}
+
 console.log(bad ? `\n${bad} FAILED` : "\nall checks passed");
 process.exit(bad ? 1 : 0);

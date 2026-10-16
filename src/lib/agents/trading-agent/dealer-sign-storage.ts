@@ -8,7 +8,7 @@ export const DEALER_SIGN_KEY = "dellegate.dealerSign";
 /**
  * One dealer-positioning setting for every toggle (Options dashboard and Gamma Heat Map). A module-level store, so every
  * mounted consumer in the page shares it; the browser's `storage` event carries a change made in another tab. Storage can
- * be empty, blocked or throw, so every access is wrapped and the default ("standard") is the fallback.
+ * be empty, blocked or throw, so every access is wrapped and the default ("app") is the fallback.
  *
  * Server render and the first client render use the default (the server snapshot); React then re-renders with the stored
  * value, so there is no hydration mismatch.

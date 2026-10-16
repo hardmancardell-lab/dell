@@ -13,12 +13,12 @@ import type { FlowAtWalls, GexRegime, GexSignalResult, QuadrantLabel, TermStruct
 export type DealerSignMode = "app" | "standard";
 
 /** The one default for every dealer-positioning toggle (Options dashboard and Gamma Heat Map share a single setting). */
-export const DEFAULT_DEALER_SIGN: DealerSignMode = "standard";
+export const DEFAULT_DEALER_SIGN: DealerSignMode = "app";
 
-/** Toggle wording and order, shared by every control: "standard" first. "(as logged)" marks the convention the forward paper-backtest log records. */
+/** Toggle wording and order, shared by every control: the default ("app", dealers short calls, long puts) first. It is also the convention the forward paper-backtest log records. */
 export const DEALER_SIGN_LABELS: Record<DealerSignMode, string> = {
+  app: "Dealers short calls, long puts (default, as logged)",
   standard: "Dealers long calls, short puts",
-  app: "Dealers short calls, long puts (as logged)",
 };
 
 /** Validates a stored value. Anything that is not exactly "app" or "standard" (missing, corrupt, from an older build) falls back to the default. */
