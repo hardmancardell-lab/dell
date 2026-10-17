@@ -1349,7 +1349,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 1,
     title: "Reading the three statements",
-    body: "The income statement shows revenue and profit over a period. The balance sheet shows what a company owns and owes at a single point in time. The cash flow statement shows actual cash moving in and out — and it's the one that's hardest to fake, because accounting profit can include revenue that hasn't actually been collected yet.\n\nA company can report a genuine accounting profit while its cash position quietly deteriorates — usually a sign to look at receivables and inventory before trusting the headline number.",
+    body: "A company reports its results in three statements. The income statement shows revenue (money from sales) and profit over a period of time. The balance sheet is a snapshot. It shows what the company owns and owes on one day. The cash flow statement shows the real cash moving in and out.\n\nCash is the hardest number to fake. A company can show a profit on paper while its cash shrinks, for example when customers have not paid yet. If you see a profit but falling cash, look at receivables (money customers still owe) and inventory (goods not yet sold) before you trust the headline number.",
     tryIt: { label: "Security Analysis · Value Checklist" },
     checks: [
       {
@@ -1392,7 +1392,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 2,
     title: "Valuation: what \"cheap\" and \"expensive\" mean",
-    body: "P/E (price divided by earnings per share) and P/B (price divided by book value per share) are the most common starting valuation ratios. A high P/E can mean a stock is genuinely overpriced — or it can mean the market expects much faster growth, which changes what a \"fair\" multiple even looks like.\n\nComparing a P/E across two completely different sectors is a classic beginner-dressed-as-analyst mistake — a software company and a utility company have structurally different growth and risk profiles, so their \"normal\" P/E ranges are nowhere near the same.",
+    body: "Two common ways to judge a price are P/E and P/B. P/E is the stock price divided by the company's yearly profit per share. P/B is the price divided by book value per share, which is the company's net worth on paper. A high P/E can mean a stock is overpriced. It can also mean investors expect much faster growth.\n\nDo not compare P/E ratios across very different industries. A software company and a utility have different growth and risk, so their normal P/E ranges are far apart. Compare a company with its own industry first.",
     tryIt: null,
     checks: [
       {
@@ -1435,7 +1435,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 3,
     title: "Market structure, briefly",
-    body: "Stocks trade on exchanges through market makers who quote a bid (what buyers offer) and an ask (what sellers want) — the gap between them is the spread. A quoted price isn't quite the price you'll get: buying at market means paying the ask, not the midpoint.\n\nThis matters most for thinly-traded stocks, where wide spreads can quietly cost you more than a few cents per share.",
+    body: "Stocks trade on exchanges. Market makers post two prices. The bid is what buyers will pay. The ask is what sellers want. The gap between them is the spread. If you buy at market, you pay the ask, not the middle price. If you sell at market, you get the bid.\n\nThis matters most for stocks that trade rarely. Their spreads can be wide, so the cost can be more than a few cents a share.",
     tryIt: null,
     checks: [
       {
@@ -1478,7 +1478,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 4,
     title: "Building an actual diversified portfolio",
-    body: "True diversification is about correlation, not just \"different companies.\" Two stocks in different industries can still move together if they share the same underlying economic sensitivity — this is the mistake this module exists to prevent.\n\nChecking real correlation between holdings, not just eyeballing that the tickers look different, is the difference between a portfolio that's actually diversified and one that only looks that way on paper.",
+    body: "Real diversification is about correlation. Correlation shows how closely two holdings move together. It runs from -1 (opposite moves) to +1 (in lockstep). Two stocks in different industries can still move together if the same forces drive both.\n\nDo not just check that the company names look different. Check how closely the holdings actually move together. That is the difference between a portfolio that is truly spread out and one that only looks that way on paper.",
     tryIt: { label: "Portfolio Tracker · Correlation Finder" },
     checks: [
       {
@@ -1521,7 +1521,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 5,
     title: "Macro basics: rates, the Fed, the yield curve",
-    body: "The Federal Reserve sets short-term interest rates, which ripples through borrowing costs across the whole economy. Higher rates mean future cash flows are discounted more heavily when valuing a company — so growth stocks, whose value depends heavily on earnings far in the future, are typically hit hardest when rates rise.\n\nThe yield curve (the relationship between short- and long-term Treasury yields) is one of the most closely watched macro signals precisely because an inverted curve has come before every U.S. recession since 1955, usually by 6 to 24 months, with one false alarm (San Francisco Fed, 2018).",
+    body: "The Federal Reserve (the Fed) sets short-term interest rates. Those rates change borrowing costs across the whole economy. When rates rise, the value today of future profits falls. This is called discounting. Growth stocks are hit hardest, because most of their profit is far in the future.\n\nThe yield curve compares short-term and long-term Treasury yields (the interest rates on US government bonds). When short-term yields rise above long-term yields, the curve is inverted. An inverted curve has come before every US recession since 1955, usually by 6 to 24 months, with one false alarm (San Francisco Fed, 2018).",
     tryIt: { label: "Top-Down Economic Analysis · Macro" },
     checks: [
       {

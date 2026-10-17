@@ -12,6 +12,10 @@ import { fileURLToPath } from "node:url";
 import { LITERACY_MODULES, PLACEMENT_QUESTIONS } from "../../src/lib/agents/financial-literacy/skills/curriculum-content.ts";
 
 export const TARGET_GRADE = 8.0;
+// Per-tier caps (owner decision 2026-10): beginner and intermediate grade 8, expert grade 10. A tier is added to
+// ENFORCED_TIERS once all of its lessons meet the cap; until then the per-lesson baseline (below) is the ratchet.
+export const TIER_CAP: Record<string, number> = { beginner: 8.0, intermediate: 8.0, expert: 10.0 };
+const ENFORCED_TIERS = ["beginner"];
 const BASELINE = fileURLToPath(new URL("./reading-level.baseline.json", import.meta.url));
 
 const EXC: Record<string, number> = { create: 2, idea: 3, ideal: 3, area: 3, being: 2, quiet: 2, science: 2, every: 2, society: 4, variety: 4, experience: 4, people: 2, poor: 1, hour: 1, fire: 1, real: 1, really: 2, serious: 3, previous: 3, obvious: 3, variable: 4, various: 3, ratio: 3, usually: 4, created: 3, diversify: 4, giant: 2, lion: 2, media: 3, radio: 3, video: 3, poem: 2, riot: 2, trial: 2, dial: 2, diet: 2, annual: 3, actual: 3, casual: 3, manual: 3, usual: 3, virtual: 3, value: 2, issue: 2, continue: 3, venue: 2, rescue: 2, argue: 2, queue: 1, business: 2, evening: 2, family: 3, interest: 3, different: 3, several: 3, general: 3, camera: 3, average: 3, comfortable: 3, favorite: 3, chocolate: 3, vegetable: 3, miserable: 4, mortgage: 2, deductible: 4, valuable: 4, college: 2, license: 2, scarcity: 3, quantity: 3 };
@@ -70,6 +74,7 @@ if (process.argv[1] && process.argv[1].endsWith("reading-level.mts")) {
     const p = place.filter((x) => x.tier === t);
     console.log(`${t.padEnd(12)} lessons n=${r.length} mean FK ${mean(r.map((x) => x.fk)).toFixed(2)} above ${TARGET_GRADE}: ${r.filter((x) => x.fk > TARGET_GRADE).length} | placement n=${p.length} mean FK ${mean(p.map((x) => x.fk)).toFixed(2)}`);
   }
+  if (process.argv.includes("--grades")) console.log(rows.map((r) => `${r.id.replace(/^(beginner|intermediate|expert)-/, "$1:")}=${r.fk}`).join(" "));
   if (process.argv.includes("--json")) console.log(JSON.stringify({ rows, place }, null, 1));
   else console.log("lessons above target:", rows.filter((r) => r.fk > TARGET_GRADE).map((r) => `${r.id}(${r.fk})`).join(" ") || "none");
 
@@ -81,6 +86,7 @@ if (process.argv[1] && process.argv[1].endsWith("reading-level.mts")) {
     process.exit(0);
   }
   let bad = 0;
+  for (const r of rows) if (ENFORCED_TIERS.includes(r.tier) && r.fk > TIER_CAP[r.tier]) { bad++; console.log("FAIL tier cap", r.id, r.fk, ">", TIER_CAP[r.tier]); }
   for (const a of all) {
     const b = base[a.id];
     if (b == null) { if (a.fk > TARGET_GRADE) { bad++; console.log("FAIL new/unbaselined", a.id, a.fk, "> target", TARGET_GRADE); } }
