@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidSessionId } from "@/lib/data/postgrest-safe";
 import { evaluateAccountOrders } from "@/lib/agents/trading-agent/skills/paper-trading-engine";
 import { getOrCreateAccount, isPaperTradingDbConfigured } from "@/lib/data/paper-trading-db";
 
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   }
   try {
     const body = (await request.json()) as { sessionId?: string };
-    if (!body.sessionId) {
+    if (!isValidSessionId(body.sessionId)) {
       return NextResponse.json({ error: "Request body must include 'sessionId'." }, { status: 400 });
     }
     const account = await getOrCreateAccount(body.sessionId);

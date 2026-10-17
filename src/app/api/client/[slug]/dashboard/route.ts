@@ -1,12 +1,14 @@
 import { cookies } from "next/headers";
 import { verifyClientCookie } from "@/lib/access/tokens";
 import { NextResponse } from "next/server";
+import { isValidId } from "@/lib/data/postgrest-safe";
 import { getAdvisorClientBySlug, listClientHoldings, listRealizedPnl } from "@/lib/data/advisor-clients-db";
 import { valuatePortfolio } from "@/lib/agents/trading-agent/skills/portfolio-valuation";
 import { checkWashSaleRisk } from "@/lib/agents/trading-agent/skills/wash-sale-check";
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  if (!isValidId(slug)) return NextResponse.json({ error: "Client not found." }, { status: 404 });
   const client = await getAdvisorClientBySlug(slug);
   if (!client) return NextResponse.json({ error: "Client not found." }, { status: 404 });
 

@@ -1,4 +1,5 @@
 import type { AlertChannel, AlertConditionType, AlertRule, AlertRuleInput, AlertSubscription, AssetClass } from "@/lib/agents/trading-agent/types";
+import { pgId, assertToken, assertPhone } from "@/lib/data/postgrest-safe";
 
 /**
  * Plain-fetch Supabase REST CRUD for alert_subscriptions/alert_rules/alert_log
@@ -159,7 +160,7 @@ export async function getActiveRulesWithSubscriptions(): Promise<AlertRule[]> {
 }
 
 export async function setRuleTriggeredState(ruleId: string, currentlyTriggered: boolean): Promise<void> {
-  await supabaseRequest(`alert_rules?id=eq.${encodeURIComponent(ruleId)}`, {
+  await supabaseRequest(`alert_rules?id=eq.${pgId(ruleId)}`, {
     method: "PATCH",
     body: { currently_triggered: currentlyTriggered, last_evaluated_at: new Date().toISOString() },
   });
@@ -186,7 +187,7 @@ export async function insertAlertLog(entry: {
 
 /** Returns true if a matching active subscription was found and deactivated. */
 export async function deactivateSubscriptionByToken(token: string): Promise<boolean> {
-  const rows = await supabaseRequest<SubscriptionRow[]>(`alert_subscriptions?unsubscribe_token=eq.${encodeURIComponent(token)}`, {
+  const rows = await supabaseRequest<SubscriptionRow[]>(`alert_subscriptions?unsubscribe_token=eq.${encodeURIComponent(assertToken(token))}`, {
     method: "PATCH",
     prefer: "return=representation",
     body: { active: false },
@@ -196,7 +197,7 @@ export async function deactivateSubscriptionByToken(token: string): Promise<bool
 
 /** Twilio's own STOP handling blocks future sends on their side but doesn't touch our database — the SMS webhook calls this to keep alert_subscriptions.active in sync. */
 export async function deactivateSubscriptionsByPhone(phone: string): Promise<number> {
-  const rows = await supabaseRequest<SubscriptionRow[]>(`alert_subscriptions?phone=eq.${encodeURIComponent(phone)}`, {
+  const rows = await supabaseRequest<SubscriptionRow[]>(`alert_subscriptions?phone=eq.${encodeURIComponent(assertPhone(phone))}`, {
     method: "PATCH",
     prefer: "return=representation",
     body: { active: false },

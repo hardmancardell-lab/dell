@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
+import { isValidSessionId } from "@/lib/data/postgrest-safe";
 import { getAccountBySessionId, getTradeLog, isPaperTradingDbConfigured } from "@/lib/data/paper-trading-db";
 import { summarizeStrategies } from "@/lib/agents/trading-agent/skills/paper-strategy-performance";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sessionId = searchParams.get("sessionId");
-  if (!sessionId) {
-    return NextResponse.json({ error: "Missing required 'sessionId' query param." }, { status: 400 });
+  if (!isValidSessionId(sessionId)) {
+    return NextResponse.json({ error: "Missing or invalid 'sessionId' query param." }, { status: 400 });
   }
   if (!isPaperTradingDbConfigured()) {
     return NextResponse.json({ error: "Paper trading is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." }, { status: 503 });

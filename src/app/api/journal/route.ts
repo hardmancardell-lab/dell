@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidSessionId } from "@/lib/data/postgrest-safe";
 import { createJournalPosition, getJournalPositions, insertJournalFill, isJournalDbConfigured } from "@/lib/data/journal-db";
 import type { JournalPositionInput } from "@/lib/agents/trading-agent/types";
 
@@ -7,8 +8,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Trade Journal is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." }, { status: 503 });
   }
   const sessionId = new URL(request.url).searchParams.get("sessionId");
-  if (!sessionId) {
-    return NextResponse.json({ error: "Missing required 'sessionId' query param." }, { status: 400 });
+  if (!isValidSessionId(sessionId)) {
+    return NextResponse.json({ error: "Missing or invalid 'sessionId' query param." }, { status: 400 });
   }
   try {
     const positions = await getJournalPositions(sessionId);
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   }
   try {
     const body = (await request.json()) as JournalPositionInput;
-    if (!body.sessionId || !body.ticker || !body.instrumentType || !body.strategy || !body.source || !body.quantity || !body.entryPrice) {
+    if (!isValidSessionId(body.sessionId) || !body.ticker || !body.instrumentType || !body.strategy || !body.source || !body.quantity || !body.entryPrice) {
       return NextResponse.json(
         { error: "Request body must include 'sessionId', 'ticker', 'instrumentType', 'source', 'strategy', 'quantity', and 'entryPrice'." },
         { status: 400 }

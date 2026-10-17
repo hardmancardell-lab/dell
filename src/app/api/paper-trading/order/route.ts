@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidSessionId } from "@/lib/data/postgrest-safe";
 import { placeOrder } from "@/lib/agents/trading-agent/skills/paper-trading-engine";
 import { isPaperTradingDbConfigured } from "@/lib/data/paper-trading-db";
 import type { PaperOrderInput } from "@/lib/agents/trading-agent/types";
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
   }
   try {
     const body = (await request.json()) as { sessionId?: string; order?: PaperOrderInput };
-    if (!body.sessionId || !body.order) {
+    if (!isValidSessionId(body.sessionId) || !body.order) {
       return NextResponse.json({ error: "Request body must include 'sessionId' and 'order'." }, { status: 400 });
     }
     const result = await placeOrder(body.sessionId, body.order);

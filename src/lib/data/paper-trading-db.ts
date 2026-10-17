@@ -10,6 +10,7 @@ import type {
   PaperOrderType,
   PaperPosition,
 } from "@/lib/agents/trading-agent/types";
+import { pgId, pgSession, pgSymbol, assertDate, assertOneOf, assertFiniteNumber, clampLimit } from "@/lib/data/postgrest-safe";
 
 /**
  * Plain-fetch Supabase REST CRUD for paper_accounts/paper_orders/paper_fills/
@@ -203,7 +204,7 @@ function toPosition(row: PositionRow): PaperPosition {
 // --- Accounts ---
 
 export async function getAccountBySessionId(sessionId: string): Promise<PaperAccount | null> {
-  const rows = await supabaseRequest<AccountRow[]>(`paper_accounts?session_id=eq.${encodeURIComponent(sessionId)}`, {
+  const rows = await supabaseRequest<AccountRow[]>(`paper_accounts?session_id=eq.${pgSession(sessionId)}`, {
     method: "GET",
     prefer: "return=representation",
   });
@@ -211,7 +212,7 @@ export async function getAccountBySessionId(sessionId: string): Promise<PaperAcc
 }
 
 export async function getAccountById(accountId: string): Promise<PaperAccount | null> {
-  const rows = await supabaseRequest<AccountRow[]>(`paper_accounts?id=eq.${encodeURIComponent(accountId)}`, {
+  const rows = await supabaseRequest<AccountRow[]>(`paper_accounts?id=eq.${pgId(accountId)}`, {
     method: "GET",
     prefer: "return=representation",
   });
@@ -230,7 +231,7 @@ export async function getOrCreateAccount(sessionId: string): Promise<PaperAccoun
 }
 
 export async function updateAccountCash(accountId: string, cashBalance: number): Promise<void> {
-  await supabaseRequest(`paper_accounts?id=eq.${encodeURIComponent(accountId)}`, {
+  await supabaseRequest(`paper_accounts?id=eq.${pgId(accountId)}`, {
     method: "PATCH",
     body: { cash_balance: cashBalance },
   });
@@ -303,7 +304,7 @@ async function createOrderRequest(order: Parameters<typeof createOrder>[0]): Pro
 }
 
 export async function getOrderById(orderId: string): Promise<PaperOrder | null> {
-  const rows = await supabaseRequest<OrderRow[]>(`paper_orders?id=eq.${encodeURIComponent(orderId)}`, {
+  const rows = await supabaseRequest<OrderRow[]>(`paper_orders?id=eq.${pgId(orderId)}`, {
     method: "GET",
     prefer: "return=representation",
   });
@@ -312,7 +313,7 @@ export async function getOrderById(orderId: string): Promise<PaperOrder | null> 
 
 export async function getOpenOrders(accountId: string): Promise<PaperOrder[]> {
   const rows = await supabaseRequest<OrderRow[]>(
-    `paper_orders?account_id=eq.${encodeURIComponent(accountId)}&status=eq.pending&order=created_at.desc`,
+    `paper_orders?account_id=eq.${pgId(accountId)}&status=eq.pending&order=created_at.desc`,
     { method: "GET", prefer: "return=representation" }
   );
   return rows.map(toOrder);
@@ -328,21 +329,21 @@ export async function getAllPendingOrders(): Promise<PaperOrder[]> {
 }
 
 export async function markOrderEvaluated(orderId: string, trailingStopPrice: number | null): Promise<void> {
-  await supabaseRequest(`paper_orders?id=eq.${encodeURIComponent(orderId)}`, {
+  await supabaseRequest(`paper_orders?id=eq.${pgId(orderId)}`, {
     method: "PATCH",
     body: { last_evaluated_at: new Date().toISOString(), trailing_stop_price: trailingStopPrice },
   });
 }
 
 export async function fillOrder(orderId: string): Promise<void> {
-  await supabaseRequest(`paper_orders?id=eq.${encodeURIComponent(orderId)}`, {
+  await supabaseRequest(`paper_orders?id=eq.${pgId(orderId)}`, {
     method: "PATCH",
     body: { status: "filled", filled_at: new Date().toISOString() },
   });
 }
 
 export async function cancelOrder(orderId: string): Promise<void> {
-  await supabaseRequest(`paper_orders?id=eq.${encodeURIComponent(orderId)}`, {
+  await supabaseRequest(`paper_orders?id=eq.${pgId(orderId)}`, {
     method: "PATCH",
     body: { status: "cancelled", cancelled_at: new Date().toISOString() },
   });
@@ -351,7 +352,7 @@ export async function cancelOrder(orderId: string): Promise<void> {
 /** OCO: when one order in a group fills (or is manually cancelled), every other pending order sharing its group is auto-cancelled. */
 export async function cancelOcoSiblings(ocoGroupId: string, excludeOrderId: string): Promise<string[]> {
   const rows = await supabaseRequest<OrderRow[]>(
-    `paper_orders?oco_group_id=eq.${encodeURIComponent(ocoGroupId)}&status=eq.pending&id=neq.${encodeURIComponent(excludeOrderId)}`,
+    `paper_orders?oco_group_id=eq.${pgId(ocoGroupId)}&status=eq.pending&id=neq.${pgId(excludeOrderId)}`,
     { method: "PATCH", prefer: "return=representation", body: { status: "cancelled", cancelled_at: new Date().toISOString() } }
   );
   return rows.map((r) => r.id);
@@ -397,7 +398,7 @@ export async function insertFill(fill: {
 
 export async function getFills(accountId: string, limit = 100): Promise<PaperFill[]> {
   const rows = await supabaseRequest<FillRow[]>(
-    `paper_fills?account_id=eq.${encodeURIComponent(accountId)}&order=filled_at.desc&limit=${limit}`,
+    `paper_fills?account_id=eq.${pgId(accountId)}&order=filled_at.desc&limit=${clampLimit(limit)}`,
     { method: "GET", prefer: "return=representation" }
   );
   return rows.map(toFill);
@@ -406,7 +407,7 @@ export async function getFills(accountId: string, limit = 100): Promise<PaperFil
 // --- Positions ---
 
 export async function getPositions(accountId: string): Promise<PaperPosition[]> {
-  const rows = await supabaseRequest<PositionRow[]>(`paper_positions?account_id=eq.${encodeURIComponent(accountId)}`, {
+  const rows = await supabaseRequest<PositionRow[]>(`paper_positions?account_id=eq.${pgId(accountId)}`, {
     method: "GET",
     prefer: "return=representation",
   });
@@ -415,7 +416,7 @@ export async function getPositions(accountId: string): Promise<PaperPosition[]> 
 
 export async function getPosition(accountId: string, symbol: string, assetClass: AssetClass): Promise<PaperPosition | null> {
   const rows = await supabaseRequest<PositionRow[]>(
-    `paper_positions?account_id=eq.${encodeURIComponent(accountId)}&symbol=eq.${encodeURIComponent(symbol)}&asset_class=eq.${encodeURIComponent(assetClass)}`,
+    `paper_positions?account_id=eq.${pgId(accountId)}&symbol=eq.${pgSymbol(symbol)}&asset_class=eq.${pgId(assetClass, "assetClass")}`,
     { method: "GET", prefer: "return=representation" }
   );
   return rows[0] ? toPosition(rows[0]) : null;
@@ -445,7 +446,7 @@ export async function upsertPosition(
 
 export async function deletePosition(accountId: string, symbol: string, assetClass: AssetClass): Promise<void> {
   await supabaseRequest(
-    `paper_positions?account_id=eq.${encodeURIComponent(accountId)}&symbol=eq.${encodeURIComponent(symbol)}&asset_class=eq.${encodeURIComponent(assetClass)}`,
+    `paper_positions?account_id=eq.${pgId(accountId)}&symbol=eq.${pgSymbol(symbol)}&asset_class=eq.${pgId(assetClass, "assetClass")}`,
     { method: "DELETE" }
   );
 }
@@ -494,12 +495,12 @@ export interface TradeLogRow {
 async function findOpeningStrategy(fill: PaperFill, order: PaperOrder): Promise<TradeLogRow | null> {
   const opposite = fill.side === "sell" ? "buy" : "sell";
   let q =
-    `paper_trade_log?account_id=eq.${encodeURIComponent(fill.accountId)}` +
-    `&symbol=eq.${encodeURIComponent(fill.symbol)}&asset_class=eq.${encodeURIComponent(order.assetClass)}` +
+    `paper_trade_log?account_id=eq.${pgId(fill.accountId)}` +
+    `&symbol=eq.${pgSymbol(fill.symbol)}&asset_class=eq.${pgId(order.assetClass, "assetClass")}` +
     `&side=eq.${opposite}&strategy_type=not.is.null&order=logged_at.desc&limit=1`;
-  if (fill.optionRight) q += `&option_right=eq.${fill.optionRight}`;
-  if (fill.strikePrice !== null && fill.strikePrice !== undefined) q += `&strike_price=eq.${fill.strikePrice}`;
-  if (fill.expirationDate) q += `&expiration_date=eq.${encodeURIComponent(fill.expirationDate)}`;
+  if (fill.optionRight) q += `&option_right=eq.${assertOneOf(fill.optionRight, ["call", "put"], "optionRight")}`;
+  if (fill.strikePrice !== null && fill.strikePrice !== undefined) q += `&strike_price=eq.${assertFiniteNumber(fill.strikePrice, "strikePrice")}`;
+  if (fill.expirationDate) q += `&expiration_date=eq.${encodeURIComponent(assertDate(fill.expirationDate, "expirationDate"))}`;
   const rows = await supabaseRequest<TradeLogRow[]>(q, { method: "GET", prefer: "return=representation" });
   return rows[0] ?? null;
 }
@@ -543,7 +544,7 @@ export async function insertTradeLog(order: PaperOrder, fill: PaperFill): Promis
 
 export async function getTradeLog(accountId: string, limit = 500): Promise<TradeLogRow[]> {
   return supabaseRequest<TradeLogRow[]>(
-    `paper_trade_log?account_id=eq.${encodeURIComponent(accountId)}&order=logged_at.desc&limit=${limit}`,
+    `paper_trade_log?account_id=eq.${pgId(accountId)}&order=logged_at.desc&limit=${clampLimit(limit)}`,
     { method: "GET", prefer: "return=representation" }
   );
 }

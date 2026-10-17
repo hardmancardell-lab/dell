@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from "crypto";
 import type { AdvisorClient, PortfolioHolding, RealizedSale } from "@/lib/agents/trading-agent/types";
+import { pgId } from "@/lib/data/postgrest-safe";
 
 /**
  * Plain-fetch Supabase REST CRUD for advisor_clients/advisor_client_holdings
@@ -110,7 +111,7 @@ export async function updateAdvisorClient(
     body.linked_email = updates.linkedEmail ? updates.linkedEmail.trim().toLowerCase() : null;
   }
   if (updates.passcode !== undefined) body.passcode_hash = hashPasscode(updates.passcode);
-  const rows = await supabaseRequest<ClientRow[]>("advisor_clients?slug=eq." + encodeURIComponent(slug), {
+  const rows = await supabaseRequest<ClientRow[]>("advisor_clients?slug=eq." + pgId(slug), {
     method: "PATCH",
     prefer: "return=representation",
     body,
@@ -128,7 +129,7 @@ export async function updateAdvisorClient(
  */
 export async function getAdvisorClientByUser(userId: string, email: string): Promise<AdvisorClient | null> {
   const byUserId = await supabaseRequest<ClientRow[]>(
-    `advisor_clients?user_id=eq.${encodeURIComponent(userId)}&select=*`,
+    `advisor_clients?user_id=eq.${pgId(userId)}&select=*`,
     { method: "GET", prefer: "return=representation" }
   );
   if (byUserId.length > 0) return rowToClient(byUserId[0]);
@@ -148,7 +149,7 @@ export async function getAdvisorClientByUser(userId: string, email: string): Pro
   }
 
   const linked = await supabaseRequest<ClientRow[]>(
-    `advisor_clients?id=eq.${encodeURIComponent(byEmail[0].id)}`,
+    `advisor_clients?id=eq.${pgId(byEmail[0].id)}`,
     { method: "PATCH", prefer: "return=representation", body: { user_id: userId } }
   );
   return rowToClient(linked[0]);
@@ -163,7 +164,7 @@ export async function listAdvisorClients(): Promise<AdvisorClient[]> {
 }
 
 export async function getAdvisorClientBySlug(slug: string): Promise<(AdvisorClient & { passcodeHash: string }) | null> {
-  const rows = await supabaseRequest<ClientRow[]>(`advisor_clients?slug=eq.${encodeURIComponent(slug)}&select=*`, {
+  const rows = await supabaseRequest<ClientRow[]>(`advisor_clients?slug=eq.${pgId(slug)}&select=*`, {
     method: "GET",
     prefer: "return=representation",
   });
@@ -172,7 +173,7 @@ export async function getAdvisorClientBySlug(slug: string): Promise<(AdvisorClie
 }
 
 export async function deleteAdvisorClient(slug: string): Promise<void> {
-  await supabaseRequest("advisor_clients?slug=eq." + encodeURIComponent(slug), { method: "DELETE" });
+  await supabaseRequest("advisor_clients?slug=eq." + pgId(slug), { method: "DELETE" });
 }
 
 interface HoldingRow {
@@ -208,7 +209,7 @@ function rowToHolding(row: HoldingRow): PortfolioHolding {
 
 export async function listClientHoldings(clientId: string): Promise<PortfolioHolding[]> {
   const rows = await supabaseRequest<HoldingRow[]>(
-    `advisor_client_holdings?client_id=eq.${encodeURIComponent(clientId)}&select=*&order=created_at.asc`,
+    `advisor_client_holdings?client_id=eq.${pgId(clientId)}&select=*&order=created_at.asc`,
     { method: "GET", prefer: "return=representation" }
   );
   return rows.map(rowToHolding);
@@ -239,19 +240,19 @@ export async function createClientHolding(
 }
 
 export async function deleteClientHolding(holdingId: string): Promise<void> {
-  await supabaseRequest("advisor_client_holdings?id=eq." + encodeURIComponent(holdingId), { method: "DELETE" });
+  await supabaseRequest("advisor_client_holdings?id=eq." + pgId(holdingId), { method: "DELETE" });
 }
 
 async function getClientHoldingRowById(holdingId: string): Promise<HoldingRow | null> {
   const rows = await supabaseRequest<HoldingRow[]>(
-    `advisor_client_holdings?id=eq.${encodeURIComponent(holdingId)}&select=*`,
+    `advisor_client_holdings?id=eq.${pgId(holdingId)}&select=*`,
     { method: "GET", prefer: "return=representation" }
   );
   return rows.length > 0 ? rows[0] : null;
 }
 
 async function updateClientHoldingShares(holdingId: string, shares: number): Promise<PortfolioHolding> {
-  const rows = await supabaseRequest<HoldingRow[]>("advisor_client_holdings?id=eq." + encodeURIComponent(holdingId), {
+  const rows = await supabaseRequest<HoldingRow[]>("advisor_client_holdings?id=eq." + pgId(holdingId), {
     method: "PATCH",
     prefer: "return=representation",
     body: { shares },
@@ -288,7 +289,7 @@ function rowToRealizedSale(row: RealizedSaleRow): RealizedSale {
 
 export async function listRealizedPnl(clientId: string): Promise<RealizedSale[]> {
   const rows = await supabaseRequest<RealizedSaleRow[]>(
-    `advisor_client_realized_pnl?client_id=eq.${encodeURIComponent(clientId)}&select=*&order=sale_date.desc,created_at.desc`,
+    `advisor_client_realized_pnl?client_id=eq.${pgId(clientId)}&select=*&order=sale_date.desc,created_at.desc`,
     { method: "GET", prefer: "return=representation" }
   );
   return rows.map(rowToRealizedSale);

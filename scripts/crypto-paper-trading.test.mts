@@ -82,7 +82,7 @@ globalThis.fetch = async (input: any, init: any = {}) => {
   return json([]);
 };
 
-const SESSION = "s1";
+const SESSION = "session-crypto-test-1";
 const acct = () => db.paper_accounts[0];
 const pos = () => db.paper_positions?.find((p) => p.symbol === "BTC-USD");
 const order = (q: number, side = "buy", extra = {}) => ({ symbol: "btc", assetClass: "crypto", side, orderType: "market", quantity: q, ...extra });

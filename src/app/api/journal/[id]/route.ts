@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidSessionId, isValidId } from "@/lib/data/postgrest-safe";
 import { deleteJournalPosition, isJournalDbConfigured, updateJournalPosition } from "@/lib/data/journal-db";
 import type { JournalEmotionTag, JournalStatus } from "@/lib/agents/trading-agent/types";
 
@@ -19,10 +20,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ error: "Trade Journal is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." }, { status: 503 });
   }
   const { id } = await context.params;
+  if (!isValidId(id)) {
+    return NextResponse.json({ error: "Invalid position id." }, { status: 400 });
+  }
   try {
     const { sessionId, ...fields } = (await request.json()) as PatchBody;
-    if (!sessionId) {
-      return NextResponse.json({ error: "Missing required 'sessionId'." }, { status: 400 });
+    if (!isValidSessionId(sessionId)) {
+      return NextResponse.json({ error: "Missing or invalid 'sessionId'." }, { status: 400 });
     }
     const position = await updateJournalPosition(id, sessionId, fields);
     return NextResponse.json({ position });
@@ -37,9 +41,12 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     return NextResponse.json({ error: "Trade Journal is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." }, { status: 503 });
   }
   const { id } = await context.params;
+  if (!isValidId(id)) {
+    return NextResponse.json({ error: "Invalid position id." }, { status: 400 });
+  }
   const sessionId = new URL(request.url).searchParams.get("sessionId");
-  if (!sessionId) {
-    return NextResponse.json({ error: "Missing required 'sessionId' query param." }, { status: 400 });
+  if (!isValidSessionId(sessionId)) {
+    return NextResponse.json({ error: "Missing or invalid 'sessionId' query param." }, { status: 400 });
   }
   try {
     await deleteJournalPosition(id, sessionId);

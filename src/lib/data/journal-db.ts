@@ -7,6 +7,7 @@ import type {
   JournalSource,
   JournalStatus,
 } from "@/lib/agents/trading-agent/types";
+import { pgId, sessionOwnershipFilter, assertId, assertSessionId } from "@/lib/data/postgrest-safe";
 
 /**
  * Plain-fetch Supabase REST CRUD for journal_positions/journal_fills — same
@@ -127,17 +128,10 @@ function toPosition(row: PositionRow): JournalPosition {
 
 const POSITION_SELECT = "*,fills:journal_fills(*)";
 
-// Every journal_positions row is scoped to the anonymous session_id that
-// created it — same pattern as paper_accounts/alert_subscriptions elsewhere
-// in this app (no login system anywhere; a browser-local session id is the
-// only identity concept this app has). Legacy rows created before this
-// column existed have session_id IS NULL and stay visible to everyone
-// (grandfathered — real-world impact is zero right now since there was
-// only ever one real beta user before this scoping landed), but every row
-// created from here on is strictly scoped to its owner.
-function ownershipFilter(sessionId: string): string {
-  return `or=(session_id.eq.${encodeURIComponent(sessionId)},session_id.is.null)`;
-}
+// Every journal_positions row is scoped to the anonymous session_id that created it (no login system exists; a
+// browser-local session id is the only identity concept). The filter itself, the strict session-id pattern, and the
+// explicit LEGACY_NULL_SESSION_ROWS_VISIBLE_TO_EVERYONE decision for old NULL-session rows live in postgrest-safe.ts.
+const ownershipFilter = sessionOwnershipFilter;
 
 export async function createJournalPosition(input: {
   sessionId: string;
@@ -154,6 +148,7 @@ export async function createJournalPosition(input: {
   emotionTag: JournalEmotionTag | null;
   openedAt: string;
 }): Promise<JournalPosition> {
+  assertSessionId(input.sessionId);
   const rows = await supabaseRequest<PositionRow[]>("journal_positions", {
     method: "POST",
     prefer: "return=representation",
@@ -187,7 +182,7 @@ export async function getJournalPositions(sessionId: string): Promise<JournalPos
 
 export async function getJournalPositionById(id: string, sessionId: string): Promise<JournalPosition | null> {
   const rows = await supabaseRequest<PositionRow[]>(
-    `journal_positions?id=eq.${encodeURIComponent(id)}&${ownershipFilter(sessionId)}&select=${encodeURIComponent(POSITION_SELECT)}`,
+    `journal_positions?id=eq.${pgId(id)}&${ownershipFilter(sessionId)}&select=${encodeURIComponent(POSITION_SELECT)}`,
     { method: "GET", prefer: "return=representation" }
   );
   return rows[0] ? toPosition(rows[0]) : null;
@@ -219,20 +214,21 @@ export async function updateJournalPosition(
   if ("status" in fields) body.status = fields.status;
   if ("closedAt" in fields) body.closed_at = fields.closedAt;
 
-  await supabaseRequest(`journal_positions?id=eq.${encodeURIComponent(id)}&${ownershipFilter(sessionId)}`, { method: "PATCH", body });
+  await supabaseRequest(`journal_positions?id=eq.${pgId(id)}&${ownershipFilter(sessionId)}`, { method: "PATCH", body });
   const updated = await getJournalPositionById(id, sessionId);
   if (!updated) throw new Error("Position not found after update.");
   return updated;
 }
 
 export async function deleteJournalPosition(id: string, sessionId: string): Promise<void> {
-  await supabaseRequest(`journal_positions?id=eq.${encodeURIComponent(id)}&${ownershipFilter(sessionId)}`, { method: "DELETE" });
+  await supabaseRequest(`journal_positions?id=eq.${pgId(id)}&${ownershipFilter(sessionId)}`, { method: "DELETE" });
 }
 
 export async function insertJournalFill(
   positionId: string,
   fill: { side: JournalFillSide; quantity: number; price: number; filledAt: string; note: string | null }
 ): Promise<JournalFill> {
+  assertId(positionId, "positionId");
   const rows = await supabaseRequest<FillRow[]>("journal_fills", {
     method: "POST",
     prefer: "return=representation",

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidSessionId, isValidId } from "@/lib/data/postgrest-safe";
 import { getJournalPositionById, insertJournalFill, isJournalDbConfigured, updateJournalPosition } from "@/lib/data/journal-db";
 import { computeJournalPositionMetrics } from "@/lib/agents/trading-agent/skills/journal-log";
 import type { JournalFillInput } from "@/lib/agents/trading-agent/types";
@@ -11,9 +12,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "Trade Journal is not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset)." }, { status: 503 });
   }
   const { id } = await context.params;
+  if (!isValidId(id)) {
+    return NextResponse.json({ error: "Invalid position id." }, { status: 400 });
+  }
   try {
     const body = (await request.json()) as JournalFillInput & { sessionId?: string };
-    if (!body.sessionId || !body.side || !body.quantity || body.price == null) {
+    if (!isValidSessionId(body.sessionId) || !body.side || !body.quantity || body.price == null) {
       return NextResponse.json({ error: "Request body must include 'sessionId', 'side', 'quantity', and 'price'." }, { status: 400 });
     }
     const existing = await getJournalPositionById(id, body.sessionId);

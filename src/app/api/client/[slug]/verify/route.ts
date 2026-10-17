@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidId } from "@/lib/data/postgrest-safe";
 import { getAdvisorClientBySlug, hashPasscode } from "@/lib/data/advisor-clients-db";
 import { clientIp, LockoutLimiter, tooManyRequests } from "@/lib/access/rate-limit";
 import { ACCESS_TOKEN_TTL_SECONDS, issueClientCookie, timingSafeEqualStr } from "@/lib/access/tokens";
@@ -18,6 +19,7 @@ const perSlug = new LockoutLimiter(10, 15 * 60_000, 60_000, 30 * 60_000);
  */
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  if (!isValidId(slug)) return NextResponse.json({ error: "Incorrect passcode." }, { status: 401 });
   const ipKey = `${clientIp(request)}|${slug.slice(0, 64)}`;
   const slugKey = `slug|${slug.slice(0, 64)}`;
   const gate = perIp.check(ipKey);
