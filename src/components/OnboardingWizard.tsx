@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useAppNavigation } from "@/lib/navigation/app-navigation";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 
@@ -51,9 +51,10 @@ const GOALS: Goal[] = [
   {
     id: "learn",
     label: "Learn the basics first",
-    description: "Real gamified modules by skill tier — not another quiz.",
+    description: "Short lessons by skill level, plus optional games.",
     primaryId: "literacy",
-    tip: "Pick your tier (Beginner/Intermediate/Expert) and start with the first module — each one is a real game, not a multiple-choice quiz.",
+    // The tab opens a placement quiz (18 short questions, about 5 minutes) that sets your starting level; there is no tier picker.
+    tip: "Financial Literacy starts with a short placement quiz (18 questions, about 5 minutes) that sets your starting level. Then work through the lessons in order. The games are optional extras.",
   },
 ];
 
@@ -66,6 +67,14 @@ export function OnboardingWizard() {
   const [chosenId, setChosenId] = useState<GoalId | null>(null);
   const nav = useAppNavigation();
   const { track } = useTrackEvent();
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const open = hydrated && !dismissed;
+
+  // Move focus into the dialog when it opens (and re-focus on each step so screen readers announce the new heading).
+  useEffect(() => {
+    if (open) dialogRef.current?.focus();
+  }, [open, step]);
 
   useEffect(() => {
     try {
@@ -98,14 +107,33 @@ export function OnboardingWizard() {
     finish("completed");
   }
 
-  if (!hydrated || dismissed) return null;
+  if (!open) return null;
+
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      finish("skipped");
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const nodes = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])") ?? []);
+    if (nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    const current = document.activeElement;
+    if (e.shiftKey && (current === first || current === dialogRef.current)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && current === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
 
   const chosen = GOALS.find((g) => g.id === chosenId) ?? null;
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
       style={{
         position: "fixed",
         inset: 0,
@@ -117,11 +145,20 @@ export function OnboardingWizard() {
         padding: 16,
       }}
     >
-      <div className="jarvis" style={{ maxWidth: 480, width: "100%" }}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="jarvis"
+        style={{ maxWidth: 480, width: "100%", outline: "none" }}
+      >
         <div className="jv-card" style={{ padding: 24 }}>
           {step === "welcome" && (
             <>
-              <h2 className="jv-title" style={{ fontSize: 20, marginBottom: 8 }}>Welcome to Dellegate</h2>
+              <h2 id={titleId} className="jv-title" style={{ fontSize: 20, marginBottom: 8 }}>Welcome to Dellegate</h2>
               <p className="jv-lede" style={{ marginBottom: 20 }}>
                 Real market data, real backtests, no fabricated numbers. Five sections: <strong>Research Agent</strong>{" "}
                 (macro → sector → company analysis), <strong>Trading Agent</strong> (signals, backtests, options),{" "}
@@ -138,7 +175,7 @@ export function OnboardingWizard() {
 
           {step === "goal" && (
             <>
-              <h2 className="jv-title" style={{ fontSize: 20, marginBottom: 16 }}>What are you here to do?</h2>
+              <h2 id={titleId} className="jv-title" style={{ fontSize: 20, marginBottom: 16 }}>What are you here to do?</h2>
               <div className="flex flex-col gap-2 mb-4">
                 {GOALS.map((g) => (
                   <button
@@ -161,7 +198,7 @@ export function OnboardingWizard() {
 
           {step === "tip" && chosen && (
             <>
-              <h2 className="jv-title" style={{ fontSize: 20, marginBottom: 8 }}>Good place to start</h2>
+              <h2 id={titleId} className="jv-title" style={{ fontSize: 20, marginBottom: 8 }}>Good place to start</h2>
               <p className="jv-lede" style={{ marginBottom: 20 }}>{chosen.tip}</p>
               <div className="flex items-center justify-between">
                 <button onClick={() => setStep("goal")} className="jv-btn-outline">← Back</button>

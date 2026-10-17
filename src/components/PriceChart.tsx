@@ -22,6 +22,7 @@ import { SESSIONS, toUtcParts } from "@/lib/agents/trading-agent/skills/time-win
 import type { ChartBarsResult } from "@/lib/agents/trading-agent/skills/chart-bars";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import dynamic from "next/dynamic";
+import { JARVIS as TOKENS, INDICATOR_COLORS, SMA_COLORS, VOLUME_BAR, OSC_HIST } from "@/lib/design/tokens";
 // The floating trade panel is only opened on demand; loading these lazily keeps recharts (via OptionsChainTradeTab) and the
 // order form out of every chart consumer's first load.
 const PaperOrderForm = dynamic(() => import("./PaperOrderForm").then((m) => m.PaperOrderForm));
@@ -88,43 +89,17 @@ const OSCILLATOR_INDICATORS: OscillatorDef[] = [
   { id: "cmf", label: "CMF (20)" },
 ];
 
-const COLORS = {
-  ema20: "#8b5cf6",
-  ema50: "#ec4899",
-  bollinger: "#06b6d4",
-  keltner: "#f97316",
-  psar: "#eab308",
-  hma: "#14b8a6",
-  ichimokuTenkan: "#3b82f6",
-  ichimokuKijun: "#ef4444",
-  ichimokuSpanA: "#22c55e",
-  ichimokuSpanB: "#f43f5e",
-  ichimokuChikou: "#a855f7",
-  vwap: "#0ea5e9",
-  volumeProfile: "#84cc16",
-  rsi: "#3b82f6",
-  stochK: "#3b82f6",
-  stochD: "#f59e0b",
-  cci: "#8b5cf6",
-  roc: "#14b8a6",
-  williamsR: "#ec4899",
-  macdLine: "#3b82f6",
-  macdSignal: "#f59e0b",
-  atr: "#f97316",
-  obv: "#06b6d4",
-  cmf: "#84cc16",
-};
+const COLORS = INDICATOR_COLORS;
 
-// The jarvis palette's real hex values (globals.css .jarvis custom
-// properties) — lightweight-charts renders on canvas and can't resolve
-// var(--...) itself, so the chart's own theme is kept in sync by hand here.
+// Chart theme from the shared jarvis tokens (canvas cannot resolve var(--...)); drift is checked by
+// scripts/quality/check-design-tokens.cjs.
 const JARVIS = {
-  inkBg: "#0e131b", // --ink-900
-  line: "#223040", // --line
-  text1: "#9fb0c4", // --text-1
-  signal: "#4fe8d0", // --signal — also this chart's candle up-color
-  danger: "#e8637a", // --danger — also this chart's candle down-color
-  verdict: "#f0a868", // --verdict — cost-basis line
+  inkBg: TOKENS.ink900,
+  line: TOKENS.line,
+  text1: TOKENS.text1,
+  signal: TOKENS.signal,
+  danger: TOKENS.danger,
+  verdict: TOKENS.verdict,
 };
 
 /** Writes the OHLCV legend for candle `index` into `el` (hidden when there is no candle). Plain DOM, no React state. */
@@ -302,8 +277,8 @@ export function PriceChart({
     });
     chart.priceScale("volume").applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 
-    const sma20Series = chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 1 });
-    const sma50Series = chart.addSeries(LineSeries, { color: "#f59e0b", lineWidth: 1 });
+    const sma20Series = chart.addSeries(LineSeries, { color: SMA_COLORS.sma20, lineWidth: 1 });
+    const sma50Series = chart.addSeries(LineSeries, { color: SMA_COLORS.sma50, lineWidth: 1 });
 
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
@@ -407,7 +382,7 @@ export function PriceChart({
       candles.map((c) => ({
         time: toSeconds(c.datetime),
         value: c.volume,
-        color: c.close >= c.open ? "rgba(79,232,208,0.5)" : "rgba(232,99,122,0.5)",
+        color: c.close >= c.open ? VOLUME_BAR.up : VOLUME_BAR.down,
       }))
     );
 
@@ -522,7 +497,7 @@ export function PriceChart({
       const points = values
         .map((v, i) =>
           v !== null
-            ? { time: times[i], value: v, color: v >= 0 ? "rgba(79,232,208,0.6)" : "rgba(232,99,122,0.6)" }
+            ? { time: times[i], value: v, color: v >= 0 ? OSC_HIST.up : OSC_HIST.down }
             : null
         )
         .filter((p): p is { time: UTCTimestamp; value: number; color: string } => p !== null);
@@ -737,11 +712,11 @@ export function PriceChart({
       <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: "var(--text-1)" }}>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={showSma20} onChange={(e) => setShowSma20(e.target.checked)} />
-          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "#3b82f6" }} /> SMA 20
+          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: SMA_COLORS.sma20 }} /> SMA 20
         </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={showSma50} onChange={(e) => setShowSma50(e.target.checked)} />
-          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "#f59e0b" }} /> SMA 50
+          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: SMA_COLORS.sma50 }} /> SMA 50
         </label>
         {loading && <span style={{ color: "var(--text-2)" }}>Loading…</span>}
         {focusDate && <span style={{ color: "var(--text-2)" }}>Centered on {focusDate}</span>}
