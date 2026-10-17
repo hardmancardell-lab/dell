@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { useAppNavigationOptional } from "@/lib/navigation/app-navigation";
 
@@ -17,8 +17,13 @@ export function Tabs({
   mobileDropdown = false,
   navLevel,
   navParentId,
+  ariaLabel,
 }: {
   tabs: TabItem[];
+  // Accessible name of the tab list (and of the mobile dropdown). Defaults
+  // to a generic label per size; call sites with several rows on one screen
+  // should pass something specific ("Trading sections").
+  ariaLabel?: string;
   size?: "primary" | "secondary" | "tertiary";
   // "jarvis" — the app's in-progress redesign direction. Opt-in per call
   // site so unredesigned agents keep the current look untouched; only pass
@@ -48,6 +53,49 @@ export function Tabs({
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
   const { track } = useTrackEvent();
   const nav = useAppNavigationOptional();
+  const uid = useId();
+  const btnRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const listLabel = ariaLabel ?? (size === "primary" ? "Agents" : size === "secondary" ? "Sections" : "Views");
+  const tabDomId = (id: string) => `${uid}-tab-${id}`;
+  const panelDomId = (id: string) => `${uid}-panel-${id}`;
+
+  // WAI-ARIA tabs pattern, automatic activation: roving tabindex (only the
+  // active tab is a Tab stop), Left/Right wrap, Home/End jump to the ends.
+  function onTabKeyDown(e: KeyboardEvent<HTMLButtonElement>, index: number) {
+    let next = -1;
+    if (e.key === "ArrowRight") next = (index + 1) % tabs.length;
+    else if (e.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = tabs.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    const t = tabs[next];
+    selectTab(t.id, t.label);
+    btnRefs.current[next]?.focus();
+  }
+
+  function tabProps(t: TabItem, index: number) {
+    const selected = t.id === activeTab?.id;
+    return {
+      ref: (el: HTMLButtonElement | null) => {
+        btnRefs.current[index] = el;
+      },
+      id: tabDomId(t.id),
+      role: "tab" as const,
+      type: "button" as const,
+      "aria-selected": selected,
+      "aria-controls": selected ? panelDomId(t.id) : undefined,
+      tabIndex: selected ? 0 : -1,
+      onKeyDown: (e: KeyboardEvent<HTMLButtonElement>) => onTabKeyDown(e, index),
+      onClick: () => selectTab(t.id, t.label),
+    };
+  }
+
+  const panel = activeTab ? (
+    <div role="tabpanel" id={panelDomId(activeTab.id)} aria-labelledby={tabDomId(activeTab.id)}>
+      {activeTab.content}
+    </div>
+  ) : null;
 
   function selectTab(id: string, label: string) {
     setActive(id);
@@ -74,16 +122,16 @@ export function Tabs({
   if (size === "tertiary") {
     return (
       <div>
-        <div className="flex flex-wrap gap-2 mb-6">
-          {tabs.map((t) =>
+        <div role="tablist" aria-label={listLabel} className="flex flex-wrap gap-2 mb-6">
+          {tabs.map((t, i) =>
             theme === "jarvis" ? (
               <button
                 key={t.id}
-                onClick={() => selectTab(t.id, t.label)}
+                {...tabProps(t, i)}
                 className={`px-4 py-1.5 text-[11px] font-mono uppercase tracking-wider border transition-colors ${
                   t.id === activeTab?.id
                     ? "bg-[var(--signal)] text-[var(--ink-950)] border-[var(--signal)] font-semibold"
-                    : "border-[var(--line)] text-[var(--text-1)] hover:border-[var(--line-bright)]"
+                    : "border-[var(--line-control)] text-[var(--text-1)] hover:border-[var(--signal-dim)]"
                 }`}
               >
                 {t.label}
@@ -91,7 +139,7 @@ export function Tabs({
             ) : (
               <button
                 key={t.id}
-                onClick={() => selectTab(t.id, t.label)}
+                {...tabProps(t, i)}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                   t.id === activeTab?.id
                     ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-black"
@@ -103,7 +151,7 @@ export function Tabs({
             )
           )}
         </div>
-        <div>{activeTab?.content}</div>
+        {panel}
       </div>
     );
   }
@@ -112,15 +160,15 @@ export function Tabs({
 
   const buttonRow = (
     <div className={`overflow-x-auto overscroll-x-contain ${isPrimary ? "mb-8" : "mb-6"}`}>
-      <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800 w-max min-w-full">
-        {tabs.map((t) => (
+      <div role="tablist" aria-label={listLabel} className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800 w-max min-w-full">
+        {tabs.map((t, i) => (
           <button
             key={t.id}
-            onClick={() => selectTab(t.id, t.label)}
+            {...tabProps(t, i)}
             className={`${isPrimary ? "px-5 py-3 text-base" : "px-4 py-2 text-sm"} shrink-0 whitespace-nowrap font-medium border-b-2 -mb-px transition-colors ${
               t.id === activeTab?.id
                 ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
-                : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
             }`}
           >
             {t.label}
@@ -134,7 +182,7 @@ export function Tabs({
     return (
       <div>
         {buttonRow}
-        <div>{activeTab?.content}</div>
+        {panel}
       </div>
     );
   }
@@ -146,12 +194,13 @@ export function Tabs({
           the sm breakpoint and up, where there's room for it. */}
       <div className={`sm:hidden ${isPrimary ? "mb-8" : "mb-6"}`}>
         <select
+          aria-label={`${listLabel} (choose a section)`}
           value={activeTab?.id}
           onChange={(e) => {
             const t = tabs.find((tab) => tab.id === e.target.value);
             if (t) selectTab(t.id, t.label);
           }}
-          className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm font-medium"
+          className="w-full rounded-lg border border-zinc-400 dark:border-zinc-500 bg-white dark:bg-zinc-950 px-3 py-2 text-sm font-medium"
         >
           {tabs.map((t) => (
             <option key={t.id} value={t.id}>
@@ -162,7 +211,7 @@ export function Tabs({
       </div>
 
       <div className="hidden sm:block">{buttonRow}</div>
-      <div>{activeTab?.content}</div>
+      {panel}
     </div>
   );
 }

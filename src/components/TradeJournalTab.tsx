@@ -19,12 +19,12 @@ import type {
 
 const inputStyle = {
   background: "var(--ink-900)",
-  border: "1px solid var(--line)",
+  border: "1px solid var(--line-control)",
   color: "var(--text-0)",
   fontFamily: "var(--font-mono)",
 } as const;
 
-const selectStyle = { background: "var(--ink-900)", border: "1px solid var(--line)", color: "var(--text-0)" } as const;
+const selectStyle = { background: "var(--ink-900)", border: "1px solid var(--line-control)", color: "var(--text-0)" } as const;
 
 function fmtMoney(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "—";
@@ -619,17 +619,17 @@ export function TradeJournalTab() {
       <div className="jv-card">
         <div className="jv-label mb-3">Log a New Trade</div>
         <form onSubmit={handleSubmit} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <input value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="Ticker, e.g. SPCX" required className="px-3 py-2 text-sm" style={inputStyle} />
-          <select value={instrumentType} onChange={(e) => setInstrumentType(e.target.value as JournalInstrumentType)} className="px-3 py-2 text-sm" style={selectStyle}>
+          <input aria-label="Ticker symbol" value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="Ticker, e.g. SPCX" required className="px-3 py-2 text-sm" style={inputStyle} />
+          <select aria-label="Instrument type" value={instrumentType} onChange={(e) => setInstrumentType(e.target.value as JournalInstrumentType)} className="px-3 py-2 text-sm" style={selectStyle}>
             <option value="call">Call</option>
             <option value="put">Put</option>
             <option value="shares">Shares</option>
           </select>
-          <select value={source} onChange={(e) => setSource(e.target.value as JournalSource)} className="px-3 py-2 text-sm" style={selectStyle}>
+          <select aria-label="Trade source, live or paper" value={source} onChange={(e) => setSource(e.target.value as JournalSource)} className="px-3 py-2 text-sm" style={selectStyle}>
             <option value="live">Live (real broker)</option>
             <option value="paper">Paper Trading practice</option>
           </select>
-          <select value={strategy} onChange={(e) => setStrategy(e.target.value)} className="px-3 py-2 text-sm" style={selectStyle}>
+          <select aria-label="Strategy" value={strategy} onChange={(e) => setStrategy(e.target.value)} className="px-3 py-2 text-sm" style={selectStyle}>
             {JOURNAL_STRATEGY_TAGS.map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
@@ -637,15 +637,16 @@ export function TradeJournalTab() {
             ))}
           </select>
           {strategy === "other" && (
-            <input value={strategyOther} onChange={(e) => setStrategyOther(e.target.value)} placeholder="Name your strategy" className="px-3 py-2 text-sm col-span-2" style={inputStyle} />
+            <input aria-label="Custom strategy name" value={strategyOther} onChange={(e) => setStrategyOther(e.target.value)} placeholder="Name your strategy" className="px-3 py-2 text-sm col-span-2" style={inputStyle} />
           )}
           {instrumentType !== "shares" && (
-            <input value={strikePrice} onChange={(e) => setStrikePrice(e.target.value)} type="number" step="0.5" placeholder="Strike" required className="px-3 py-2 text-sm" style={inputStyle} />
+            <input aria-label="Strike price" value={strikePrice} onChange={(e) => setStrikePrice(e.target.value)} type="number" step="0.5" placeholder="Strike" required className="px-3 py-2 text-sm" style={inputStyle} />
           )}
           {instrumentType !== "shares" && (
-            <input value={expirationDate} onChange={(e) => setExpirationDate(e.target.value)} type="date" required className="px-3 py-2 text-sm" style={inputStyle} />
+            <input aria-label="Expiration date" value={expirationDate} onChange={(e) => setExpirationDate(e.target.value)} type="date" required className="px-3 py-2 text-sm" style={inputStyle} />
           )}
           <input
+            aria-label={instrumentType === "shares" ? "Number of shares" : "Number of contracts"}
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             type="number"
@@ -656,8 +657,9 @@ export function TradeJournalTab() {
             className="px-3 py-2 text-sm"
             style={inputStyle}
           />
-          <input value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} type="number" step="0.01" placeholder="Entry price" required className="px-3 py-2 text-sm" style={inputStyle} />
+          <input aria-label="Entry price" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} type="number" step="0.01" placeholder="Entry price" required className="px-3 py-2 text-sm" style={inputStyle} />
           <input
+            aria-label="Stop-loss price, defines 1R"
             value={stopLoss}
             onChange={(e) => setStopLoss(e.target.value)}
             type="number"
@@ -666,8 +668,8 @@ export function TradeJournalTab() {
             className="px-3 py-2 text-sm"
             style={inputStyle}
           />
-          <input value={targetPrice} onChange={(e) => setTargetPrice(e.target.value)} type="number" step="0.01" placeholder="Target price" className="px-3 py-2 text-sm" style={inputStyle} />
-          <select value={emotionTag} onChange={(e) => setEmotionTag(e.target.value as JournalEmotionTag | "")} className="px-3 py-2 text-sm" style={selectStyle}>
+          <input aria-label="Target price" value={targetPrice} onChange={(e) => setTargetPrice(e.target.value)} type="number" step="0.01" placeholder="Target price" className="px-3 py-2 text-sm" style={inputStyle} />
+          <select aria-label="Emotion at entry" value={emotionTag} onChange={(e) => setEmotionTag(e.target.value as JournalEmotionTag | "")} className="px-3 py-2 text-sm" style={selectStyle}>
             <option value="">Emotion at entry…</option>
             {JOURNAL_EMOTION_TAGS.map((e) => (
               <option key={e.value} value={e.value}>
@@ -675,8 +677,9 @@ export function TradeJournalTab() {
               </option>
             ))}
           </select>
-          <input value={entryDate} onChange={(e) => setEntryDate(e.target.value)} type="datetime-local" placeholder="Entry time (default now)" className="px-3 py-2 text-sm" style={inputStyle} />
+          <input aria-label="Entry date and time" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} type="datetime-local" placeholder="Entry time (default now)" className="px-3 py-2 text-sm" style={inputStyle} />
           <textarea
+            aria-label="Thesis, why you are taking this trade"
             value={thesis}
             onChange={(e) => setThesis(e.target.value)}
             placeholder="Thesis — why you're taking this trade, going in"
@@ -716,7 +719,7 @@ export function TradeJournalTab() {
           <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
             <div className="jv-label">All Positions ({visibleRows.length}/{gridRows.length})</div>
             <div className="flex flex-wrap gap-2 items-center">
-              <select value={filterStrategy} onChange={(e) => setFilterStrategy(e.target.value)} className="px-2 py-1 text-xs" style={selectStyle}>
+              <select aria-label="Filter by strategy" value={filterStrategy} onChange={(e) => setFilterStrategy(e.target.value)} className="px-2 py-1 text-xs" style={selectStyle}>
                 <option value="all">All strategies</option>
                 {strategyOptions.map((s) => (
                   <option key={s} value={s}>
@@ -724,12 +727,12 @@ export function TradeJournalTab() {
                   </option>
                 ))}
               </select>
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-2 py-1 text-xs" style={selectStyle}>
+              <select aria-label="Filter by status" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-2 py-1 text-xs" style={selectStyle}>
                 <option value="all">Open + Closed</option>
                 <option value="open">Open only</option>
                 <option value="closed">Closed only</option>
               </select>
-              <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="px-2 py-1 text-xs" style={selectStyle}>
+              <select aria-label="Filter by source" value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="px-2 py-1 text-xs" style={selectStyle}>
                 <option value="all">Live + Paper</option>
                 <option value="live">Live only</option>
                 <option value="paper">Paper only</option>
@@ -906,12 +909,12 @@ function OpenPositionCard({ position, sessionId, onChange }: { position: Journal
       <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--line)" }}>
         <div className="jv-label mb-2">Add a Fill (average in, take a partial, or close)</div>
         <div className="flex flex-wrap gap-2 items-center">
-          <select value={fillSide} onChange={(e) => setFillSide(e.target.value as "buy" | "sell")} className="px-2 py-1 text-xs" style={selectStyle}>
+          <select aria-label="Fill side, buy or sell" value={fillSide} onChange={(e) => setFillSide(e.target.value as "buy" | "sell")} className="px-2 py-1 text-xs" style={selectStyle}>
             <option value="buy">Buy (add)</option>
             <option value="sell">Sell (reduce/close)</option>
           </select>
-          <input value={fillQty} onChange={(e) => setFillQty(e.target.value)} type="number" step="1" placeholder="Qty" className="px-2 py-1 text-xs w-20" style={inputStyle} />
-          <input value={fillPrice} onChange={(e) => setFillPrice(e.target.value)} type="number" step="0.01" placeholder="Price" className="px-2 py-1 text-xs w-24" style={inputStyle} />
+          <input aria-label="Fill quantity" value={fillQty} onChange={(e) => setFillQty(e.target.value)} type="number" step="1" placeholder="Qty" className="px-2 py-1 text-xs w-20" style={inputStyle} />
+          <input aria-label="Fill price" value={fillPrice} onChange={(e) => setFillPrice(e.target.value)} type="number" step="0.01" placeholder="Price" className="px-2 py-1 text-xs w-24" style={inputStyle} />
           <button onClick={submitFill} disabled={busy || !fillQty || !fillPrice} className="jv-btn-outline text-xs px-3 py-1 disabled:opacity-50">
             {busy ? "Submitting…" : "Add Fill"}
           </button>
@@ -962,6 +965,7 @@ function OpenPositionCard({ position, sessionId, onChange }: { position: Journal
           ))}
         </div>
         <textarea
+          aria-label="Post-trade notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="What really happened — honest post-trade notes"

@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
+/*
+ * The app is a single dark theme by design (see the .jarvis note below), so
+ * plain-Tailwind surfaces that still use `dark:` pairs must NOT follow the
+ * OS light/dark setting: the body always carries a near-black scrim
+ * (body.jv-app-bg) and a light page there would leave dark text on dark.
+ * `dark:` is therefore bound to the app root instead of the media query.
+ */
+@custom-variant dark (&:where(.jv-app-bg, .jv-app-bg *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -10,13 +20,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
@@ -67,7 +70,15 @@ body.jv-app-bg {
   --danger: #e8637a;
   --text-0: #edf2f7;
   --text-1: #9fb0c4;
-  --text-2: #62748c;
+  /* text-2 was #62748c (3.3-4.1:1, failed AA on every surface). Same blue-grey
+     hue/saturation, lightness raised: 5.74 / 5.42 / 5.09 / 4.61 on
+     ink-950/900/800/700. Checked by scripts/quality/check-design-tokens-contrast.cjs. */
+  --text-2: #7b8ca2;
+  /* Interactive-control borders and the focus ring need 3:1 against the
+     surface they sit on (WCAG 1.4.11): 3.30 on ink-950, 3.12 on ink-900.
+     --line / --line-bright stay for decorative dividers and cards. */
+  --line-control: #4a6683;
+  --focus-ring: #4fe8d0;
   --font-ui: -apple-system, "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 
@@ -96,6 +107,20 @@ body.jv-app-bg {
   background: radial-gradient(ellipse 900px 500px at 50% 0%, rgba(79, 232, 208, 0.06), transparent 70%);
   pointer-events: none;
   border-radius: inherit;
+}
+
+/* A .jarvis island inside another .jarvis (about 12 tabs wrap themselves
+   while their parent group already did) must not stack a second padding,
+   background, radius or glow: that left 215px of content on a 375px phone. */
+.jarvis .jarvis {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+}
+.jarvis .jarvis::before { display: none; }
+
+@media (max-width: 640px) {
+  .jarvis { padding: 16px 12px 32px; border-radius: 8px; }
 }
 
 .jarvis .jv-eyebrow {
@@ -337,14 +362,14 @@ body.jv-app-bg {
 .jarvis .jv-input,
 .jarvis .jv-select {
   background: var(--ink-900);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-control);
   color: var(--text-0);
   font-family: var(--font-mono);
   font-size: 13px;
   padding: 8px 12px;
 }
 .jarvis .jv-input::placeholder { color: var(--text-2); }
-.jarvis .jv-input:focus, .jarvis .jv-select:focus { outline: none; border-color: var(--line-bright); }
+.jarvis .jv-input:focus, .jarvis .jv-select:focus { border-color: var(--focus-ring); }
 .jarvis .jv-btn {
   background: var(--signal);
   color: var(--ink-950);
@@ -362,7 +387,7 @@ body.jv-app-bg {
   font-weight: 500;
   font-size: 12px;
   padding: 6px 14px;
-  border: 1px solid var(--line-bright);
+  border: 1px solid var(--line-control);
 }
 .jarvis .jv-btn-outline:hover { border-color: var(--signal-dim); color: var(--signal); }
 .jarvis .jv-btn-outline:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -436,3 +461,35 @@ body.jv-app-bg {
   top: 16px;
   align-self: start;
 }
+
+/* ---- Accessibility: focus, reduced motion, touch targets ----------------
+   One visible keyboard focus indicator for every interactive element class
+   (2px signal outline, 2px offset; signal on ink is 10-13:1, above the 3:1
+   non-text minimum). Applies inside .jarvis and to the plain-Tailwind
+   shell/auth/admin surfaces that sit directly on the dark body scrim. */
+:is(a, button, input, select, textarea, summary, [tabindex], [role="button"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"], [role="link"], [role="menuitem"]):focus-visible {
+  outline: 2px solid var(--focus-ring, #4fe8d0);
+  outline-offset: 2px;
+}
+/* Text fields already move the border on :focus; keep the outline for
+   keyboard focus and mouse focus alike so the signal is never border-only. */
+.jarvis :is(input, select, textarea):focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis .jv-converge-bar line.pulse,
+  .jarvis .jv-verdict-panel .jv-vp-label .jv-dot { animation: none; }
+}
+
+@media (pointer: coarse) {
+  .jarvis :is(.jv-btn, .jv-btn-outline, .jv-input, .jv-select) { min-height: 44px; }
+}
+
+/* Plain-Tailwind surfaces (auth, admin, shell headings, HelpMenu) use
+   text-zinc-500 for secondary text. On the near-black body scrim that is
+   4.1-4.35:1, under AA. Those files are not all on the jarvis tokens yet, so
+   lift the one class globally to a neutral that clears 4.5:1 (about 7:1 on
+   #05070a). Remove when the plain files move to jarvis tokens. */
+.text-zinc-500 { color: #9b9ba5; }
