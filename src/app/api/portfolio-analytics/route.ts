@@ -3,6 +3,9 @@ import { runPortfolioAnalytics } from "@/lib/agents/trading-agent/skills/portfol
 import type { PortfolioHolding } from "@/lib/agents/trading-agent/types";
 
 // POST — same rationale as watchlist-scan/route.ts and portfolio-valuation/route.ts.
+// Bounded so a very large request cannot run past the serverless limit unnoticed (the skill also caps the asset count).
+export const maxDuration = 30;
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { holdings?: PortfolioHolding[] };

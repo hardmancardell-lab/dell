@@ -1,4 +1,5 @@
 import { randomBytes, createHash } from "crypto";
+import { computeRealizedPnl } from "@/lib/agents/trading-agent/skills/realized-pnl";
 import type { AdvisorClient, PortfolioHolding, RealizedSale } from "@/lib/agents/trading-agent/types";
 import { pgId } from "@/lib/data/postgrest-safe";
 
@@ -319,7 +320,13 @@ export async function sellClientHolding(
   }
 
   const costBasisPerShare = holdingRow.cost_basis_per_share;
-  const realizedPnl = (salePricePerShare - costBasisPerShare) * sharesSold - fee;
+  // Same rule as the browser ledger: an option contract controls 100 shares (see skills/realized-pnl.ts).
+  const realizedPnl = computeRealizedPnl(
+    { assetClass: holdingRow.asset_class as PortfolioHolding["assetClass"], costBasisPerShare },
+    sharesSold,
+    salePricePerShare,
+    fee
+  );
   const rows = await supabaseRequest<RealizedSaleRow[]>("advisor_client_realized_pnl", {
     method: "POST",
     prefer: "return=representation",
