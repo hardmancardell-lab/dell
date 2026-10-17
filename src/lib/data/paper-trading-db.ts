@@ -10,7 +10,7 @@ import type {
   PaperOrderType,
   PaperPosition,
 } from "@/lib/agents/trading-agent/types";
-import { pgId, pgSession, pgSymbol, assertDate, assertOneOf, assertFiniteNumber, clampLimit } from "@/lib/data/postgrest-safe";
+import { assertSessionId, pgId, pgSession, pgSymbol, assertDate, assertOneOf, assertFiniteNumber, clampLimit } from "@/lib/data/postgrest-safe";
 
 /**
  * Plain-fetch Supabase REST CRUD for paper_accounts/paper_orders/paper_fills/
@@ -219,7 +219,21 @@ export async function getAccountById(accountId: string): Promise<PaperAccount | 
   return rows[0] ? toAccount(rows[0]) : null;
 }
 
-export async function getOrCreateAccount(sessionId: string): Promise<PaperAccount> {
+// Concurrent first requests for one session share a single create (otherwise each sees "no account" and inserts its
+// own: the audit measured 10 rows for 1 session). In-process only; a UNIQUE(session_id) constraint is the durable fix
+// (see db/migrations/2026-10-16_paper_fill_atomic.sql).
+const inflightAccounts = new Map<string, Promise<PaperAccount>>();
+
+export function getOrCreateAccount(sessionId: string): Promise<PaperAccount> {
+  assertSessionId(sessionId);
+  const running = inflightAccounts.get(sessionId);
+  if (running) return running;
+  const p = createAccountIfMissing(sessionId).finally(() => inflightAccounts.delete(sessionId));
+  inflightAccounts.set(sessionId, p);
+  return p;
+}
+
+async function createAccountIfMissing(sessionId: string): Promise<PaperAccount> {
   const existing = await getAccountBySessionId(sessionId);
   if (existing) return existing;
   const rows = await supabaseRequest<AccountRow[]>("paper_accounts", {
@@ -335,18 +349,43 @@ export async function markOrderEvaluated(orderId: string, trailingStopPrice: num
   });
 }
 
-export async function fillOrder(orderId: string): Promise<void> {
-  await supabaseRequest(`paper_orders?id=eq.${pgId(orderId)}`, {
+/**
+ * Conditional (compare-and-set) order state transitions. Each PATCH carries a status filter and asks for the
+ * updated rows back, so exactly one caller can win a transition: a second concurrent caller matches zero rows and
+ * gets false. This is what stops one pending order from being filled by three overlapping "Check Orders" calls.
+ */
+async function transitionOrder(orderId: string, from: PaperOrderStatus, body: Record<string, unknown>): Promise<boolean> {
+  const rows = await supabaseRequest<OrderRow[]>(`paper_orders?id=eq.${pgId(orderId)}&status=eq.${from}`, {
     method: "PATCH",
-    body: { status: "filled", filled_at: new Date().toISOString() },
+    prefer: "return=representation",
+    body,
   });
+  return Array.isArray(rows) && rows.length > 0;
 }
 
-export async function cancelOrder(orderId: string): Promise<void> {
-  await supabaseRequest(`paper_orders?id=eq.${pgId(orderId)}`, {
-    method: "PATCH",
-    body: { status: "cancelled", cancelled_at: new Date().toISOString() },
-  });
+/** pending -> filled. True only for the single caller that wins the claim. */
+export async function claimPendingOrder(orderId: string): Promise<boolean> {
+  return transitionOrder(orderId, "pending", { status: "filled", filled_at: new Date().toISOString() });
+}
+
+/** Back-compat name: marks a pending order filled; returns false when it was no longer pending. */
+export async function fillOrder(orderId: string): Promise<boolean> {
+  return claimPendingOrder(orderId);
+}
+
+/** filled -> pending: undo a claim whose fill could not be applied (transient error), so a later check can retry it. */
+export async function releaseClaimedOrder(orderId: string): Promise<boolean> {
+  return transitionOrder(orderId, "filled", { status: "pending", filled_at: null });
+}
+
+/** filled -> rejected: a claimed order whose fill failed a funds/holdings check at fill time. */
+export async function rejectClaimedOrder(orderId: string, reason: string): Promise<boolean> {
+  return transitionOrder(orderId, "filled", { status: "rejected", rejected_reason: reason.slice(0, 500), filled_at: null });
+}
+
+/** pending -> cancelled by default (a filled order can no longer be cancelled). Pass "filled" only to void an order row whose fill never landed. */
+export async function cancelOrder(orderId: string, from: PaperOrderStatus = "pending"): Promise<boolean> {
+  return transitionOrder(orderId, from, { status: "cancelled", cancelled_at: new Date().toISOString() });
 }
 
 /** OCO: when one order in a group fills (or is manually cancelled), every other pending order sharing its group is auto-cancelled. */

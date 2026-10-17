@@ -14,9 +14,11 @@ import {
 import {
   cancelOcoSiblings,
   cancelOrder as dbCancelOrder,
+  claimPendingOrder,
+  rejectClaimedOrder,
+  releaseClaimedOrder,
   createOrder as dbCreateOrder,
   deletePosition,
-  fillOrder as dbFillOrder,
   getAccountById,
   getAccountBySessionId,
   getAllPendingOrders,
@@ -32,6 +34,7 @@ import {
   upsertPosition,
 } from "@/lib/data/paper-trading-db";
 import { computeWinLossMetrics } from "../stats";
+import { ID_PATTERN, SYMBOL_PATTERN } from "@/lib/data/postgrest-safe";
 import type {
   AssetClass,
   PaperAccountSummary,
@@ -89,6 +92,147 @@ const OPTIONS_CONTRACT_MULTIPLIER = 100;
 const MARKET_SLIPPAGE_PER_SHARE = 0.02;
 
 const STOP_LOOKBACK_CAP_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — bounds how far back a very old resting order re-scans
+
+// ---------------------------------------------------------------- input validation
+
+const ASSET_CLASSES: readonly AssetClass[] = ["equity", "bond", "option", "future", "forex", "commodity", "crypto"];
+const ORDER_TYPES: readonly PaperOrderType[] = ["market", "limit", "stop", "stop_limit", "trailing_stop"];
+const SIDES: readonly PaperOrderSide[] = ["buy", "sell"];
+const MAX_PRICE = 10_000_000;
+/** Upper bound on one order's quantity, per asset class (shares / contracts / units / coins). Rejects typos and abuse, not real use. */
+const MAX_QUANTITY: Record<AssetClass, number> = { equity: 10_000_000, bond: 10_000_000, future: 100_000, commodity: 10_000_000, option: 100_000, forex: 1_000_000_000, crypto: 1_000_000_000 };
+
+export class PaperOrderValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PaperOrderValidationError";
+  }
+}
+
+function isPositiveFinite(v: unknown, max = MAX_PRICE): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v > 0 && v <= max;
+}
+
+function optionalPrice(v: unknown, label: string): number | null {
+  if (v === undefined || v === null) return null;
+  if (!isPositiveFinite(v)) throw new PaperOrderValidationError(`${label} must be a finite positive number no larger than ${MAX_PRICE.toLocaleString("en-US")}.`);
+  return v;
+}
+
+/**
+ * Validates and normalizes an order that arrives from a public, anonymous-session route. Whitelists side, order type
+ * and asset class; requires finite, positive, bounded quantity and prices; requires a plausible symbol; whole
+ * quantities outside crypto (the quantity columns were integers before the crypto migration). Throws
+ * PaperOrderValidationError with a user-readable message; never returns a partially-valid order.
+ */
+export function validatePaperOrderInput(raw: unknown): PaperOrderInput {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new PaperOrderValidationError("Order must be an object.");
+  const o = raw as Record<string, unknown>;
+  if (typeof o.side !== "string" || !(SIDES as readonly string[]).includes(o.side)) throw new PaperOrderValidationError("Side must be 'buy' or 'sell'.");
+  if (typeof o.orderType !== "string" || !(ORDER_TYPES as readonly string[]).includes(o.orderType)) throw new PaperOrderValidationError(`Order type must be one of: ${ORDER_TYPES.join(", ")}.`);
+  if (typeof o.assetClass !== "string" || !(ASSET_CLASSES as readonly string[]).includes(o.assetClass)) throw new PaperOrderValidationError(`Asset class must be one of: ${ASSET_CLASSES.join(", ")}.`);
+  const assetClass = o.assetClass as AssetClass;
+  const side = o.side as PaperOrderSide;
+  const orderType = o.orderType as PaperOrderType;
+
+  if (typeof o.symbol !== "string") throw new PaperOrderValidationError("Symbol is required.");
+  const symbol = o.symbol.trim().toUpperCase();
+  if (assetClass !== "option" && !SYMBOL_PATTERN.test(symbol)) throw new PaperOrderValidationError("Symbol must be 1-32 characters: letters, digits, '.', '-', '^', '=' or '/'.");
+
+  const quantity = o.quantity;
+  if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity <= 0) throw new PaperOrderValidationError("Quantity must be a positive number.");
+  if (quantity > MAX_QUANTITY[assetClass]) throw new PaperOrderValidationError(`Quantity is larger than the ${MAX_QUANTITY[assetClass].toLocaleString("en-US")} allowed for ${assetClass} orders.`);
+  if (assetClass !== "crypto" && !Number.isInteger(quantity)) throw new PaperOrderValidationError("Quantity must be a whole number (fractional quantities are only supported for crypto).");
+
+  const limitPrice = optionalPrice(o.limitPrice, "Limit price");
+  const stopPrice = optionalPrice(o.stopPrice, "Stop price");
+  const trailAmount = optionalPrice(o.trailAmount, "Trail amount");
+  if ((orderType === "limit" || orderType === "stop_limit") && limitPrice === null) throw new PaperOrderValidationError("A positive limit price is required for limit/stop-limit orders.");
+  if ((orderType === "stop" || orderType === "stop_limit") && stopPrice === null) throw new PaperOrderValidationError("A positive stop price is required for stop/stop-limit orders.");
+  if (orderType === "trailing_stop" && trailAmount === null) throw new PaperOrderValidationError("A positive trail amount is required for trailing-stop orders.");
+
+  for (const key of ["ocoGroupId", "strategyGroupId"] as const) {
+    const v = o[key];
+    if (v !== undefined && v !== null && (typeof v !== "string" || !ID_PATTERN.test(v))) throw new PaperOrderValidationError(`${key} is not a valid id.`);
+  }
+
+  const out: PaperOrderInput = {
+    symbol,
+    assetClass,
+    side,
+    orderType,
+    quantity,
+    limitPrice,
+    stopPrice,
+    trailAmount,
+    ocoGroupId: (o.ocoGroupId as string | null | undefined) ?? null,
+    strategyGroupId: (o.strategyGroupId as string | null | undefined) ?? null,
+    attribution: (o.attribution as PaperOrderInput["attribution"]) ?? null,
+  };
+
+  if (assetClass === "option") {
+    const underlying = typeof o.underlyingSymbol === "string" ? o.underlyingSymbol.trim().toUpperCase() : "";
+    if (!SYMBOL_PATTERN.test(underlying)) throw new PaperOrderValidationError("Options orders require a valid underlyingSymbol.");
+    if (typeof o.expirationDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(o.expirationDate) || Number.isNaN(Date.parse(o.expirationDate))) throw new PaperOrderValidationError("Options orders require expirationDate as YYYY-MM-DD.");
+    if (o.optionRight !== "call" && o.optionRight !== "put") throw new PaperOrderValidationError("optionRight must be 'call' or 'put'.");
+    if (!isPositiveFinite(o.strikePrice, 1_000_000)) throw new PaperOrderValidationError("strikePrice must be a finite positive number.");
+    out.underlyingSymbol = underlying;
+    out.expirationDate = o.expirationDate;
+    out.optionRight = o.optionRight as PaperOptionRight;
+    out.strikePrice = o.strikePrice as number;
+  }
+  return out;
+}
+
+/** A price is usable only if it is finite and above zero. A missing or zero quote must reject the order, never fill at 0. */
+export function requireUsablePrice(price: unknown, label: string): number {
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
+    throw new Error(`No usable ${label} price right now, so the order was rejected and nothing was filled.`);
+  }
+  return price;
+}
+
+/** fetchQuote now rejects when the provider has no price; turn that (and any zero) into a clear rejection message. */
+async function requireQuote(symbol: string): Promise<{ lastPrice: number }> {
+  let quote: { lastPrice?: number };
+  try {
+    quote = await fetchQuote(symbol);
+  } catch (err) {
+    throw new Error(`Could not get a live price for ${symbol} (${err instanceof Error ? err.message : "unknown error"}). The order was rejected and nothing was filled.`);
+  }
+  return { lastPrice: requireUsablePrice(quote.lastPrice, symbol) };
+}
+
+// ---------------------------------------------------------------- per-account serialization
+
+/**
+ * Serializes async work per key inside this process, so overlapping orders / order checks on one account run one
+ * after another instead of interleaving their read-modify-write of cash and positions (the audit measured 20
+ * concurrent buys losing 23k of cash debits). LIMITATION: this protects one server instance only. Cross-instance
+ * atomicity needs the database function in db/migrations/2026-10-16_paper_fill_atomic.sql.
+ */
+const accountLocks = new Map<string, Promise<unknown>>();
+export async function withAccountLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = accountLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const tail = prev.then(() => gate);
+  accountLocks.set(key, tail);
+  await prev.catch(() => undefined);
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (accountLocks.get(key) === tail) accountLocks.delete(key);
+  }
+}
+
+class FillRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FillRejectedError";
+  }
+}
 
 /** 1 for every asset class except options, where 1 contract = 100 shares of notional exposure. Exported for reuse by portfolio-valuation.ts. */
 export function notionalMultiplier(assetClass: AssetClass): number {
@@ -167,8 +311,24 @@ async function applyFill(params: { order: PaperOrder; fillPrice: number; slippag
   const multiplier = notionalMultiplier(order.assetClass);
   const { secFee, finraFee, occFee, totalFees } = computeFees(order.assetClass, order.side, order.quantity, fillPrice);
 
+  requireUsablePrice(fillPrice, order.symbol);
   const position = await getPosition(order.accountId, order.symbol, order.assetClass);
   const existingQty = position?.quantity ?? 0;
+
+  // Re-check at fill time against FRESH state (a pending order may fill days after it was placed, and other fills may
+  // have used the cash or shares since). Options keep their own collateral rules from placeOptionOrder.
+  const grossValue = order.quantity * multiplier * fillPrice;
+  const cashNeeded = order.side === "buy" ? grossValue + totalFees : 0;
+  const freshAccount = await requireAccountById(order.accountId);
+  if (order.side === "buy" && cashNeeded > freshAccount.cashBalance + 1e-9) {
+    throw new FillRejectedError(`Insufficient cash at fill time: needs $${cashNeeded.toFixed(2)}, account has $${freshAccount.cashBalance.toFixed(2)}.`);
+  }
+  if (order.side === "sell" && order.assetClass !== "option" && existingQty < order.quantity - 1e-12) {
+    throw new FillRejectedError(`Cannot sell ${order.quantity} ${order.symbol} at fill time: only ${existingQty} held.`);
+  }
+  if (order.side === "sell" && order.assetClass === "option" && existingQty > 0 && order.quantity > existingQty) {
+    throw new FillRejectedError(`Cannot sell ${order.quantity} contract(s) at fill time: only ${existingQty} held.`);
+  }
   const existingCost = position?.avgCostBasis ?? 0;
   const optionFields: Partial<PaperOptionFields> = {
     underlyingSymbol: order.underlyingSymbol,
@@ -218,8 +378,7 @@ async function applyFill(params: { order: PaperOrder; fillPrice: number; slippag
   }
 
   const cashDelta = order.side === "buy" ? -(order.quantity * multiplier * fillPrice) - totalFees : order.quantity * multiplier * fillPrice - totalFees;
-  const acct = await requireAccountById(order.accountId);
-  await updateAccountCash(order.accountId, acct.cashBalance + cashDelta);
+  await updateAccountCash(order.accountId, freshAccount.cashBalance + cashDelta);
 
   const fill = await insertFill({
     orderId: order.id,
@@ -238,7 +397,8 @@ async function applyFill(params: { order: PaperOrder; fillPrice: number; slippag
   });
 
   await insertTradeLog(order, fill);
-  await dbFillOrder(order.id);
+  // The order's pending -> filled transition is made by the caller BEFORE applyFill (claimPendingOrder, or created as
+  // filled by placeOrder), so it is never done a second time here.
 
   if (order.ocoGroupId) {
     await cancelOcoSiblings(order.ocoGroupId, order.id);
@@ -279,29 +439,21 @@ export interface PlaceOrderResult {
  * entirely by placeOptionOrder — they're always market-only and never rest.
  */
 export async function placeOrder(sessionId: string, rawInput: PaperOrderInput): Promise<PlaceOrderResult> {
-  if (rawInput.quantity <= 0 || !Number.isFinite(rawInput.quantity)) {
-    throw new Error("Quantity must be a positive number.");
-  }
-  const isCrypto = rawInput.assetClass === "crypto";
-  const input = isCrypto ? prepareCryptoOrder(rawInput) : rawInput;
+  const validated = validatePaperOrderInput(rawInput);
+  const isCrypto = validated.assetClass === "crypto";
+  const input = isCrypto ? prepareCryptoOrder(validated) : validated;
 
-  if (input.assetClass === "option") {
-    return placeOptionOrder(sessionId, input);
-  }
+  // One account-creation at a time per session (no unique constraint is guaranteed in the table), then one order at a
+  // time per account so cash/position read-modify-write cycles never interleave inside this instance.
+  const account = await withAccountLock(`session:${sessionId}`, () => getOrCreateAccount(sessionId));
+  return withAccountLock(`acct:${account.id}`, () => (input.assetClass === "option" ? placeOptionOrder(sessionId, input) : placeStandardOrder(sessionId, input)));
+}
 
-  if ((input.orderType === "limit" || input.orderType === "stop_limit") && !(input.limitPrice && input.limitPrice > 0)) {
-    throw new Error("A positive limit price is required for limit/stop-limit orders.");
-  }
-  if ((input.orderType === "stop" || input.orderType === "stop_limit") && !(input.stopPrice && input.stopPrice > 0)) {
-    throw new Error("A positive stop price is required for stop/stop-limit orders.");
-  }
-  if (input.orderType === "trailing_stop" && !(input.trailAmount && input.trailAmount > 0)) {
-    throw new Error("A positive trail amount is required for trailing-stop orders.");
-  }
-
+async function placeStandardOrder(sessionId: string, input: PaperOrderInput): Promise<PlaceOrderResult> {
+  const isCrypto = input.assetClass === "crypto";
   const account = await getOrCreateAccount(sessionId);
   const symbol = input.symbol.trim().toUpperCase();
-  const quote = await fetchQuote(symbol);
+  const quote = await requireQuote(symbol);
   const cryptoBook = isCrypto ? await requireCryptoBidAsk(symbol) : null;
 
   if (input.side === "sell") {
@@ -381,9 +533,9 @@ export async function placeOrder(sessionId: string, rawInput: PaperOrderInput): 
   try {
     await applyFill({ order: { ...order, quantity: input.quantity }, fillPrice, slippagePerShare });
   } catch (err) {
-    if (!isCrypto) throw err;
     // The order row was already written as filled; do not leave it claiming a fill that never reached the position.
-    await dbCancelOrder(order.id).catch(() => undefined);
+    await dbCancelOrder(order.id, "filled").catch(() => undefined);
+    if (!isCrypto) throw err;
     throw explainCryptoDbError(err);
   }
 
@@ -426,7 +578,7 @@ async function placeOptionOrder(sessionId: string, input: PaperOrderInput): Prom
   const position = await getPosition(account.id, symbol, "option");
   const existingQty = position?.quantity ?? 0;
 
-  const fillPrice = input.side === "buy" ? contract.ask : contract.bid;
+  const fillPrice = requireUsablePrice(input.side === "buy" ? contract.ask : contract.bid, `${symbol} ${input.side === "buy" ? "ask" : "bid"}`);
   const mid = (contract.bid + contract.ask) / 2;
   const slippagePerShare = Math.abs(fillPrice - mid);
   const { totalFees } = computeFees("option", input.side, input.quantity, fillPrice);
@@ -489,7 +641,12 @@ async function placeOptionOrder(sessionId: string, input: PaperOrderInput): Prom
     strikePrice,
   });
 
-  await applyFill({ order: { ...order, quantity: input.quantity }, fillPrice, slippagePerShare });
+  try {
+    await applyFill({ order: { ...order, quantity: input.quantity }, fillPrice, slippagePerShare });
+  } catch (err) {
+    await dbCancelOrder(order.id, "filled").catch(() => undefined);
+    throw err;
+  }
 
   return { order: { ...order, status: "filled" }, filled: true, rejected: null };
 }
@@ -534,7 +691,7 @@ async function resolveTriggeredFillPrice(
  * an option order would be a bug, so it's guarded explicitly rather than
  * silently mishandled.
  */
-async function evaluateOrder(order: PaperOrder): Promise<{ filled: boolean; cancelledOco: string[] }> {
+async function evaluateOrder(order: PaperOrder): Promise<{ filled: boolean; cancelledOco: string[]; rejectedReason?: string }> {
   if (order.assetClass === "option") {
     throw new Error(`Order ${order.id} is an option order and should never be pending — this is a bug if reached.`);
   }
@@ -589,9 +746,30 @@ async function evaluateOrder(order: PaperOrder): Promise<{ filled: boolean; canc
     return { filled: false, cancelledOco: [] };
   }
 
-  await applyFill({ order, fillPrice, slippagePerShare });
-  const cancelledOco = order.ocoGroupId ? await cancelOcoSiblings(order.ocoGroupId, order.id) : [];
-  return { filled: true, cancelledOco };
+  requireUsablePrice(fillPrice, order.symbol);
+  const pendingOrder = order;
+  const fillPriceFinal = fillPrice;
+  const slippageFinal = slippagePerShare;
+
+  // Claim the order with a conditional PATCH (status=eq.pending) BEFORE touching cash or positions: only one of
+  // several overlapping evaluators can win, so one order can never fill twice. The per-account lock keeps the fill's
+  // cash/position updates from interleaving with other orders of the same account in this instance.
+  return withAccountLock(`acct:${pendingOrder.accountId}`, async () => {
+    const claimed = await claimPendingOrder(pendingOrder.id);
+    if (!claimed) return { filled: false, cancelledOco: [] as string[] };
+    try {
+      await applyFill({ order: pendingOrder, fillPrice: fillPriceFinal, slippagePerShare: slippageFinal });
+    } catch (err) {
+      if (err instanceof FillRejectedError) {
+        await rejectClaimedOrder(pendingOrder.id, err.message).catch(() => undefined);
+        return { filled: false, cancelledOco: [] as string[], rejectedReason: err.message };
+      }
+      await releaseClaimedOrder(pendingOrder.id).catch(() => undefined);
+      throw err;
+    }
+    const cancelledOco = pendingOrder.ocoGroupId ? await cancelOcoSiblings(pendingOrder.ocoGroupId, pendingOrder.id) : [];
+    return { filled: true, cancelledOco };
+  });
 }
 
 function scanLimitFill(side: PaperOrderSide, limitPrice: number, bars: MarketCandle[]): number | null {
@@ -664,6 +842,7 @@ async function evaluateOrders(orders: PaperOrder[]): Promise<PaperOrderCheckResu
     if (alreadyCancelled.has(order.id)) continue;
     try {
       const result = await evaluateOrder(order);
+      if (result.rejectedReason) errors.push({ orderId: order.id, error: `Order rejected at fill time: ${result.rejectedReason}` });
       if (result.filled) ordersFilled++;
       for (const id of result.cancelledOco) {
         alreadyCancelled.add(id);
@@ -763,7 +942,9 @@ export async function cancelUserOrder(orderId: string, sessionId: string): Promi
   const orders = await getOpenOrders(account.id);
   const order = orders.find((o) => o.id === orderId);
   if (!order) throw new Error("Order not found, already filled, or already cancelled.");
-  await dbCancelOrder(orderId);
+  // Conditional on status=pending: if a fill won the race a moment ago, the cancel must lose, not overwrite it.
+  const cancelled = await dbCancelOrder(orderId);
+  if (!cancelled) throw new Error("Order not found, already filled, or already cancelled.");
 }
 
 export type { PaperOrderType };
