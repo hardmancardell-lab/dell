@@ -1,0 +1,61 @@
+name: CI
+
+# Type check, offline tests (including the pure-noise false-pass regression test) and the disclosure-coverage ratchet
+# on every push and pull request to main. No secrets are used or needed: every test runs against fakes, with fixed
+# seeds, and makes no network call to a market-data provider or to Supabase.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      # Runs every scripts/*.test.mts and scripts/quality/*.test.mts through the TypeScript loader, skips the ones marked
+      # "requires-network" (unless LIVE=1), prints a per-file summary and exits non-zero on any failure. This includes
+      # scripts/quality/noise-false-pass.test.mts: seeded Monte Carlo on pure-noise series through runBacktest, which
+      # fails if any signal is certified at any horizon in more than 8% of series (it was 12-38% before the statistics
+      # fix), plus a no-look-ahead truncation test and a planted-edge power check.
+      - name: Offline tests (includes the noise false-pass test)
+        run: node scripts/run-tests.mjs
+
+      # Fails if the shared ResearchNotice disclosure disappears from a tab that had it, or an owned tab gains missing
+      # disclosure criteria. Prints the tabs that still lack the notice.
+      - name: Disclosure coverage ratchet
+        run: node scripts/quality/disclosure-coverage.cjs --check
+
+      # ESLint currently reports errors that predate this workflow. It is recorded, not enforced: the count goes to the
+      # log and the job summary so it can be ratcheted down later.
+      - name: ESLint (non-blocking, records the error count)
+        continue-on-error: true
+        run: |
+          set +e
+          npx eslint . --format json --output-file eslint-report.json
+          status=$?
+          errors=$(node -e "try{const r=require('./eslint-report.json');console.log(r.reduce((s,f)=>s+f.errorCount,0)+' errors, '+r.reduce((s,f)=>s+f.warningCount,0)+' warnings')}catch(e){console.log('could not read the ESLint report')}")
+          echo "ESLint: $errors (exit code $status)"
+          echo "ESLint: $errors" >> "$GITHUB_STEP_SUMMARY"
+          exit $status
