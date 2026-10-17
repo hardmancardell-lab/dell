@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface WinLossMetrics {
   winRate: number | null;
@@ -99,6 +100,7 @@ export function FomcReactionStudyTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="Federal Reserve meeting dates, FRED, Alpaca daily bars" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real event study: how each ticker has actually reacted on every FOMC decision day since 2015 (day-of and
         next-day % move), broken down by the trailing Fed-rate regime active at the time. The upcoming{" "}

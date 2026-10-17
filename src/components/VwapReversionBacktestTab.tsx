@@ -6,6 +6,7 @@ import { BacktestChartsPanel, type ChartHorizon, type ChartTrade } from "./Backt
 import { MacroRegimeBanner } from "./MacroRegimeBanner";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { VwapBacktestSignalType, VwapReversionBacktestResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 const SIGNAL_OPTIONS: { value: VwapBacktestSignalType; label: string }[] = [
   { value: "vwapMeanReversionOversold", label: "VWAP Mean Reversion — Oversold" },
@@ -112,6 +113,7 @@ export function VwapReversionBacktestTab({ defaultTicker = "AAPL" }: { defaultTi
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca minute bars (IEX feed, one exchange); Coinbase for crypto; OANDA for forex" testsRun={4} />
       <MacroRegimeBanner />
       <p className="jv-lede">
         Walks real 5-min intraday bars, session by session, computing when price crosses today&apos;s own

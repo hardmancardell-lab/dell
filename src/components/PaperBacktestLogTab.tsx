@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PaperBacktestLogEntry } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 function fmtPct(v: number | null): string {
   return v !== null ? `${v.toFixed(2)}%` : "—";
@@ -50,6 +51,7 @@ export function PaperBacktestLogTab() {
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="the app paper-backtest log" />
       <p className="jv-lede">
         A row is logged automatically every time the GEX &amp; Dealer Positioning check runs for a
         watchlisted underlying (deduped per underlying + expiration), starting from whenever this was first

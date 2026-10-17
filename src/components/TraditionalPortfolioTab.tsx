@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { TraditionalCandidatesResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 const READ_STYLE: Record<string, { color: string; borderColor: string; background: string }> = {
   constructive: { color: "var(--signal)", borderColor: "var(--signal-dim)", background: "rgba(79, 232, 208, 0.06)" },
@@ -53,6 +54,7 @@ export function TraditionalPortfolioTab() {
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <ResearchNotice source="Alpaca daily bars, FRED, FMP" hypothetical={false} />
       <div className="flex items-center justify-between gap-4">
         <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           Candidate securities seeded from the Research Agent&apos;s own Sector Recommendations (real macro-indicator

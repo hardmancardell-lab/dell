@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface WeekOffsetStats {
   offsetFromDecision: number;
@@ -79,6 +80,7 @@ export function FomcWeekVarianceTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="Federal Reserve meeting dates and Alpaca daily bars" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real weekday-by-weekday variance comparison: does this ticker actually get more volatile heading into an FOMC
         decision than in a regular week? Every real FOMC decision date since 2015 is aligned to its real position in

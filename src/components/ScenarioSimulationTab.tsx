@@ -5,6 +5,7 @@ import { Area, CartesianGrid, ComposedChart, Line, Tooltip, XAxis, YAxis } from 
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { MarketScenarioLabel, ScenarioSimulationResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 const HORIZON_OPTIONS = [1, 3, 5, 10, 20];
 
@@ -84,6 +85,7 @@ export function ScenarioSimulationTab() {
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <ResearchNotice source="Alpaca daily bars, FRED" />
       <div className="flex items-start justify-between gap-4">
         <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           Projects your current portfolio value forward under three real historical market regimes — not portfolio

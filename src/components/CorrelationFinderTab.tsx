@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { CorrelationFinderResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 function fmtCorrelation(v: number | null): string {
   return v !== null ? v.toFixed(3) : "N/A";
@@ -52,6 +53,7 @@ export function CorrelationFinderTab() {
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca daily bars (IEX feed; prices are not adjusted for splits or dividends); Coinbase for crypto; OANDA for forex" hypothetical={false} />
       <p className="jv-lede">
         Find what actually moves opposite (or alongside) a ticker, computed from real daily returns —
         not a guess. Leave the candidate list blank to check a default cross-asset set (gold, Treasuries,

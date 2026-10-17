@@ -14,6 +14,7 @@ import type {
   QuadrantLabel,
   StrategyCategory,
 } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface SkewRow {
   ticker: string;
@@ -165,6 +166,7 @@ export function OptionsDashboardTab() {
 
   return (
     <div className="flex flex-col gap-10">
+      <ResearchNotice source="Tradier option chains (sandbox feed, delayed about 15 minutes) and Alpaca quotes" hypothetical={false} />
       <div className="jarvis flex flex-col gap-10">
       <WatchlistSelector />
 

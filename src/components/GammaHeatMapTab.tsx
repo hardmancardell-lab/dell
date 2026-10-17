@@ -5,6 +5,7 @@ import type { GammaHeatMapResult } from "@/lib/agents/trading-agent/skills/gamma
 import { DEALER_SIGN_LABELS, type DealerSignMode } from "@/lib/agents/trading-agent/skills/gex-sign";
 import { useDealerSign } from "@/lib/agents/trading-agent/dealer-sign-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
+import { ResearchNotice } from "./ResearchNotice";
 
 type View = "net" | "call" | "put" | "gross";
 type Scale = "shared" | "each";
@@ -248,6 +249,7 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Tradier option chains (sandbox feed, delayed about 15 minutes) and Alpaca quotes" hypothetical={false} />
       <p className="jv-lede">
         Dollar gamma by strike (down the side) and expiration (across) for any optionable ticker. A dark cell means a lot of option gamma sits at that
         strike and date. The strip on the right adds up each strike across the expirations shown. It maps where positioning is concentrated; it does not

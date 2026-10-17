@@ -5,6 +5,7 @@ import { CartesianGrid, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } fr
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { PortfolioAnalyticsResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 function fmtPct(v: number | null): string {
   return v !== null ? `${(v * 100).toFixed(2)}%` : "N/A";
@@ -79,6 +80,7 @@ export function ModernPortfolioTab() {
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <ResearchNotice source="Alpaca daily bars over the last year, FRED risk-free rate" />
       <div className="flex items-center justify-between gap-4">
         <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           How your holdings move together, not how good any one of them is. Beta measures each holding&apos;s

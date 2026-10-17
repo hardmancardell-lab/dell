@@ -6,6 +6,7 @@ import { ORB_LOOKBACK_MONTH_OPTIONS } from "@/lib/agents/trading-agent/constants
 import { WatchlistSelector } from "./WatchlistSelector";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { AssetClass, OrbWatchlistSummary } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 const RANGE_OPTIONS: (5 | 15 | 30)[] = [5, 15, 30];
 const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal whitespace-nowrap";
@@ -75,6 +76,7 @@ export function OrbWatchlistTab({ filterAssetClass = "equity" }: { filterAssetCl
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca minute bars (IEX feed, one exchange); Coinbase for crypto; OANDA for forex" testsRun={6} />
       <p className="jv-lede">
         Opening Range Breakout, backtested and tracked across every {filterAssetClass === "equity" ? "equity" : filterAssetClass} ticker on the
         watchlist at once. For the full 6-row breakdown of any one ticker (long/short ×

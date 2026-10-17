@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface WinLossMetrics {
   winRate: number | null;
@@ -83,6 +84,7 @@ export function QuadWitchingStudyTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="Alpaca daily bars (IEX feed; prices are not adjusted for splits or dividends); Coinbase for crypto; OANDA for forex" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real event study: quadruple ("quad") witching — the simultaneous expiration of stock index futures, index
         options, and single-stock options on the third Friday of March, June, September, and December. Measures real

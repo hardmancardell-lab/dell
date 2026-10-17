@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface Result {
   fredSeriesId: string;
@@ -64,6 +65,7 @@ export function YieldAlertThresholdTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="Alpaca daily bars of yield ETFs" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         No real intraday Treasury yield data exists anywhere this app can source for free — FRED, the only yield
         provider here, is daily-close only. This converts a yield threshold into the equivalent price on a real,

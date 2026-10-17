@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface WinLossMetrics {
   winRate: number | null;
@@ -72,6 +73,7 @@ export function WeekStartMomentumTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="Alpaca daily bars (IEX feed; prices are not adjusted for splits or dividends); Coinbase for crypto; OANDA for forex" testsRun={5} />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real conditional study: given how a ticker's week actually started (its first real trading day's move,
         bucketed into fixed ranges), how has the rest of that week historically turned out — does a strong start tend

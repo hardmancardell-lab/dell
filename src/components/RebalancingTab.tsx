@@ -10,6 +10,7 @@ import { StatCard } from "./StatCard";
 import { AllocationPieChart } from "./AllocationPieChart";
 import type { OptionType } from "@/lib/agents/trading-agent/black-scholes";
 import type { AssetClass, PortfolioSummary } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 function fmtUsd(v: number): string {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -429,6 +430,7 @@ export function RebalancingTab() {
 
   return (
     <div className="jarvis flex flex-col gap-10">
+      <ResearchNotice source="your own holdings and Alpaca, OANDA and Coinbase prices" hypothetical={false} />
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold" style={{ color: "var(--text-0)" }}>Rebalancing</h2>

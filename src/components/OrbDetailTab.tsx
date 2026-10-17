@@ -5,6 +5,7 @@ import { ORB_LOOKBACK_MONTH_OPTIONS } from "@/lib/agents/trading-agent/constants
 import { GlossaryTerm } from "./GlossaryTerm";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { AtrOrbTickerResult, OrbTickerResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 type RangeMode = "clock" | "atr";
 type CombinedResult = (OrbTickerResult | AtrOrbTickerResult) & { rangeMode: RangeMode };
@@ -97,6 +98,7 @@ export function OrbDetailTab({ defaultTicker = "AAPL" }: { defaultTicker?: strin
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca minute bars (IEX feed, one exchange); Coinbase for crypto; OANDA for forex" testsRun={6} />
       <p className="jv-lede">
         Opening Range Breakout — a range defines the level a real breakout has to close beyond. Clock mode
         uses the high/low of the first N minutes after the open; ATR mode uses the instrument&apos;s own

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { StatCard } from "./StatCard";
 import type { CorporateBuybackOfferingResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 function fmtPct(v: number | null): string {
   return v !== null ? `${v >= 0 ? "+" : ""}${v.toFixed(3)}%` : "N/A";
@@ -37,6 +38,7 @@ export function CorporateBuybackOfferingTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="SEC EDGAR filings and Alpaca daily bars" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Two separate real event studies for {ticker || "a ticker"}: (1) how the stock has actually reacted to its own
         real, filed securities offerings (SEC EDGAR 424B-series/S-1/S-3 filings), and (2) its real quarterly buyback

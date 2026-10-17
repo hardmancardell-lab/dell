@@ -117,6 +117,8 @@ export async function getGuidedTradeSignals(ownedSymbols: string[] = []): Promis
         strategyType: h.strategyType,
         headline: headlineFor(h.strategyType),
         currentPrice: quote.lastPrice,
+        priceAsOf: quote.asOf ?? null,
+        priceDelayed: quote.delayed ?? false,
         historicalWinRatePct: h.winRatePct,
         sampleSize: h.sampleSize,
         bootstrapCiLower: h.bootstrapCiLower,

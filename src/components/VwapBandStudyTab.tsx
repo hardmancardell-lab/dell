@@ -5,6 +5,7 @@ import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { VwapBandStudyResult } from "@/lib/agents/trading-agent/skills/vwap-band-study";
 import type { ForwardRange, GroupSummary } from "@/lib/agents/trading-agent/skills/vwap-band-engine";
 import type { SignalLogView, SignalScanResult } from "@/lib/agents/trading-agent/skills/vwap-signal-service";
+import { ResearchNotice } from "./ResearchNotice";
 
 const DAYS_OPTIONS = [60, 90, 120, 180];
 const K_OPTIONS = [1.5, 2, 2.5];
@@ -482,6 +483,7 @@ export function VwapBandStudyTab({ defaultTicker = "SPY" }: { defaultTicker?: st
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca minute bars and Tradier option data (delayed)" />
       <p className="jv-lede">
         Walks real 5-minute bars session by session and measures what happened after price touched today&apos;s VWAP &plusmn; k standard
         deviations, split by how unusual the volume was at that moment (a Z-score against the same time of day over the prior 20

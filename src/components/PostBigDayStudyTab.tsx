@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PriceChart } from "./PriceChart";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface PostBigDayOccurrence {
   triggerDateKey: string;
@@ -122,6 +123,7 @@ export function PostBigDayStudyTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="Alpaca daily bars (IEX feed; prices are not adjusted for splits or dividends); Coinbase for crypto; OANDA for forex" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real conditional study: after a day that moved at least the threshold shown — gain OR loss — how does the
         NEXT real trading day actually behave? Highlighted rows are the specific event days that gapped down at

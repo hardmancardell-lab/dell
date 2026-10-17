@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface Occurrence {
   witchingDate: string;
@@ -95,6 +96,7 @@ export function WitchingRangeContainmentTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="Alpaca daily bars (IEX feed; prices are not adjusted for splits or dividends); Coinbase for crypto; OANDA for forex" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real per-occurrence P&amp;L for a witching-day symmetric butterfly: buy 1 call @ {result?.lowerLongPct ?? 95}% of
         entry, sell {result?.shortContracts ?? 2} call(s) @ {result?.shortStrikePct ?? 100}%, buy 1 call @{" "}

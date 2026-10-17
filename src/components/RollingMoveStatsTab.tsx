@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AssetClass, RollingMoveStatsResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 function fmtPct(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "N/A";
@@ -33,6 +34,7 @@ export function RollingMoveStatsTab({ defaultTicker = "EUR/USD", defaultAssetCla
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <ResearchNotice source="Alpaca daily bars (IEX feed; prices are not adjusted for splits or dividends); Coinbase for crypto; OANDA for forex" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real rolling 20/40/100-day move statistics, computed directly from actual daily bars — average up-day
         return and average down-day return are reported separately, not collapsed into one symmetric figure, since

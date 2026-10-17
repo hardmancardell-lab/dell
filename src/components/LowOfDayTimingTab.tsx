@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface Bucket {
   bucketLabel: string;
@@ -70,6 +71,7 @@ export function LowOfDayTimingTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="Alpaca minute bars (IEX feed, one exchange); Coinbase for crypto; OANDA for forex" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         When does the high and low of the regular session (9:30am-4:00pm ET) typically happen? Plus a real
         conditional check: on the days the session low did NOT form before 10:30am ET, when does it actually

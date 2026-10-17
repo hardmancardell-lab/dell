@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ShockScanEntryCard } from "./ShockScanEntryCard";
 import type { AssetClass, PortfolioHolding, PortfolioShockScanResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 /**
  * Same real GDELT coverage-spike + PhD-persona scan that powers the Portfolio
@@ -51,6 +52,7 @@ export function SupplyDemandShockScanTab({ assetClass, defaultTicker }: { assetC
 
   return (
     <div className="jarvis flex flex-col gap-4">
+      <ResearchNotice source="GDELT news coverage counts" hypothetical={false} />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Checks whether this symbol&apos;s underlying sector/pair/commodity is seeing a real, unusual spike in news
         coverage right now (GDELT), and — if so — a PhD-economist-persona read on whether it looks like a supply-side

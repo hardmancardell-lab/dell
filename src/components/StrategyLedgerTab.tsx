@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { GlossaryTerm } from "./GlossaryTerm";
 import { classifyEntropyRegime } from "@/lib/agents/trading-agent/skills/entropy-analyzer";
 import type { StrategyHypothesis } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 function fmtPct(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "N/A";
@@ -42,6 +43,7 @@ export function StrategyLedgerTab() {
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <ResearchNotice source="the weekly hypothesis sweep ledger" testsRun={325} />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Every row here is a real result from this app&apos;s own backtest engines, swept automatically once a week
         against a fixed ticker universe — validated rows passed real BH-FDR significance, a bootstrap confidence

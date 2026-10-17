@@ -2148,4 +2148,8 @@ export interface GuidedTradeSignal {
   // linked advisor_clients portfolio — null/false for the general public.
   ownedByUser: boolean;
   relatedHoldingSymbol: string | null; // e.g. "NLR" if this signal is on OKLO and OKLO shares NLR's sector
+  /** Epoch ms of the trade the current price comes from (the data source's time, not the page-load time). */
+  priceAsOf?: number | null;
+  /** True when the price is known or observed to be delayed. */
+  priceDelayed?: boolean;
 }

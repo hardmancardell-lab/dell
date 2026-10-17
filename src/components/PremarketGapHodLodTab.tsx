@@ -5,6 +5,7 @@ import { PriceChart } from "./PriceChart";
 import { GlossaryTerm } from "./GlossaryTerm";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { HodLodResult, PremarketGapDay } from "@/lib/agents/trading-agent/skills/premarket-gap-hodlod";
+import { ResearchNotice } from "./ResearchNotice";
 
 const LOOKBACK_OPTIONS = [90, 180, 365];
 const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal whitespace-nowrap";
@@ -92,6 +93,7 @@ export function PremarketGapHodLodTab({ defaultTicker = "AAPL" }: { defaultTicke
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca minute bars (IEX feed, one exchange); Coinbase for crypto; OANDA for forex" />
       <p className="jv-lede">
         Real premarket gap-down frequency plus high-of-day/low-of-day timing stats, computed from
         actual minute bars (Alpaca free-tier IEX feed for equities — single-exchange, weakest in

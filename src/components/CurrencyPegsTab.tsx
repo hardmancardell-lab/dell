@@ -9,6 +9,7 @@ import type {
   PegReversionDirectionResult,
   PegReversionResult,
 } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 const LOOKBACK_YEAR_OPTIONS = [1, 2, 3, 5];
 const TRADE_LOG_DISPLAY_LIMIT = 30;
@@ -214,6 +215,7 @@ export function CurrencyPegsTab() {
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="OANDA daily candles and published peg rules" testsRun={5} />
       <p className="jv-lede">
         Every currency this app has confirmed is pegged to another, with its real target rate (and
         official band, where one exists). Every entry was re-checked against live sources on

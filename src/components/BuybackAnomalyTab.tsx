@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { StatCard } from "./StatCard";
 import type { BetaDriftResult, BuybackAnomalyResult, BuybackRegressionResult, DummyVariableRegressionResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 function fmtPct(v: number | null): string {
   return v !== null ? `${v >= 0 ? "+" : ""}${v.toFixed(3)}%` : "N/A";
@@ -116,6 +117,7 @@ export function BuybackAnomalyTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="U.S. Treasury Fiscal Data buyback operations and Alpaca daily bars" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real event study: does the dollar size of a U.S. Treasury long-term ("20Y to 30Y" bucket) bond buyback
         operation predict {ticker}&apos;s % move on the operation day and the following day? Operation dates and

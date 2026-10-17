@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ResearchNotice } from "./ResearchNotice";
 
 interface DayRow {
   dateKey: string;
@@ -65,6 +66,7 @@ export function OvernightIntradayPatternTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="Alpaca minute bars (IEX feed, one exchange); Coinbase for crypto; OANDA for forex" />
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         Real check for a claimed pattern: does this ticker actually drop overnight and run the rest of the day?
         Splits every real trading day (trailing ~year) into its overnight component (prior close → open) and

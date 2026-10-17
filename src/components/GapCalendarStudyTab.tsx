@@ -8,6 +8,7 @@ import type {
   RecentDayVarianceResult,
   GapAnalogScanResult,
 } from "@/lib/agents/trading-agent/skills/gap-calendar-study";
+import { ResearchNotice } from "./ResearchNotice";
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal whitespace-nowrap";
@@ -144,6 +145,7 @@ export function GapCalendarStudyTab({ defaultTicker = "AAPL" }: { defaultTicker?
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca minute bars (IEX feed, one exchange); Coinbase for crypto; OANDA for forex" />
       <p className="jv-lede">
         Three real-data studies for any ticker: when a given weekday&apos;s high/low of day actually
         happens, how gap-up vs. gap-down days differ over a recent window, and how the stock has

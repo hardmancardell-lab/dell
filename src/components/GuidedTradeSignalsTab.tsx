@@ -7,6 +7,7 @@ import { attributionFromSignal } from "@/lib/agents/trading-agent/skills/paper-a
 import { OptionScenarioPanel } from "./OptionScenarioPanel";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import type { GuidedTradeSignal } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 function fmtUsd(v: number): string {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -39,8 +40,13 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
           <h3 className="text-lg font-semibold" style={{ color: "var(--text-0)" }}>{signal.headline}</h3>
         </div>
         <div className="text-right">
-          <div className="text-xs" style={{ color: "var(--text-2)" }}>Current price</div>
+          <div className="text-xs" style={{ color: "var(--text-2)" }}>Last price</div>
           <div className="text-lg font-semibold" style={{ color: "var(--text-0)" }}>{fmtUsd(signal.currentPrice)}</div>
+          <div className="text-[11px]" style={{ color: signal.priceDelayed ? "var(--verdict)" : "var(--text-2)" }}>
+            {signal.priceAsOf
+              ? `as of ${new Date(signal.priceAsOf).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET${signal.priceDelayed ? " (delayed)" : ""}`
+              : "quote time not provided; may be delayed"}
+          </div>
         </div>
       </div>
 
@@ -61,6 +67,9 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
         This exact setup happened <strong>{signal.sampleSize}</strong> times before in {signal.ticker}&apos;s real history.
         It worked out (a positive move) <strong>{signal.historicalWinRatePct.toFixed(0)}%</strong> of the time, holding for {signal.horizonLabel}.
       </p>
+      <p className="text-xs mb-1" style={{ color: "var(--text-2)" }}>
+        Entry rule studied: {signal.entryRule}
+      </p>
       {range && (
         <p className="text-sm mb-1" style={{ color: "var(--text-1)" }}>
           Typical range of outcomes: <strong>{range}</strong>.
@@ -77,8 +86,8 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
       {signal.exitType === "time" && signal.stopLossVerdict === "stops_hurt" && (
         <p className="text-sm mb-3 font-medium" style={{ color: "var(--danger)" }}>
           Tested against real data: a stop-loss makes this setup worse, not safer — every level tested destroys most
-          of the edge without meaningfully cutting the drawdown above. Size your position assuming that full
-          worst-case loss is possible; don&apos;t rely on a stop to cap it.
+          of the edge without meaningfully cutting the drawdown above. The worst case in this sample
+          could happen again, and a stop-loss would not have capped it.
         </p>
       )}
       {signal.exitType === "time" && signal.stopLossVerdict === "stops_help" && (
@@ -102,8 +111,9 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
       {signal.suggestedOption && (
         <>
           <p className="text-sm mb-2" style={{ color: "var(--text-1)" }}>
-            Suggested option trade: <strong>{formatOptionLine(signal.suggestedOption)}</strong> — defined risk (max loss
-            is the premium paid), expiring past this setup&apos;s own {signal.horizonLabel} horizon.
+            Example setup for study, not an instruction: <strong>{formatOptionLine(signal.suggestedOption)}</strong> — a defined-risk
+            structure (the most a buyer can lose is the premium paid), expiring past this setup&apos;s own {signal.horizonLabel} horizon.
+            It is shown to illustrate how the idea could be expressed, not as a recommendation.
           </p>
           <OptionScenarioPanel
             ticker={signal.suggestedOption.underlyingSymbol}
@@ -198,6 +208,7 @@ export function GuidedTradeSignalsTab() {
 
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="the weekly hypothesis sweep ledger and Alpaca quotes (may be delayed)" testsRun={325} />
       <div>
         <h2 className="text-xl font-semibold mb-1" style={{ color: "var(--text-0)" }}>Today&apos;s Guided Setups</h2>
         <p className="jv-lede" style={{ marginBottom: 0 }}>

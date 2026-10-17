@@ -9,6 +9,7 @@ import { useTrackEvent } from "@/lib/analytics/use-track";
 import { getCurrencyPeg } from "@/lib/agents/trading-agent/skills/currency-pegs";
 import type { AssetClass, EquityBacktestResult, EquityBacktestSignalType } from "@/lib/agents/trading-agent/types";
 import type { OvernightCheckpointBacktestResult } from "@/lib/agents/trading-agent/skills/overnight-checkpoint-backtest";
+import { ResearchNotice } from "./ResearchNotice";
 
 const SIGNAL_OPTIONS: { value: EquityBacktestSignalType; label: string }[] = [
   { value: "volumeDisplacement", label: "Volume Displacement" },
@@ -188,6 +189,7 @@ export function HistoricalBacktestTab({
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca daily bars (IEX feed; prices are not adjusted for splits or dividends); Coinbase for crypto; OANDA for forex" testsRun={20} />
       {!crypto && <MacroRegimeBanner />}
       <p className="jv-lede">
         Walks real historical daily bars, computing the chosen signal at each past day (using only data

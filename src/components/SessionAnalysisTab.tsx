@@ -5,6 +5,7 @@ import { GlossaryTerm } from "./GlossaryTerm";
 import { StatCard } from "./StatCard";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { SessionAnalysisResult, SessionSequenceBucketResult } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 const TH_CLASS = "py-2 pr-4 font-mono text-xs uppercase tracking-wider font-normal whitespace-nowrap";
 const TD_CLASS = "py-2 pr-4 whitespace-nowrap";
@@ -69,6 +70,7 @@ export function SessionAnalysisTab({ defaultTicker = "EUR/USD" }: { defaultTicke
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="OANDA minute candles for forex (tick volume, not traded volume)" testsRun={6} />
       <p className="jv-lede">
         Real trading-session boundaries (Asian 00:00-09:00 UTC, London 08:00-17:00 UTC, New York 13:00-22:00
         UTC — the standard industry convention, not this app&apos;s Eastern-Time equity-session windows) plus a

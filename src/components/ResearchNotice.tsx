@@ -51,13 +51,13 @@ export function ResearchNotice({ source, asOf, delayed, sampleSize, testsRun, hy
         {hypothetical && " Backtested and hypothetical results were not produced by real trading and have no real fills, fees or taxes."}{" "}
         Past performance does not predict future results.
       </p>
-      {(source || asOfText || delayed) && (
-        <p className="text-xs" style={{ color: "var(--text-2)", margin: "6px 0 0" }}>
-          {source ? `Data: ${source}. ` : ""}
-          {asOfText ? `As of ${asOfText}. ` : ""}
-          {delayed ? "Some prices may be delayed. " : "Prices may be delayed. "}
-        </p>
-      )}
+      <p className="text-xs" style={{ color: "var(--text-2)", margin: "6px 0 0" }}>
+        {source ? `Data: ${source}. ` : ""}
+        {asOfText
+          ? `As of ${asOfText}. `
+          : "Data is pulled when you run this view and is as of the latest completed bar the data source returned; it is not a live feed. "}
+        {delayed ? "Some prices are delayed. " : "Prices may be delayed. "}
+      </p>
       {(typeof sampleSize === "number" || (typeof testsRun === "number" && testsRun > 1)) && (
         <p className="text-xs" style={{ color: "var(--text-2)", margin: "6px 0 0" }}>
           {typeof sampleSize === "number" ? `Based on ${sampleSize} observation${sampleSize === 1 ? "" : "s"}; small samples are unreliable. ` : ""}

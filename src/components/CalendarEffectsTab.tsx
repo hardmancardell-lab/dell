@@ -19,6 +19,7 @@ import type {
   SingleWeekdayResult,
   TimeOfDayEffectResult,
 } from "@/lib/agents/trading-agent/types";
+import { ResearchNotice } from "./ResearchNotice";
 
 type Mode = "dayOfWeek" | "timeOfDay" | "singleWeekday";
 const TRADE_LOG_DISPLAY_LIMIT = 50;
@@ -186,6 +187,7 @@ export function CalendarEffectsTab({ defaultTicker = "AAPL", assetClass = "equit
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca minute bars (IEX feed, one exchange); Coinbase for crypto; OANDA for forex" testsRun={5} />
       <MacroRegimeBanner />
       <p className="jv-lede">
         Does this ticker tend to move on specific days of the week, or at specific times of day — or is any
