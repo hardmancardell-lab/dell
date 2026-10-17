@@ -14,6 +14,8 @@ import {
 import { SIGNAL_CHECK_LEVELS } from "@/lib/agents/financial-literacy/skills/signal-check-content";
 import { LONG_HAUL_MODULE_ID } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import { LITERACY_TIER_ORDER } from "@/lib/agents/financial-literacy/types";
+import { placeLearner, QUESTIONS_PER_TIER } from "@/lib/agents/financial-literacy/placement";
+import { QUIZ_XP_DAILY_CAP, quizQuestionKey } from "@/lib/agents/financial-literacy/quiz-xp";
 import type {
   BadgeId,
   CheckQuestion,
@@ -45,17 +47,8 @@ const BADGE_LABEL: Record<BadgeId, string> = {
   "signal-sorter": "Signal Sorter",
 };
 
-// A tier's own questions must show real strength (5/6); every tier below it
-// must also clear a genuine-grounding bar (4/6) — placement requires
-// cumulative evidence, not just performance on the target tier in
-// isolation. This is the fix for the false-mastery problem: guessing well
-// on a couple of Expert questions with no real grounding below it can no
-// longer place someone into Expert. See the psychometric standard-setting
-// literature on placement-test cut scores (e.g. NCPR's postsecondary
-// placement cut-score working paper) for why a narrow, single-tier bar
-// produces exactly this failure mode.
-const TARGET_TIER_BAR = 5; // out of 6
-const LOWER_TIER_BAR = 4; // out of 6
+// The placement rule (bars of 5/6 on the target tier and 4/6 below it) lives in
+// placement.ts so it can be unit tested.
 
 // Phaser touches window/navigator at module-eval time — ssr:false keeps it
 // out of any server-rendered pass of this "use client" file.
@@ -107,14 +100,7 @@ function PlacementFlow({
     PLACEMENT_QUESTIONS.forEach((q, i) => {
       if (answers[i] === q.correctIndex) correctByTier[q.tier] += 1;
     });
-    let placedTier: LiteracyTier = "beginner";
-    LITERACY_TIER_ORDER.forEach((tier, tierIndex) => {
-      const meetsTarget = correctByTier[tier] >= TARGET_TIER_BAR;
-      const meetsEveryLowerTier = LITERACY_TIER_ORDER.slice(0, tierIndex).every(
-        (lower) => correctByTier[lower] >= LOWER_TIER_BAR
-      );
-      if (meetsTarget && meetsEveryLowerTier) placedTier = tier;
-    });
+    const placedTier = placeLearner(correctByTier);
     track("literacy_placement_completed", {
       agent: "literacy",
       tab: "Placement",
@@ -126,10 +112,10 @@ function PlacementFlow({
   return (
     <div>
       <p className="jv-lede">
-        Two quick things before your curriculum: {PLACEMENT_QUESTIONS.length} questions to find
-        where you're already fluent (not a test to pass or fail — just placement, though placing
-        into a tier now requires real grounding in everything below it too, not just a good guess
-        on the tier itself), and what you actually want out of this. Both can be retaken any time.
+        Answer {PLACEMENT_QUESTIONS.length} short questions so we can find where to start. It is not
+        a pass or fail test. To place in a higher level you need to do well on the levels below it
+        too, so a lucky guess will not skip you ahead. Then tell us what you want out of this. You
+        can retake both any time.
       </p>
 
       <div className="flex flex-col gap-4 mb-8">
@@ -175,7 +161,7 @@ function PlacementFlow({
 
       {showValidation && (!allAnswered || !goal) && (
         <p className="text-sm mb-4" style={{ color: "var(--danger)" }}>
-          Answer all 9 questions and pick a goal to continue.
+          Answer all {PLACEMENT_QUESTIONS.length} questions and pick a goal to continue.
         </p>
       )}
 
@@ -492,6 +478,7 @@ function ModuleCard({
 
 interface QuizPoolItem {
   moduleId: string;
+  checkIndex: number;
   moduleTitle: string;
   question: CheckQuestion;
 }
@@ -507,7 +494,7 @@ const QUIZ_SCOPE_LABEL: Record<LiteracyTier | "all", string> = {
 function buildQuizPool(scope: LiteracyTier | "all", unlockedTiers: LiteracyTier[]): QuizPoolItem[] {
   const modules = LITERACY_MODULES.filter((m) => (scope === "all" ? unlockedTiers.includes(m.tier) : m.tier === scope));
   const pool: QuizPoolItem[] = [];
-  modules.forEach((m) => m.checks.forEach((q) => pool.push({ moduleId: m.id, moduleTitle: m.title, question: q })));
+  modules.forEach((m) => m.checks.forEach((q, checkIndex) => pool.push({ moduleId: m.id, checkIndex, moduleTitle: m.title, question: q })));
   return pool;
 }
 
@@ -532,7 +519,7 @@ function QuizMode({
 }: {
   unlockedTiers: LiteracyTier[];
   progress: LiteracyProgress;
-  recordQuizAnswer: (xpAwarded: number) => void;
+  recordQuizAnswer: (requestedXp: number, questionKey: string) => void;
   recordWrongAnswer: () => void;
   recordQuizRoundResult: (result: { correctCount: number; totalCount: number; pointsScored: number }) => void;
 }) {
@@ -605,7 +592,7 @@ function QuizMode({
         return next;
       });
       track("literacy_answer", { agent: "literacy", tab: "Quiz Mode", metadata: { mode: "quiz", moduleId: current.moduleId, correct: true, timedOut: false, xpAwarded: pts } });
-      recordQuizAnswer(pts);
+      recordQuizAnswer(pts, quizQuestionKey(current.moduleId, current.checkIndex));
     } else {
       setRoundStreak(0);
       track("literacy_answer", { agent: "literacy", tab: "Quiz Mode", metadata: { mode: "quiz", moduleId: current.moduleId, correct: false, timedOut: false } });
@@ -639,7 +626,8 @@ function QuizMode({
         <p className="text-sm mb-4" style={{ color: "var(--text-1)" }}>
           A timed {QUIZ_ROUND_LENGTH}-question round pulled from every check question in scope —
           including modules you've already finished, since this is review/practice, not a gate.
-          Same speed-scored points as the learn flow; no retries mid-round.
+          Points are speed-scored; no retries mid-round. XP is paid the first time you answer
+          each question correctly, up to {QUIZ_XP_DAILY_CAP} XP a day from Quiz Mode.
         </p>
         <div className="mb-4">
           <div className="jv-label" style={{ marginBottom: 8 }}>Question scope</div>
@@ -864,7 +852,7 @@ function CurriculumView({
           <div>
             <div className="jv-label">Modules Done</div>
             <div className="text-2xl font-semibold" style={{ color: "var(--text-0)" }}>
-              {progress.completedModuleIds.length}/{LITERACY_MODULES.length}
+              {progress.completedModuleIds.filter((id) => LITERACY_MODULES.some((m) => m.id === id)).length}/{LITERACY_MODULES.length}
             </div>
           </div>
           <div>
@@ -884,7 +872,7 @@ function CurriculumView({
         {placementBreakdown && (
           <p className="text-xs mb-3 max-w-2xl" style={{ color: "var(--text-2)" }}>
             <span className="font-medium" style={{ color: "var(--text-1)" }}>Why here? </span>
-            {placementExplanation(placementBreakdown, 6, placementTier)}
+            {placementExplanation(placementBreakdown, QUESTIONS_PER_TIER, placementTier)}
           </p>
         )}
         <button onClick={resetPlacement} className="text-xs" style={{ color: "var(--text-2)" }}>
@@ -1017,6 +1005,11 @@ export function FinancialLiteracyTab() {
         A three-tier financial literacy curriculum — every module points at the real tool
         elsewhere in this app that demonstrates the concept. Placement is a starting point,
         not a gate; every tier stays visible, just locked until the one before it is done.
+      </p>
+      <p className="jv-note" style={{ marginTop: 0, marginBottom: 16 }}>
+        <b>Educational, not financial advice.</b> These lessons explain general ideas. They are not
+        personal advice and do not tell you what to buy, sell, borrow or sign. Rules, rates and
+        programs change, so check current official sources before you act.
       </p>
       {!placement ? (
         <PlacementFlow onComplete={recordPlacement} />

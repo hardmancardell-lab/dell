@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { LITERACY_MODULES } from "./skills/curriculum-content";
 import { SIGNAL_CHECK_LEVELS } from "./skills/signal-check-content";
 import { LITERACY_TIER_ORDER } from "./types";
+import { EMPTY_QUIZ_XP, applyQuizXp, localDateKey } from "./quiz-xp";
 import type { BadgeId, LearnerGoal, LiteracyProgress, LiteracyTier, PlacementResult } from "./types";
 
 const PLACEMENT_KEY = "financial-literacy-placement";
@@ -20,6 +21,7 @@ const EMPTY_PROGRESS: LiteracyProgress = {
   roundsPlayed: 0,
   bestRoundScore: 0,
   hasPerfectRound: false,
+  ...EMPTY_QUIZ_XP,
 };
 
 function readRaw<T>(key: string): T | null {
@@ -33,7 +35,7 @@ function readRaw<T>(key: string): T | null {
 }
 
 function todayDateKey(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey();
 }
 
 function moduleIdsForTier(tier: LiteracyTier): string[] {
@@ -155,10 +157,16 @@ export function useLiteracyProgress() {
     });
   }, []);
 
-  /** A correct Quiz Mode answer — same XP/streak/daily-activity bump as completing a module's check, without touching completedModuleIds (a round can revisit already-completed modules' questions for review). */
-  const recordQuizAnswer = useCallback((xpAwarded: number) => {
+  /**
+   * A correct Quiz Mode answer — same streak/daily-activity bump as completing a module's check, without touching
+   * completedModuleIds (a round can revisit already-completed modules' questions for review). XP is limited: each
+   * question pays once and Quiz Mode pays at most QUIZ_XP_DAILY_CAP per local day (see quiz-xp.ts), so a repeat
+   * or capped answer still counts as activity but adds 0 XP.
+   */
+  const recordQuizAnswer = useCallback((requestedXp: number, questionKey: string) => {
     setProgress((current) => {
-      const next = bumpForCorrectAnswer(current, xpAwarded);
+      const { awarded, next: xpState } = applyQuizXp(current, questionKey, requestedXp, todayDateKey());
+      const next = { ...bumpForCorrectAnswer(current, awarded), ...xpState };
       window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(next));
       return next;
     });

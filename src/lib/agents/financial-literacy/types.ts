@@ -34,7 +34,7 @@ export interface LiteracyModule {
   checks: CheckQuestion[];
 }
 
-/** One of the 9 placement-quiz questions — 3 per tier, concept-recognition style, not vocabulary recall. */
+/** One of the 18 placement-quiz questions — 6 per tier (QUESTIONS_PER_TIER in placement.ts), concept-recognition style, not vocabulary recall. */
 export interface PlacementQuestion {
   tier: LiteracyTier; // which tier this question probes fluency in
   prompt: string;
@@ -62,7 +62,7 @@ export interface LiteracyProgress {
   completedModuleIds: string[];
   xp: number;
   streakDays: number;
-  lastActivityDateKey: string | null; // YYYY-MM-DD, Eastern-agnostic (client-local is fine here, not a market-data concern)
+  lastActivityDateKey: string | null; // YYYY-MM-DD in the learner's LOCAL calendar (localDateKey in quiz-xp.ts), not a market-data concern
   // Kahoot-style consecutive-correct-answer streak across check questions,
   // distinct from streakDays (daily-activity streak) above — broken by any
   // wrong or timed-out answer, not by a day gap. Shared between the
@@ -75,6 +75,11 @@ export interface LiteracyProgress {
   roundsPlayed: number;
   bestRoundScore: number;
   hasPerfectRound: boolean;
+  // Quiz Mode XP limits (see quiz-xp.ts): a question pays XP once, and at
+  // most QUIZ_XP_DAILY_CAP XP per local day can come from Quiz Mode.
+  quizXpDate: string | null;
+  quizXpToday: number;
+  quizXpQuestionKeys: string[];
 }
 
 export type BadgeId =
