@@ -20,7 +20,19 @@ jobs:
     steps:
       - name: Hit /api/cron/check-alerts
         run: |
-          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/check-alerts" \
+          # Never follow redirects (no -L): a 307 to /gate or /login used to look like success under `curl -sf`.
+          # Pass only on HTTP 200 whose JSON body says ok:true or skipped:true.
+          status=$(curl -sS --max-time 75 --max-redirs 0 -X GET "${{ secrets.APP_URL }}/api/cron/check-alerts" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -o response.json -w "HTTP %{http_code}\n"
+            -o response.json -w "%{http_code}")
+          echo "HTTP $status"
           cat response.json
+          echo
+          if [ "$status" != "200" ]; then
+            echo "::error::Expected HTTP 200, got $status"
+            exit 1
+          fi
+          jq -e '.ok == true or .skipped == true' response.json > /dev/null || {
+            echo "::error::Response body is not ok:true or skipped:true"
+            exit 1
+          }

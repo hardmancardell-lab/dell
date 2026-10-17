@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { bearerMatches } from "@/lib/access/tokens";
 import {
   getActiveRulesWithSubscriptions,
   insertAlertLog,
@@ -47,10 +48,8 @@ function isMonday(): boolean {
 }
 
 export async function GET(request: Request) {
-  const expected = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  if (!expected || auth !== `Bearer ${expected}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await bearerMatches(request.headers.get("authorization"), process.env.CRON_SECRET))) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
   // Paper-trading order sweep — independent of the alerts gates below, since
@@ -96,11 +95,11 @@ export async function GET(request: Request) {
   }
 
   if (!isAlertsDbConfigured()) {
-    return NextResponse.json({ ok: true, skipped: "Alerts DB not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset).", paperOrders, hypothesisSweep, strategySuggestions });
+    return NextResponse.json({ ok: true, skipped: true, reason: "Alerts DB not configured (SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset).", paperOrders, hypothesisSweep, strategySuggestions });
   }
 
   if (!isDuringMarketHours()) {
-    return NextResponse.json({ ok: true, skipped: "Outside market hours (9:30am-4:00pm ET, weekdays).", paperOrders, hypothesisSweep, strategySuggestions });
+    return NextResponse.json({ ok: true, skipped: true, reason: "Outside market hours (9:30am-4:00pm ET, weekdays).", paperOrders, hypothesisSweep, strategySuggestions });
   }
 
   const rules = await getActiveRulesWithSubscriptions();
@@ -192,5 +191,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ rulesEvaluated: rules.length, alertsSent, errors, paperOrders, hypothesisSweep, strategySuggestions });
+  return NextResponse.json({ ok: true, rulesEvaluated: rules.length, alertsSent, errors, paperOrders, hypothesisSweep, strategySuggestions });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { bearerMatches } from "@/lib/access/tokens";
 import * as tradier from "@/lib/data/tradier";
 import { resolveOptionFlowFeed } from "@/lib/data/tradier";
 import { fetchQuote } from "@/lib/data/market-data";
@@ -29,10 +30,8 @@ function dateKeyDaysAgo(ms: number, days: number): string {
  * fires on a UTC superset (13:30-21:00); this route trims to the exact ET session. Logs raw measures only.
  */
 export async function GET(request: Request) {
-  const expected = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
-  if (!expected || auth !== `Bearer ${expected}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await bearerMatches(request.headers.get("authorization"), process.env.CRON_SECRET))) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
   const nowMs = Date.now();
