@@ -21,8 +21,11 @@ import { TIMEFRAME_PRESETS } from "@/lib/agents/trading-agent/skills/timeframe-p
 import { SESSIONS, toUtcParts } from "@/lib/agents/trading-agent/skills/time-windows";
 import type { ChartBarsResult } from "@/lib/agents/trading-agent/skills/chart-bars";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
-import { PaperOrderForm } from "./PaperOrderForm";
-import { OptionsChainTradeTab } from "./OptionsChainTradeTab";
+import dynamic from "next/dynamic";
+// The floating trade panel is only opened on demand; loading these lazily keeps recharts (via OptionsChainTradeTab) and the
+// order form out of every chart consumer's first load.
+const PaperOrderForm = dynamic(() => import("./PaperOrderForm").then((m) => m.PaperOrderForm));
+const OptionsChainTradeTab = dynamic(() => import("./OptionsChainTradeTab").then((m) => m.OptionsChainTradeTab));
 import type { AssetClass, PaperAccountSummary } from "@/lib/agents/trading-agent/types";
 import {
   atr,
@@ -124,6 +127,42 @@ const JARVIS = {
   verdict: "#f0a868", // --verdict — cost-basis line
 };
 
+/** Writes the OHLCV legend for candle `index` into `el` (hidden when there is no candle). Plain DOM, no React state. */
+function writeLegend(
+  el: HTMLDivElement | null,
+  candles: ChartBarsResult["candles"],
+  index: number,
+  timeframeId: string,
+  fmt: (v: number) => string
+) {
+  if (!el) return;
+  if (index < 0 || index >= candles.length) {
+    el.style.display = "none";
+    return;
+  }
+  const c = candles[index];
+  const prior = index > 0 ? candles[index - 1] : null;
+  const changePct = prior && prior.close > 0 ? ((c.close - prior.close) / prior.close) * 100 : null;
+  const preset = TIMEFRAME_PRESETS.find((p) => p.id === timeframeId);
+  const isIntraday = !(preset?.alpacaTimeframe === "1Day" || preset?.alpacaTimeframe === "1Week");
+  const d = new Date(c.datetime);
+  const dateKey = isIntraday ? d.toLocaleString() : d.toISOString().slice(0, 10);
+  const span = (text: string, color?: string) => {
+    const e = document.createElement("span");
+    e.textContent = text;
+    if (color) e.style.color = color;
+    return e;
+  };
+  const changeColor = changePct === null ? "var(--text-2)" : changePct >= 0 ? "var(--signal)" : "var(--danger)";
+  el.replaceChildren(
+    span(dateKey, "var(--text-0)"),
+    span(`  O ${fmt(c.open)}  H ${fmt(c.high)}  L ${fmt(c.low)}  C ${fmt(c.close)}  `),
+    span(changePct !== null ? `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%` : "N/A", changeColor),
+    span(`  Vol ${c.volume.toLocaleString()}`)
+  );
+  el.style.display = "block";
+}
+
 export function PriceChart({
   symbol,
   focusDate,
@@ -153,15 +192,13 @@ export function PriceChart({
   readOnlyRef.current = readOnly;
   const dataRef = useRef<ChartBarsResult | null>(null);
   const timeframeRef = useRef("1yr");
-  const [hoverInfo, setHoverInfo] = useState<{
-    dateKey: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    changePct: number | null;
-    volume: number;
-  } | null>(null);
+  // The OHLCV legend is written straight into a small element (legendRef) instead of React state: the crosshair
+  // fires on every mouse move, and a setState there re-rendered this whole 900-line component (toolbar, indicator
+  // checkboxes, trade panel) up to 60 times a second (audit F4).
+  const legendRef = useRef<HTMLDivElement>(null);
+  const fmtPxRef = useRef<(v: number) => string>((v) => v.toFixed(2));
+  const hoverSecondsRef = useRef<number | null>(null);
+  const indexByTimeRef = useRef<Map<number, number>>(new Map());
 
   // 1mo (1-day candles, ~1 month lookback) gives useful before/after context
   // around a single occurrence date without pulling a whole year of noise.
@@ -184,6 +221,19 @@ export function PriceChart({
 
   // Sub-dollar coins (DOGE at $0.1234, SHIB far smaller) need more than two decimals in the readout and on the axis.
   const fmtPx = (v: number) => (assetClass === "crypto" && Math.abs(v) < 1 ? String(Number(v.toPrecision(5))) : v.toFixed(2));
+  fmtPxRef.current = fmtPx;
+
+  // Rebuild the time -> candle index map when the data changes, and show the latest bar in the legend until the
+  // cursor is over a candle.
+  useEffect(() => {
+    const map = new Map<number, number>();
+    data?.candles.forEach((c, i) => map.set(toSeconds(c.datetime), i));
+    indexByTimeRef.current = map;
+    hoverSecondsRef.current = null;
+    writeLegend(legendRef.current, data?.candles ?? [], data?.candles.length ? data.candles.length - 1 : -1, timeframe, fmtPx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, timeframe, assetClass]);
+
   useEffect(() => {
     const series = candleSeriesRef.current;
     const last = data?.candles[data.candles.length - 1];
@@ -219,6 +269,7 @@ export function PriceChart({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const coarse = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
     const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
@@ -231,6 +282,10 @@ export function PriceChart({
       width: containerRef.current.clientWidth,
       height: 420,
       timeScale: { timeVisible: true, secondsVisible: false },
+      // A vertical swipe that starts on the chart must scroll the page, not pan the chart (audit F6), and on touch
+      // devices the wheel never zooms. Pinch and horizontal drag still work. On mouse devices the wheel still zooms.
+      handleScroll: { vertTouchDrag: false, mouseWheel: !coarse },
+      handleScale: { mouseWheel: !coarse, pinch: true, axisPressedMouseMove: true },
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
@@ -276,24 +331,14 @@ export function PriceChart({
     // prior-close-based change%).
     chart.subscribeCrosshairMove((param) => {
       const candles = dataRef.current?.candles;
-      if (!param.time || !candles || candles.length === 0) {
-        setHoverInfo(null);
-        return;
-      }
-      const targetSeconds = param.time as number;
-      const index = candles.findIndex((c) => toSeconds(c.datetime) === targetSeconds);
-      if (index === -1) {
-        setHoverInfo(null);
-        return;
-      }
-      const c = candles[index];
-      const prior = index > 0 ? candles[index - 1] : null;
-      const changePct = prior && prior.close > 0 ? ((c.close - prior.close) / prior.close) * 100 : null;
-      const preset = TIMEFRAME_PRESETS.find((p) => p.id === timeframeRef.current);
-      const isIntraday = !(preset?.alpacaTimeframe === "1Day" || preset?.alpacaTimeframe === "1Week");
-      const d = new Date(c.datetime);
-      const dateKey = isIntraday ? d.toLocaleString() : d.toISOString().slice(0, 10);
-      setHoverInfo({ dateKey, open: c.open, high: c.high, low: c.low, close: c.close, changePct, volume: c.volume });
+      if (!candles || candles.length === 0) return;
+      const seconds = param.time ? (param.time as number) : null;
+      // Skip work while the cursor stays on the same candle.
+      if (seconds === hoverSecondsRef.current) return;
+      hoverSecondsRef.current = seconds;
+      const index = seconds === null ? -1 : (indexByTimeRef.current.get(seconds) ?? -1);
+      // Off the data (or cursor left the chart): fall back to the latest bar.
+      writeLegend(legendRef.current, candles, index === -1 ? candles.length - 1 : index, timeframeRef.current, fmtPxRef.current);
     });
 
     const resizeObserver = new ResizeObserver((entries) => {
@@ -343,7 +388,8 @@ export function PriceChart({
     };
   }, [symbol, timeframe, focusDate]);
 
-  // Push candles/volume/SMA20/SMA50 whenever data or those two toggles change.
+  // Push candles/volume/SMA20/SMA50 when the data changes. The SMA toggles only show or hide a series (next effect), so
+  // clicking one no longer resends all the data or resets the user's zoom (audit F5).
   useEffect(() => {
     if (!data || !candleSeriesRef.current || !volumeSeriesRef.current) return;
 
@@ -370,22 +416,25 @@ export function PriceChart({
     const sma50 = sma(closes, 50);
 
     sma20SeriesRef.current?.setData(
-      showSma20
-        ? candles
-            .map((c, i) => ({ time: toSeconds(c.datetime), value: sma20[i] }))
-            .filter((p): p is { time: UTCTimestamp; value: number } => p.value !== null)
-        : []
+      candles
+        .map((c, i) => ({ time: toSeconds(c.datetime), value: sma20[i] }))
+        .filter((p): p is { time: UTCTimestamp; value: number } => p.value !== null)
     );
     sma50SeriesRef.current?.setData(
-      showSma50
-        ? candles
-            .map((c, i) => ({ time: toSeconds(c.datetime), value: sma50[i] }))
-            .filter((p): p is { time: UTCTimestamp; value: number } => p.value !== null)
-        : []
+      candles
+        .map((c, i) => ({ time: toSeconds(c.datetime), value: sma50[i] }))
+        .filter((p): p is { time: UTCTimestamp; value: number } => p.value !== null)
     );
 
     chartRef.current?.timeScale().fitContent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  useEffect(() => {
+    sma20SeriesRef.current?.applyOptions({ visible: showSma20 });
+    sma50SeriesRef.current?.applyOptions({ visible: showSma50 });
   }, [data, showSma20, showSma50]);
+
 
   // Real session-boundary markers (Asian/London/New York, UTC — see
   // time-windows.ts's SESSIONS) on intraday forex/futures charts, inferred
@@ -742,65 +791,26 @@ export function PriceChart({
       <div style={{ position: "relative" }}>
         <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)" }} />
 
-        {(() => {
-          const info =
-            hoverInfo ??
-            (data && data.candles.length > 0
-              ? (() => {
-                  const last = data.candles[data.candles.length - 1];
-                  const prior = data.candles.length > 1 ? data.candles[data.candles.length - 2] : null;
-                  const preset = TIMEFRAME_PRESETS.find((p) => p.id === timeframe);
-                  const isIntraday = !(preset?.alpacaTimeframe === "1Day" || preset?.alpacaTimeframe === "1Week");
-                  const d = new Date(last.datetime);
-                  return {
-                    dateKey: isIntraday ? d.toLocaleString() : d.toISOString().slice(0, 10),
-                    open: last.open,
-                    high: last.high,
-                    low: last.low,
-                    close: last.close,
-                    changePct: prior && prior.close > 0 ? ((last.close - prior.close) / prior.close) * 100 : null,
-                    volume: last.volume,
-                  };
-                })()
-              : null);
-          if (!info) return null;
-          const changeColor = info.changePct === null ? "var(--text-2)" : info.changePct >= 0 ? "var(--signal)" : "var(--danger)";
-          return (
-            <div
-              style={{
-                position: "absolute",
-                top: 12,
-                left: 12,
-                zIndex: 5,
-                background: "rgba(8, 11, 16, 0.75)",
-                border: "1px solid var(--line)",
-                borderRadius: 4,
-                padding: "6px 10px",
-                fontSize: 11,
-                fontFamily: "monospace",
-                color: "var(--text-1)",
-                pointerEvents: "none",
-                whiteSpace: "nowrap",
-              }}
-            >
-              <span style={{ color: "var(--text-0)" }}>{info.dateKey}</span>
-              {"  O "}
-              {fmtPx(info.open)}
-              {"  H "}
-              {fmtPx(info.high)}
-              {"  L "}
-              {fmtPx(info.low)}
-              {"  C "}
-              {fmtPx(info.close)}
-              {"  "}
-              <span style={{ color: changeColor }}>
-                {info.changePct !== null ? `${info.changePct >= 0 ? "+" : ""}${info.changePct.toFixed(2)}%` : "N/A"}
-              </span>
-              {"  Vol "}
-              {info.volume.toLocaleString()}
-            </div>
-          );
-        })()}
+        <div
+          ref={legendRef}
+          aria-live="off"
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            zIndex: 5,
+            background: "rgba(8, 11, 16, 0.75)",
+            border: "1px solid var(--line)",
+            borderRadius: 4,
+            padding: "6px 10px",
+            fontSize: 11,
+            fontFamily: "monospace",
+            color: "var(--text-1)",
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+            display: "none",
+          }}
+        />
 
         {assetClass !== "option" && !readOnly && (
           <div style={{ position: "absolute", top: 12, right: 12, zIndex: 5 }}>

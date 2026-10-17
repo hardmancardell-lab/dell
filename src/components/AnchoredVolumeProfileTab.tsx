@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { AnchoredVolumeProfileResponse } from "@/lib/agents/trading-agent/skills/anchored-volume-profile-service";
 import type { LevelType, ProfileLevel } from "@/lib/agents/trading-agent/skills/anchored-volume-profile";
@@ -43,6 +43,25 @@ function niceStep(range: number, target = 6): number {
   return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p;
 }
 
+// Intl formatters are expensive to construct (about 0.5 ms each). The chart used to build a new DateTimeFormat for every
+// candle on every render (audit F8: 390 bars took 246 ms per render, 10,000 bars 5.4 s); one cached formatter per
+// time zone and style brings that to a few ms.
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+function cachedFormatter(kind: "time" | "date" | "day", tz: string): Intl.DateTimeFormat {
+  const key = `${kind}|${tz}`;
+  let f = formatterCache.get(key);
+  if (!f) {
+    f =
+      kind === "time"
+        ? new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false })
+        : kind === "date"
+          ? new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric" })
+          : new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+    formatterCache.set(key, f);
+  }
+  return f;
+}
+
 /** Pushes labels apart vertically so none overlap, keeping order. */
 function spreadLabels<T extends { y: number }>(items: T[], minGap: number, top: number, bottom: number): (T & { ly: number })[] {
   const sorted = [...items].sort((a, b) => a.y - b.y).map((i) => ({ ...i, ly: i.y }));
@@ -55,7 +74,7 @@ function spreadLabels<T extends { y: number }>(items: T[], minGap: number, top: 
   return sorted;
 }
 
-function ProfileChart({ result }: { result: AnchoredVolumeProfileResponse }) {
+const ProfileChart = memo(function ProfileChart({ result }: { result: AnchoredVolumeProfileResponse }) {
   const { candles, profile, levels, lastPrice } = result;
   const W = 960, H = 540, top = 14, bottom = 30, left = 58, right = 108;
   const priceRight = left + (W - left - right) * 0.66;
@@ -84,23 +103,31 @@ function ProfileChart({ result }: { result: AnchoredVolumeProfileResponse }) {
   const vaHi = profile.valueArea?.highBinIndex ?? -2;
   const useCandles = n <= 200;
   const tz = result.calendar === "utc" ? "UTC" : "America/New_York";
-  const fmtT = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
-  const fmtD = new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric" });
-  const dayKey = (ms: number) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(ms));
+  const fmtT = cachedFormatter("time", tz);
+  const fmtD = cachedFormatter("date", tz);
+  const fmtDay = cachedFormatter("day", tz);
 
   // x-axis labels: hourly on one-session charts, a date at each session start otherwise
-  const xLabels: { i: number; text: string }[] = [];
-  const seps: number[] = [];
-  candles.forEach((c, i) => {
-    const prevDay = i > 0 ? dayKey(candles[i - 1].datetime) : null;
-    const d = dayKey(c.datetime);
-    if (prevDay !== null && d !== prevDay) seps.push(i);
-    if (result.anchor.sessions.length > 1) {
-      if (prevDay === null || d !== prevDay) xLabels.push({ i, text: fmtD.format(new Date(c.datetime)) });
-    } else if (fmtT.format(new Date(c.datetime)).endsWith(":00") && (i === 0 || fmtT.format(new Date(candles[i - 1].datetime)) !== fmtT.format(new Date(c.datetime)))) {
-      xLabels.push({ i, text: fmtT.format(new Date(c.datetime)).replace(/^24/, "00") });
-    }
-  });
+  const { xLabels, seps } = useMemo(() => {
+    const xLabels: { i: number; text: string }[] = [];
+    const seps: number[] = [];
+    // Each candle is formatted once (day key and clock time), not twice per candle as before.
+    const dayKeys = candles.map((c) => fmtDay.format(new Date(c.datetime)));
+    const multiSession = result.anchor.sessions.length > 1;
+    const clock = multiSession ? [] : candles.map((c) => fmtT.format(new Date(c.datetime)));
+    candles.forEach((c, i) => {
+      const prevDay = i > 0 ? dayKeys[i - 1] : null;
+      const d = dayKeys[i];
+      if (prevDay !== null && d !== prevDay) seps.push(i);
+      if (multiSession) {
+        if (prevDay === null || d !== prevDay) xLabels.push({ i, text: fmtD.format(new Date(c.datetime)) });
+      } else if (clock[i].endsWith(":00") && (i === 0 || clock[i - 1] !== clock[i])) {
+        xLabels.push({ i, text: clock[i].replace(/^24/, "00") });
+      }
+    });
+    return { xLabels, seps };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles, tz, result.anchor.sessions.length]);
   const maxXLabels = 12;
   const xLabelStride = Math.ceil(xLabels.length / maxXLabels) || 1;
 
@@ -200,7 +227,7 @@ function ProfileChart({ result }: { result: AnchoredVolumeProfileResponse }) {
       </text>
     </svg>
   );
-}
+});
 
 function Legend() {
   const item = (swatch: React.ReactNode, text: string) => (

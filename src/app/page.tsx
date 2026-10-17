@@ -3,86 +3,90 @@ import { StatCard } from "@/components/StatCard";
 import { ResearchGlossaryTerm } from "@/components/ResearchGlossaryTerm";
 import { getSectorOverview } from "@/lib/agents/research-agent/skills/sector-overview";
 import { Tabs } from "@/components/Tabs";
+// Every tab body is a lazy client component (see page-tabs.tsx): only the active tab's code is downloaded.
+import {
+  AlertsSubscribeTab,
+  AnchoredVolumeProfileTab,
+  AssetChartsTab,
+  AssistantChatTab,
+  BacktestSuiteTab,
+  BondDashboardTab,
+  BusinessPhaseTab,
+  BuybackAnomalyTab,
+  CalendarEffectsTab,
+  CatalystCalendarTab,
+  CommoditiesDashboardTab,
+  CorporateBuybackOfferingTab,
+  CorrelationFinderTab,
+  CryptoChartsTab,
+  CryptoRegimeTab,
+  CryptoWatchlistTab,
+  CurrencyDashboardTab,
+  CurrencyDriversTab,
+  CurrencyPegsTab,
+  EconomicOutlookTab,
+  EquityChartsTab,
+  FinancialLiteracyTab,
+  FomcReactionStudyTab,
+  FomcWeekVarianceTab,
+  FuturesCommoditiesResearchSourcesTab,
+  FuturesDashboardTab,
+  FxResearchSourcesTab,
+  GammaHeatMapTab,
+  GapCalendarStudyTab,
+  GlobalFinancialNewsTab,
+  GlossaryTab,
+  GuidedTradeSignalsTab,
+  HistoricalBacktestTab,
+  IndustryImpactTab,
+  InternationalCentralBanksView,
+  InternationalEconomicsTab,
+  LowOfDayTimingTab,
+  ModernPortfolioTab,
+  OptionFlowTab,
+  OptionsCalculatorTab,
+  OptionsChainTradeTab,
+  OptionsDashboardTab,
+  OptionsStrategiesTab,
+  OrbStrategyTab,
+  OvernightIntradayPatternTab,
+  PaperBacktestLogTab,
+  PaperTradingTab,
+  PortfolioDashboardTab,
+  PortfolioMethodologyTab,
+  PostBigDayStudyTab,
+  PremarketGapHodLodTab,
+  QuadWitchingStudyTab,
+  RebalancingTab,
+  RequiresPlacementTier,
+  ResearchSourcesTab,
+  ResearchWatchlistTab,
+  RetirementPlanTab,
+  RollingMoveStatsTab,
+  ScenarioSimulationTab,
+  ScreenerTab,
+  SectorFundamentalsTab,
+  SectorRecommendationsTab,
+  SectorStockAnalysisTab,
+  SecurityAnalystTab,
+  SessionAnalysisTab,
+  StrategyLedgerTab,
+  SupplyDemandShockScanTab,
+  TradeJournalTab,
+  TradingDashboardTab,
+  TraditionalPortfolioTab,
+  VwapBandStudyTab,
+  VwapReversionBacktestTab,
+  WeekStartMomentumTab,
+  WitchingRangeContainmentTab,
+  YieldAlertThresholdTab,
+  YieldCurveTab,
+} from "./page-tabs";
 import { AppNavigationProvider } from "@/lib/navigation/app-navigation";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { HelpMenu } from "@/components/HelpMenu";
 import { FayeChatWidget } from "@/components/FayeChatWidget";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
-import { IndustryImpactTab } from "@/components/IndustryImpactTab";
-import { GlobalFinancialNewsTab } from "@/components/GlobalFinancialNewsTab";
-import { EconomicOutlookTab, InternationalCentralBanksView } from "@/components/EconomicOutlookTab";
-import { FomcReactionStudyTab } from "@/components/FomcReactionStudyTab";
-import { FomcWeekVarianceTab } from "@/components/FomcWeekVarianceTab";
-import { CatalystCalendarTab } from "@/components/CatalystCalendarTab";
-import { CryptoRegimeTab } from "@/components/CryptoRegimeTab";
-import { CryptoChartsTab } from "@/components/CryptoChartsTab";
-import { CryptoWatchlistTab } from "@/components/CryptoWatchlistTab";
-import { QuadWitchingStudyTab } from "@/components/QuadWitchingStudyTab";
-import { WeekStartMomentumTab } from "@/components/WeekStartMomentumTab";
-import { OvernightIntradayPatternTab } from "@/components/OvernightIntradayPatternTab";
-import { PostBigDayStudyTab } from "@/components/PostBigDayStudyTab";
-import { LowOfDayTimingTab } from "@/components/LowOfDayTimingTab";
-import { WitchingRangeContainmentTab } from "@/components/WitchingRangeContainmentTab";
-import { SectorFundamentalsTab } from "@/components/SectorFundamentalsTab";
-import { SectorRecommendationsTab } from "@/components/SectorRecommendationsTab";
-import { SectorStockAnalysisTab } from "@/components/SectorStockAnalysisTab";
-import { ResearchSourcesTab } from "@/components/ResearchSourcesTab";
-import { SecurityAnalystTab } from "@/components/SecurityAnalystTab";
-import { ScreenerTab } from "@/components/ScreenerTab";
-import { ResearchWatchlistTab } from "@/components/ResearchWatchlistTab";
-import { OptionsCalculatorTab } from "@/components/OptionsCalculatorTab";
-import { EquityChartsTab } from "@/components/EquityChartsTab";
-import { AssetChartsTab } from "@/components/AssetChartsTab";
-import { BacktestSuiteTab } from "@/components/BacktestSuiteTab";
-import { HistoricalBacktestTab } from "@/components/HistoricalBacktestTab";
-import { CalendarEffectsTab } from "@/components/CalendarEffectsTab";
-import { VwapReversionBacktestTab } from "@/components/VwapReversionBacktestTab";
-import { VwapBandStudyTab } from "@/components/VwapBandStudyTab";
-import { AnchoredVolumeProfileTab } from "@/components/AnchoredVolumeProfileTab";
-import { PremarketGapHodLodTab } from "@/components/PremarketGapHodLodTab";
-import { GapCalendarStudyTab } from "@/components/GapCalendarStudyTab";
-import { RequiresPlacementTier } from "@/components/RequiresPlacementTier";
-import { OrbStrategyTab } from "@/components/OrbStrategyTab";
-import { TradingDashboardTab } from "@/components/TradingDashboardTab";
-import { GlossaryTab } from "@/components/GlossaryTab";
-import { AlertsSubscribeTab } from "@/components/AlertsSubscribeTab";
-import { PaperTradingTab } from "@/components/PaperTradingTab";
-import { StrategyLedgerTab } from "@/components/StrategyLedgerTab";
-import { TradeJournalTab } from "@/components/TradeJournalTab";
-import { InternationalEconomicsTab } from "@/components/InternationalEconomicsTab";
-import { BondDashboardTab } from "@/components/BondDashboardTab";
-import { YieldCurveTab } from "@/components/YieldCurveTab";
-import { YieldAlertThresholdTab } from "@/components/YieldAlertThresholdTab";
-import { OptionsDashboardTab } from "@/components/OptionsDashboardTab";
-import { GammaHeatMapTab } from "@/components/GammaHeatMapTab";
-import { OptionFlowTab } from "@/components/OptionFlowTab";
-import { OptionsStrategiesTab } from "@/components/OptionsStrategiesTab";
-import { OptionsChainTradeTab } from "@/components/OptionsChainTradeTab";
-import { PaperBacktestLogTab } from "@/components/PaperBacktestLogTab";
-import { CurrencyDashboardTab } from "@/components/CurrencyDashboardTab";
-import { FuturesDashboardTab } from "@/components/FuturesDashboardTab";
-import { CommoditiesDashboardTab } from "@/components/CommoditiesDashboardTab";
-import { FxResearchSourcesTab } from "@/components/FxResearchSourcesTab";
-import { CurrencyDriversTab } from "@/components/CurrencyDriversTab";
-import { CurrencyPegsTab } from "@/components/CurrencyPegsTab";
-import { RollingMoveStatsTab } from "@/components/RollingMoveStatsTab";
-import { SessionAnalysisTab } from "@/components/SessionAnalysisTab";
-import { FuturesCommoditiesResearchSourcesTab } from "@/components/FuturesCommoditiesResearchSourcesTab";
-import { BuybackAnomalyTab } from "@/components/BuybackAnomalyTab";
-import { GuidedTradeSignalsTab } from "@/components/GuidedTradeSignalsTab";
-import { PortfolioDashboardTab } from "@/components/PortfolioDashboardTab";
-import { TraditionalPortfolioTab } from "@/components/TraditionalPortfolioTab";
-import { ModernPortfolioTab } from "@/components/ModernPortfolioTab";
-import { ScenarioSimulationTab } from "@/components/ScenarioSimulationTab";
-import { RebalancingTab } from "@/components/RebalancingTab";
-import { CorrelationFinderTab } from "@/components/CorrelationFinderTab";
-import { PortfolioMethodologyTab } from "@/components/PortfolioMethodologyTab";
-import { RetirementPlanTab } from "@/components/RetirementPlanTab";
-import { BusinessPhaseTab } from "@/components/BusinessPhaseTab";
-import { FinancialLiteracyTab } from "@/components/FinancialLiteracyTab";
-import { AssistantChatTab } from "@/components/AssistantChatTab";
-import { SupplyDemandShockScanTab } from "@/components/SupplyDemandShockScanTab";
-import { CorporateBuybackOfferingTab } from "@/components/CorporateBuybackOfferingTab";
 
 function ConditionBadge({ text }: { text: string }) {
   return <span className="jv-badge c-neutral">{text}</span>;
