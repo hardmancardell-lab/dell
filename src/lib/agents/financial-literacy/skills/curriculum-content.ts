@@ -1564,7 +1564,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 6,
     title: "Sector rotation",
-    body: "Different sectors historically lead at different points in the economic cycle. Defensive sectors — consumer staples, utilities, healthcare — tend to hold up better in a slowdown because demand for their products doesn't disappear in a recession. Cyclical sectors — consumer discretionary, homebuilders, industrials — tend to lead coming out of one.\n\nThis isn't a rigid rulebook, but understanding the pattern is what separates \"the market is down\" from \"the market is rotating.\"",
+    body: "Sectors lead at different times in the economic cycle. Some sectors are called defensive: staples (food and basics), utilities and healthcare. People still buy these products in a recession, so the sectors tend to hold up. Other sectors are called cyclical: discretionary goods (things you can skip), homebuilders and industrials. They tend to lead when the economy recovers.\n\nThis is not a strict rule. But the pattern helps you tell \"the market is down\" from \"the market is rotating.\"",
     tryIt: { label: "Top-Down Economic Analysis · Sector" },
     checks: [
       {
@@ -1607,7 +1607,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 7,
     title: "Reading a chart without superstition",
-    body: "Support and resistance aren't magic lines — they represent real clusters of buy or sell orders at prices where enough market participants previously acted. A stock that keeps bouncing at $40 is showing you that real demand has repeatedly shown up there, not that $40 has some mystical property.\n\nVolume confirms or undermines a price move: a breakout on heavy volume reflects real conviction; the same move on thin volume is easier to dismiss.",
+    body: "Support and resistance are not magic lines. They mark prices where many buyers or sellers acted before. If a stock keeps bouncing at $40, real demand has shown up there more than once. That does not mean $40 has a special power.\n\nVolume is how many shares trade. It can back up or weaken a price move. A breakout on heavy volume shows strong conviction. The same move on thin volume is easier to doubt.",
     tryIt: { label: "Trading Analysis · Charts" },
     checks: [
       {
@@ -1650,7 +1650,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 8,
     title: "Why \"backtested\" isn't proof",
-    body: "A strategy that wins 9 of 10 trades sounds convincing — until you realize 10 trades is nowhere near enough to distinguish a real, repeatable edge from a lucky streak. Real statistical evaluation requires a large enough sample, correction for testing many ideas at once, and confirmation that the pattern holds on data it wasn't built on.\n\nThis is the exact discipline this app's own backtest engines are built around — every result reports its sample size honestly, specifically because that number is the difference between a signal and noise.",
+    body: "A strategy that wins 9 of 10 trades sounds great. But 10 trades is too few to tell a real edge from a lucky streak. To judge a strategy well, you need three things. First, a large sample. Second, a correction for testing many ideas at once. Third, proof that the pattern also holds on data it was not built on.\n\nThis app's backtests follow that rule. Every result shows its sample size, because that number often separates a real signal from noise.",
     tryIt: { label: "Trading Analysis · Backtest" },
     checks: [
       {
@@ -1693,7 +1693,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 9,
     title: "Options, before the Greeks",
-    body: "A call option is a bet that a stock will rise above a certain price (the strike) before a certain date. A put option is the mirror image — a bet the stock falls below the strike. You pay a price up front to buy an option, called the premium. Both come with an expiration date, after which the option is worthless if the bet did not pay off. A call makes money only if the stock ends up above the strike by more than the premium you paid. A put needs the stock to fall below the strike by more than the premium.\n\nThis module deliberately stops before the Greeks (delta, gamma, theta, vega) — those come in the Expert tier. For now, the shape of the payoff is the important part.",
+    body: "A call option is a bet that a stock will rise above a set price, called the strike, before a set date. A put option is the reverse. It is a bet that the stock will fall below the strike. You pay a price up front to buy an option. That price is the premium. Every option has an expiration date. After that date it is worthless if the bet did not pay off.\n\nA call only makes money if the stock ends above the strike by more than the premium you paid. A put needs the stock to fall below the strike by more than the premium. This lesson stops before the Greeks (delta, gamma, theta and vega). Those come in the Expert tier. For now, focus on the shape of the payoff.",
     tryIt: null,
     checks: [
       {
@@ -1736,7 +1736,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "intermediate",
     order: 10,
     title: "The biases that wreck a good plan",
-    body: "Loss aversion (the disposition effect, specifically) shows up as selling winners too early to lock in a good feeling, while holding losers far too long hoping they'll come back — the exact opposite of a disciplined \"cut losses, let winners run\" approach. Recency bias means overweighting whatever just happened, assuming a recent trend will continue indefinitely.\n\nFor most intermediate investors, these biases — not a lack of market knowledge — are the single biggest source of avoidable underperformance.",
+    body: "Loss aversion means a loss hurts more than an equal gain feels good. The disposition effect is one result. Investors sell winners too early, to lock in a good feeling. They hold losers too long, hoping for a comeback. That is the opposite of \"cut losses, let winners run.\"\n\nTwo other biases are common. Recency bias means giving too much weight to what just happened and assuming a recent trend will go on. Confirmation bias means favoring facts that agree with what you already believe. For most investors, these biases cause more avoidable losses than a lack of market knowledge does.",
     tryIt: null,
     checks: [
       {
