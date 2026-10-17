@@ -21,6 +21,11 @@ import { TIMEFRAME_PRESETS } from "@/lib/agents/trading-agent/skills/timeframe-p
 import { SESSIONS, toUtcParts } from "@/lib/agents/trading-agent/skills/time-windows";
 import type { ChartBarsResult } from "@/lib/agents/trading-agent/skills/chart-bars";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
+import type { BarAdjustment } from "@/lib/data/market-data-types";
+import { INDICATORS } from "@/lib/chart/indicators";
+import { formatBarLabel, formatTick, zoneForProvider, type ChartZone } from "@/lib/chart/timeformat";
+import { ChartHeader } from "./chart/ChartHeader";
+import { ActiveLegend } from "./chart/ActiveLegend";
 import dynamic from "next/dynamic";
 import { JARVIS as TOKENS, INDICATOR_COLORS, SMA_COLORS, VOLUME_BAR, OSC_HIST } from "@/lib/design/tokens";
 // The floating trade panel is only opened on demand; loading these lazily keeps recharts (via OptionsChainTradeTab) and the
@@ -54,40 +59,9 @@ function toSeconds(ms: number): UTCTimestamp {
   return Math.floor(ms / 1000) as UTCTimestamp;
 }
 
-interface OverlayDef {
-  id: string;
-  label: string;
-}
-
-interface OscillatorDef {
-  id: string;
-  label: string;
-}
-
-// Fixed canonical order — also determines oscillator pane assignment order.
-const OVERLAY_INDICATORS: OverlayDef[] = [
-  { id: "ema20", label: "EMA 20" },
-  { id: "ema50", label: "EMA 50" },
-  { id: "bollinger", label: "Bollinger Bands (20, 2σ)" },
-  { id: "keltner", label: "Keltner Channels" },
-  { id: "psar", label: "Parabolic SAR" },
-  { id: "hma", label: "Hull MA (9)" },
-  { id: "ichimoku", label: "Ichimoku Kinko Hyo" },
-  { id: "vwap", label: "VWAP + Bands" },
-  { id: "volumeProfile", label: "Volume Profile (approx.)" },
-];
-
-const OSCILLATOR_INDICATORS: OscillatorDef[] = [
-  { id: "rsi", label: "RSI (14)" },
-  { id: "stochastic", label: "Stochastic (14, 3)" },
-  { id: "cci", label: "CCI (20)" },
-  { id: "roc", label: "ROC (12)" },
-  { id: "williamsR", label: "Williams %R (14)" },
-  { id: "macd", label: "MACD (12, 26, 9)" },
-  { id: "atr", label: "ATR (14)" },
-  { id: "obv", label: "OBV" },
-  { id: "cmf", label: "CMF (20)" },
-];
+// Indicator catalogue (ids, labels, estimate tags) lives in src/lib/chart/indicators.ts.
+const OVERLAY_INDICATORS = INDICATORS.filter((d) => d.group === "overlay");
+const OSCILLATOR_INDICATORS = INDICATORS.filter((d) => d.group === "oscillator");
 
 const COLORS = INDICATOR_COLORS;
 
@@ -108,7 +82,8 @@ function writeLegend(
   candles: ChartBarsResult["candles"],
   index: number,
   timeframeId: string,
-  fmt: (v: number) => string
+  fmt: (v: number) => string,
+  zone: ChartZone
 ) {
   if (!el) return;
   if (index < 0 || index >= candles.length) {
@@ -120,8 +95,7 @@ function writeLegend(
   const changePct = prior && prior.close > 0 ? ((c.close - prior.close) / prior.close) * 100 : null;
   const preset = TIMEFRAME_PRESETS.find((p) => p.id === timeframeId);
   const isIntraday = !(preset?.alpacaTimeframe === "1Day" || preset?.alpacaTimeframe === "1Week");
-  const d = new Date(c.datetime);
-  const dateKey = isIntraday ? d.toLocaleString() : d.toISOString().slice(0, 10);
+  const dateKey = formatBarLabel(Math.floor(c.datetime / 1000), zone, isIntraday);
   const span = (text: string, color?: string) => {
     const e = document.createElement("span");
     e.textContent = text;
@@ -179,6 +153,8 @@ export function PriceChart({
   // around a single occurrence date without pulling a whole year of noise.
   const [timeframe, setTimeframe] = useState(focusDate ? "1mo" : "1yr");
   timeframeRef.current = timeframe;
+  // Split-adjusted by default so a split is not drawn as a crash. Only equities and ETFs (Alpaca) have a choice.
+  const [adjustment, setAdjustment] = useState<BarAdjustment>("split");
   const [showSma20, setShowSma20] = useState(true);
   const [showSma50, setShowSma50] = useState(true);
   const [enabledOverlays, setEnabledOverlays] = useState<Set<string>>(new Set());
@@ -186,6 +162,13 @@ export function PriceChart({
   const [volumeProfileSummary, setVolumeProfileSummary] = useState<VolumeProfileResult | null>(null);
   const [data, setData] = useState<ChartBarsResult | null>(null);
   dataRef.current = data;
+  // Display zone: US equity bars in Eastern time (the exchange clock), everything else UTC. Printed in the header.
+  const zone: ChartZone = zoneForProvider(data?.meta?.provider);
+  const zoneRef = useRef<ChartZone>(zone);
+  zoneRef.current = zone;
+  const intraday = (data?.meta?.barMs ?? 86_400_000) < 86_400_000;
+  const intradayRef = useRef(intraday);
+  intradayRef.current = intraday;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -205,9 +188,9 @@ export function PriceChart({
     data?.candles.forEach((c, i) => map.set(toSeconds(c.datetime), i));
     indexByTimeRef.current = map;
     hoverSecondsRef.current = null;
-    writeLegend(legendRef.current, data?.candles ?? [], data?.candles.length ? data.candles.length - 1 : -1, timeframe, fmtPx);
+    writeLegend(legendRef.current, data?.candles ?? [], data?.candles.length ? data.candles.length - 1 : -1, timeframe, fmtPx, zone);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, timeframe, assetClass]);
+  }, [data, timeframe, assetClass, zone]);
 
   useEffect(() => {
     const series = candleSeriesRef.current;
@@ -256,7 +239,15 @@ export function PriceChart({
       },
       width: containerRef.current.clientWidth,
       height: 420,
-      timeScale: { timeVisible: true, secondsVisible: false },
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+        // lightweight-charts treats timestamps as UTC; these read the display zone (ET for equities) at draw time.
+        tickMarkFormatter: (time: Time, tickType: number) => formatTick(time as number, tickType, zoneRef.current),
+      },
+      localization: {
+        timeFormatter: (time: Time) => formatBarLabel(time as number, zoneRef.current, intradayRef.current),
+      },
       // A vertical swipe that starts on the chart must scroll the page, not pan the chart (audit F6), and on touch
       // devices the wheel never zooms. Pinch and horizontal drag still work. On mouse devices the wheel still zooms.
       handleScroll: { vertTouchDrag: false, mouseWheel: !coarse },
@@ -313,7 +304,7 @@ export function PriceChart({
       hoverSecondsRef.current = seconds;
       const index = seconds === null ? -1 : (indexByTimeRef.current.get(seconds) ?? -1);
       // Off the data (or cursor left the chart): fall back to the latest bar.
-      writeLegend(legendRef.current, candles, index === -1 ? candles.length - 1 : index, timeframeRef.current, fmtPxRef.current);
+      writeLegend(legendRef.current, candles, index === -1 ? candles.length - 1 : index, timeframeRef.current, fmtPxRef.current, zoneRef.current);
     });
 
     const resizeObserver = new ResizeObserver((entries) => {
@@ -340,9 +331,8 @@ export function PriceChart({
     setLoading(true);
     setError(null);
 
-    const url = focusDate
-      ? `/api/chart-bars?ticker=${encodeURIComponent(symbol)}&timeframe=${timeframe}&centerDate=${focusDate}`
-      : `/api/chart-bars?ticker=${encodeURIComponent(symbol)}&timeframe=${timeframe}`;
+    const base = `/api/chart-bars?ticker=${encodeURIComponent(symbol)}&timeframe=${timeframe}&adjustment=${adjustment}`;
+    const url = focusDate ? `${base}&centerDate=${focusDate}` : base;
 
     fetch(url)
       .then(async (res) => {
@@ -361,7 +351,7 @@ export function PriceChart({
     return () => {
       cancelled = true;
     };
-  }, [symbol, timeframe, focusDate]);
+  }, [symbol, timeframe, focusDate, adjustment]);
 
   // Push candles/volume/SMA20/SMA50 when the data changes. The SMA toggles only show or hide a series (next effect), so
   // clicking one no longer resends all the data or resets the user's zoom (audit F5).
@@ -547,7 +537,7 @@ export function PriceChart({
             lineWidth: 2,
             lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
-            title: "POC",
+            title: "POC (est.)",
           })
         );
       }
@@ -559,7 +549,7 @@ export function PriceChart({
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: "VAH",
+            title: "VAH (est.)",
           })
         );
       }
@@ -571,7 +561,7 @@ export function PriceChart({
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: "VAL",
+            title: "VAL (est.)",
           })
         );
       }
@@ -709,6 +699,16 @@ export function PriceChart({
         ))}
       </div>
 
+      <ChartHeader
+        meta={data?.meta ?? null}
+        zone={zone}
+        intraday={intraday}
+        adjustable={data?.meta ? data.meta.provider === "Alpaca" : assetClass === "equity"}
+        adjustment={adjustment}
+        onAdjustmentChange={setAdjustment}
+        loading={loading}
+      />
+
       <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: "var(--text-1)" }}>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={showSma20} onChange={(e) => setShowSma20(e.target.checked)} />
@@ -728,9 +728,10 @@ export function PriceChart({
         </summary>
         <div className="flex flex-wrap gap-3 mt-2 text-xs" style={{ color: "var(--text-1)" }}>
           {OVERLAY_INDICATORS.map((o) => (
-            <label key={o.id} className="flex items-center gap-1.5">
+            <label key={o.id} className="flex items-center gap-1.5" title={o.description}>
               <input type="checkbox" checked={enabledOverlays.has(o.id)} onChange={() => toggleOverlay(o.id)} />
               {o.label}
+              {o.estimate && <span className="jv-badge c-neutral" style={{ padding: "0 5px" }} title={o.estimate}>estimate</span>}
             </label>
           ))}
         </div>
@@ -742,9 +743,10 @@ export function PriceChart({
         </summary>
         <div className="flex flex-wrap gap-3 mt-2 text-xs" style={{ color: "var(--text-1)" }}>
           {OSCILLATOR_INDICATORS.map((o) => (
-            <label key={o.id} className="flex items-center gap-1.5">
+            <label key={o.id} className="flex items-center gap-1.5" title={o.description}>
               <input type="checkbox" checked={enabledOscillators.has(o.id)} onChange={() => toggleOscillator(o.id)} />
               {o.label}
+              {o.estimate && <span className="jv-badge c-neutral" style={{ padding: "0 5px" }} title={o.estimate}>estimate</span>}
             </label>
           ))}
         </div>
@@ -764,7 +766,7 @@ export function PriceChart({
       )}
 
       <div style={{ position: "relative" }}>
-        <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)" }} />
+        <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)", minHeight: 420 }} />
 
         <div
           ref={legendRef}
@@ -854,9 +856,17 @@ export function PriceChart({
         )}
       </div>
 
+      <ActiveLegend
+        feed={data?.meta?.feed ?? null}
+        adjustment={data?.meta?.adjustment ?? null}
+        showSma20={showSma20}
+        showSma50={showSma50}
+        activeIds={[...INDICATORS.filter((d) => enabledOverlays.has(d.id) || enabledOscillators.has(d.id)).map((d) => d.id)]}
+      />
+
       {volumeProfileSummary && volumeProfileSummary.poc !== null && (
         <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>
-          Volume Profile (approximated from OHLCV bars, not true tick-level data) — POC{" "}
+          Volume Profile (estimate: approximated from OHLCV bars, not true tick-level data) — POC{" "}
           {volumeProfileSummary.poc.toFixed(2)}, Value Area {volumeProfileSummary.val?.toFixed(2)}–
           {volumeProfileSummary.vah?.toFixed(2)}.
         </p>

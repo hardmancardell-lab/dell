@@ -10,6 +10,8 @@ import * as alpaca from "../../src/lib/data/alpaca.ts";
 import * as md from "../../src/lib/data/market-data.ts";
 import { parseBarAdjustment, DEFAULT_BAR_ADJUSTMENT } from "../../src/lib/data/market-data-types.ts";
 import { getChartBars } from "../../src/lib/agents/trading-agent/skills/chart-bars.ts";
+import { formatBarLabel, formatTick, zoneForProvider } from "../../src/lib/chart/timeformat.ts";
+import { INDICATORS, computeIndicator, indicatorDef } from "../../src/lib/chart/indicators.ts";
 import { deriveChartMeta, describeFeed, describeAdjustment, volumeLegendLabel, formatAge, barMsFromTimeframe, isLikelyLiveEquitySession } from "../../src/lib/chart/meta.ts";
 
 const { t, summary } = makeT();
@@ -144,6 +146,33 @@ t("market-data timeframe passes all through", param(calls[0].url, "adjustment") 
   t("no bars: asOf null, feed null, nothing invented", none.asOf === null && none.feed === null && none.delayed === null);
   t("asOf is the bar END (open + bar length)", live.asOf === wed11et - 5 * 60000 + 300000);
   t("formatAge", formatAge(10_000) === "just now" && formatAge(5 * 60000) === "5 min ago" && formatAge(3 * 3600000) === "3 h ago" && formatAge(2 * DAY) === "2 d ago" && formatAge(NaN) === "just now");
+}
+
+// ---------------------------------------------------------------- 3. time zone labels and the indicator catalogue
+{
+  const sec = Date.UTC(2026, 9, 14, 13, 35, 0) / 1000; // 09:35 ET
+  t("formatBarLabel intraday names the zone and shows ET clock time", formatBarLabel(sec, "America/New_York", true) === "2026-10-14 09:35 ET", formatBarLabel(sec, "America/New_York", true));
+  t("formatBarLabel in UTC", formatBarLabel(sec, "UTC", true) === "2026-10-14 13:35 UTC");
+  t("formatBarLabel daily is the date only", formatBarLabel(sec, "UTC", false) === "2026-10-14");
+  t("zoneForProvider: Alpaca is Eastern, everything else UTC", zoneForProvider("Alpaca") === "America/New_York" && zoneForProvider("OANDA") === "UTC" && zoneForProvider(null) === "UTC");
+  t("formatTick time type is HH:MM in the zone", formatTick(sec, 3, "America/New_York") === "09:35" && formatTick(sec, 3, "UTC") === "13:35");
+
+  const candles = Array.from({ length: 120 }, (_, i) => {
+    const c = 100 + Math.sin(i / 7) * 5 + i * 0.1;
+    return { datetime: Date.UTC(2026, 0, 1) + i * 86_400_000, open: c - 0.5, high: c + 1, low: c - 1, close: c, volume: 1000 + i };
+  });
+  const lengths = INDICATORS.map((d) => ({ id: d.id, out: computeIndicator(d.id, candles) }));
+  t("every catalogue indicator computes", lengths.every((x) => x.out.series.length > 0 || x.out.levels.length > 0));
+  t(
+    "every series spec has one value per bar (alignment)",
+    lengths.every((x) => x.out.series.every((s) => s.values.length === candles.length)),
+    lengths.filter((x) => x.out.series.some((s) => s.values.length !== candles.length)).map((x) => x.id).join(",")
+  );
+  t("estimated overlays carry an estimate reason: volume profile and VWAP", Boolean(indicatorDef("volumeProfile")?.estimate) && Boolean(indicatorDef("vwap")?.estimate));
+  t("volume profile levels are titled as estimates", computeIndicator("volumeProfile", candles).levels.every((l) => /est\./.test(l.title)));
+  t("plain price averages are not tagged as estimates", !indicatorDef("ema20")?.estimate && !indicatorDef("rsi")?.estimate);
+  t("unknown indicator id gives an empty output", computeIndicator("nope", candles).series.length === 0);
+  t("ids are unique", new Set(INDICATORS.map((d) => d.id)).size === INDICATORS.length);
 }
 
 summary();

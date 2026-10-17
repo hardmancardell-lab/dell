@@ -46,18 +46,28 @@ export function barMsFromTimeframe(timeframe: string | null | undefined): number
   }
 }
 
+// One cached formatter: constructing Intl.DateTimeFormat per bar is very slow (hundreds of ms for a few thousand bars).
+const ET_PARTS = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 /** Minutes since midnight and weekday (0 = Sunday) in America/New_York for an instant. */
 export function easternClock(ms: number): { weekday: number; minutes: number } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(ms));
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday"));
-  return { weekday, minutes: Number(get("hour")) * 60 + Number(get("minute")) };
+  const parts = ET_PARTS.formatToParts(new Date(ms));
+  let weekday = -1;
+  let hour = 0;
+  let minute = 0;
+  for (const p of parts) {
+    if (p.type === "weekday") weekday = WEEKDAYS.indexOf(p.value);
+    else if (p.type === "hour") hour = Number(p.value);
+    else if (p.type === "minute") minute = Number(p.value);
+  }
+  return { weekday, minutes: hour * 60 + minute };
 }
 
 /** True during US regular hours on a weekday (09:45 to 15:45 ET, trimmed so open and close jitter is not flagged). Holidays are not known. */
