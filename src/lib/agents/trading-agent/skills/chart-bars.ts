@@ -1,12 +1,15 @@
-import { fetchBarsForTimeframe } from "@/lib/data/market-data";
+import { classifySymbol, fetchBarsForTimeframeDetailed } from "@/lib/data/market-data";
 import { TIMEFRAME_PRESETS } from "./timeframe-presets";
-import type { MarketCandle } from "@/lib/data/market-data-types";
+import { deriveChartMeta, type ChartBarsMeta } from "@/lib/chart/meta";
+import { DEFAULT_BAR_ADJUSTMENT, type BarAdjustment, type MarketCandle } from "@/lib/data/market-data-types";
 
 export interface ChartBarsResult {
   symbol: string;
   timeframe: string;
   candles: MarketCandle[];
   dataLimitations: string[];
+  /** Where the bars came from: provider, feed, adjustment, as-of time and delay flag (see src/lib/chart/meta.ts). */
+  meta: ChartBarsMeta;
 }
 
 /**
@@ -14,11 +17,15 @@ export interface ChartBarsResult {
  * window on that date instead of ending at "now" — used to jump a chart
  * straight to a specific historical occurrence (e.g. a backtest trade-log
  * row) rather than always showing the most recent window.
+ *
+ * adjustment: "split" by default so a split is not drawn as a crash. Only equities and ETFs honour it; the result's
+ * meta.adjustment says what was actually applied (null for forex and crypto).
  */
 export async function getChartBars(
   symbol: string,
   timeframeId: string,
-  centerDateKey?: string
+  centerDateKey?: string,
+  adjustment: BarAdjustment = DEFAULT_BAR_ADJUSTMENT
 ): Promise<ChartBarsResult> {
   const preset = TIMEFRAME_PRESETS.find((p) => p.id === timeframeId);
   if (!preset) {
@@ -48,12 +55,21 @@ export async function getChartBars(
     startMs = now - preset.lookbackMs;
     endMs = now;
   }
-  const candles = await fetchBarsForTimeframe(symbol, preset.alpacaTimeframe, startMs, endMs, 60);
+  const result = await fetchBarsForTimeframeDetailed(symbol, preset.alpacaTimeframe, startMs, endMs, 60, { adjustment });
+  for (const w of result.report.warnings) if (!dataLimitations.includes(w)) dataLimitations.push(w);
+  const kind = classifySymbol(symbol).kind;
+  const meta = deriveChartMeta(result.candles, {
+    provider: result.provider ?? null,
+    adjustment: result.adjustment ?? null,
+    timeframe: preset.alpacaTimeframe,
+    assetKind: kind === "equity" || kind === "crypto" || kind === "forex" ? kind : "other",
+  });
 
   return {
     symbol: symbol.trim().toUpperCase(),
     timeframe: timeframeId,
-    candles,
+    candles: result.candles,
     dataLimitations,
+    meta,
   };
 }

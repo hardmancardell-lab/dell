@@ -32,7 +32,7 @@ async function scanPmVolume(symbol: string): Promise<{ snapshot: PmVolumeSnapsho
 async function scanVwapReversion(symbol: string): Promise<{ signal: VwapMeanReversionSignal | null; error: string | null }> {
   try {
     const now = Date.now();
-    const bars = await fetchMinuteBars(symbol, now - 2 * 24 * 60 * 60 * 1000, now, 60);
+    const bars = await fetchMinuteBars(symbol, now - 2 * 24 * 60 * 60 * 1000, now, 60, { adjustment: "raw" }); // live same-day signal: compared with the live price, so unadjusted
     const days = groupCandlesByEasternDay(bars);
     if (days.length === 0) return { signal: null, error: "No recent minute-bar data returned for this symbol." };
 

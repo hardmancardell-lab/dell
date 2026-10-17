@@ -81,9 +81,36 @@ export interface FetchReport {
   synthetic?: boolean;
 }
 
+/**
+ * How historical equity bars are adjusted for corporate actions.
+ * - "raw": prices exactly as traded. Use for paper-order fills and anything compared with a live quote.
+ * - "split": back-adjusted for splits only. The default for charts, studies and backtests, so a 4-for-1 split is
+ *   not a fake 75% crash.
+ * - "all": back-adjusted for splits and dividends (total-return style); older prices come out lower than they traded.
+ * Only Alpaca equity bars honour it; other providers (OANDA forex, Coinbase crypto, Schwab) ignore it.
+ */
+export type BarAdjustment = "raw" | "split" | "all";
+
+export const BAR_ADJUSTMENTS: readonly BarAdjustment[] = ["raw", "split", "all"];
+export const DEFAULT_BAR_ADJUSTMENT: BarAdjustment = "split";
+
+/** Parses a user/query value; anything unknown falls back to `fallback` (never throws, never passes junk to a provider). */
+export function parseBarAdjustment(value: unknown, fallback: BarAdjustment = DEFAULT_BAR_ADJUSTMENT): BarAdjustment {
+  return typeof value === "string" && (BAR_ADJUSTMENTS as readonly string[]).includes(value) ? (value as BarAdjustment) : fallback;
+}
+
+/** Optional trailing argument of every bar fetch. */
+export interface BarFetchOptions {
+  adjustment?: BarAdjustment;
+}
+
 export interface MarketCandlesResult {
   candles: MarketCandle[];
   report: FetchReport;
+  /** The adjustment actually applied by the provider. Absent when the provider has no such concept (forex, crypto). */
+  adjustment?: BarAdjustment;
+  /** Provider that answered, for example "Alpaca", "OANDA", "Coinbase". */
+  provider?: string;
 }
 
 /** Real bid/ask close at a point in time — forex only today (via OANDA). */

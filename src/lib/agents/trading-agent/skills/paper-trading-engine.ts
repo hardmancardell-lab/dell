@@ -704,7 +704,7 @@ async function evaluateOrder(order: PaperOrder): Promise<{ filled: boolean; canc
   const rawBars =
     order.assetClass === "crypto"
       ? await fetchBarsForTimeframe(order.symbol, CRYPTO_ORDER_CHECK_TIMEFRAME, startMs, endMs, 60)
-      : await fetchMinuteBars(order.symbol, startMs, endMs, 60);
+      : await fetchMinuteBars(order.symbol, startMs, endMs, 60, { adjustment: "raw" }); // fills must use the prices actually traded, never back-adjusted ones
   const bars = [...rawBars].sort((a, b) => a.datetime - b.datetime);
 
   let fillPrice: number | null = null;

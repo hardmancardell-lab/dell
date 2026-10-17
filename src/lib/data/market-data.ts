@@ -11,6 +11,7 @@ import {
 } from "./schwab-mock";
 import { aggregateCandles } from "../agents/trading-agent/skills/candle-aggregation";
 import type {
+  BarFetchOptions,
   MarketBidAsk,
   MarketCandle,
   MarketCandlesResult,
@@ -143,14 +144,15 @@ export async function fetchMinuteBars(
   symbol: string,
   startDateMs: number,
   endDateMs: number,
-  revalidateSeconds: number
+  revalidateSeconds: number,
+  opts: BarFetchOptions = {}
 ): Promise<MarketCandle[]> {
   if (isMockMode()) return synthCandles(generateMockMinuteBars(symbol, startDateMs, endDateMs));
   const c = routeOrThrow(symbol);
   if (c.kind === "crypto") return coinbase.fetchMinuteBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
   if (c.kind === "forex") return oanda.fetchMinuteBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
   return getProvider() === "alpaca"
-    ? alpaca.fetchMinuteBars(c.symbol, startDateMs, endDateMs, revalidateSeconds)
+    ? alpaca.fetchMinuteBars(c.symbol, startDateMs, endDateMs, revalidateSeconds, opts)
     : schwab.fetchMinuteBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
 }
 
@@ -158,14 +160,15 @@ export async function fetchDailyBars(
   symbol: string,
   startDateMs: number,
   endDateMs: number,
-  revalidateSeconds: number
+  revalidateSeconds: number,
+  opts: BarFetchOptions = {}
 ): Promise<MarketCandle[]> {
   if (isMockMode()) return synthCandles(generateMockDailyBars(symbol, startDateMs, endDateMs));
   const c = routeOrThrow(symbol);
   if (c.kind === "crypto") return coinbase.fetchDailyBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
   if (c.kind === "forex") return oanda.fetchDailyBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
   return getProvider() === "alpaca"
-    ? alpaca.fetchDailyBars(c.symbol, startDateMs, endDateMs, revalidateSeconds)
+    ? alpaca.fetchDailyBars(c.symbol, startDateMs, endDateMs, revalidateSeconds, opts)
     : schwab.fetchDailyBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
 }
 
@@ -186,9 +189,10 @@ export async function fetchBarsForTimeframe(
   timeframe: string,
   startMs: number,
   endMs: number,
-  revalidateSeconds: number
+  revalidateSeconds: number,
+  opts: BarFetchOptions = {}
 ): Promise<MarketCandle[]> {
-  return (await fetchBarsForTimeframeDetailed(symbol, timeframe, startMs, endMs, revalidateSeconds)).candles;
+  return (await fetchBarsForTimeframeDetailed(symbol, timeframe, startMs, endMs, revalidateSeconds, opts)).candles;
 }
 
 /** Same as fetchBarsForTimeframe, plus what was cleaned or truncated (dropped counts, warnings) and whether the data is synthetic. */
@@ -197,7 +201,8 @@ export async function fetchBarsForTimeframeDetailed(
   timeframe: string,
   startMs: number,
   endMs: number,
-  revalidateSeconds: number
+  revalidateSeconds: number,
+  opts: BarFetchOptions = {}
 ): Promise<MarketCandlesResult> {
   const bucketMs = parseTimeframeMs(timeframe);
 
@@ -215,15 +220,15 @@ export async function fetchBarsForTimeframeDetailed(
   const c = routeOrThrow(symbol);
 
   if (c.kind === "crypto") {
-    return { candles: await coinbase.fetchBarsForBucket(c.symbol, bucketMs, startMs, endMs, revalidateSeconds), report: emptyReport() };
+    return { candles: await coinbase.fetchBarsForBucket(c.symbol, bucketMs, startMs, endMs, revalidateSeconds), report: emptyReport(), provider: "Coinbase" };
   }
 
   if (c.kind === "forex") {
-    return oanda.fetchBarsForTimeframeDetailed(c.symbol, timeframe, startMs, endMs, revalidateSeconds);
+    return { provider: "OANDA", ...(await oanda.fetchBarsForTimeframeDetailed(c.symbol, timeframe, startMs, endMs, revalidateSeconds)) };
   }
 
   if (getProvider() === "alpaca") {
-    return alpaca.fetchBarsForTimeframeDetailed(c.symbol, timeframe, startMs, endMs, revalidateSeconds);
+    return alpaca.fetchBarsForTimeframeDetailed(c.symbol, timeframe, startMs, endMs, revalidateSeconds, opts);
   }
 
   // Schwab has no arbitrary-timeframe endpoint — use whichever of its two
@@ -232,7 +237,7 @@ export async function fetchBarsForTimeframeDetailed(
     bucketMs < DAY_MS
       ? await schwab.fetchMinuteBars(c.symbol, startMs, endMs, revalidateSeconds)
       : await schwab.fetchDailyBars(c.symbol, startMs, endMs, revalidateSeconds);
-  return { candles: aggregateCandles(raw, bucketMs), report: emptyReport() };
+  return { candles: aggregateCandles(raw, bucketMs), report: emptyReport(), provider: "Schwab" };
 }
 
 /**

@@ -36,7 +36,7 @@ export async function runSignalScan(ticker: string, params: Partial<BandParams> 
   const symbol = ticker.trim().toUpperCase();
   const kind = assetKindOf(symbol);
   const startMs = nowMs - SCAN_CALENDAR_DAYS * 24 * 60 * 60 * 1000;
-  const candles = await fetchBarsForTimeframe(symbol, "5Min", startMs, nowMs, LIVE_REVALIDATE_SECONDS);
+  const candles = await fetchBarsForTimeframe(symbol, "5Min", startMs, nowMs, LIVE_REVALIDATE_SECONDS, { adjustment: "raw" }); // live signal log: unadjusted, like the live quote it is compared with
   if (candles.length === 0) throw new Error(`No 5-minute bars returned for ${symbol}. Check the symbol (forex uses the EUR/USD form).`);
 
   const scan = scanSignals(candles, symbol, kind, nowMs, params);

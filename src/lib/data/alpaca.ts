@@ -1,5 +1,7 @@
-import { NoPriceError, isUsablePrice, DELAYED_AFTER_MS } from "./market-data-types";
+import { NoPriceError, isUsablePrice, DELAYED_AFTER_MS, DEFAULT_BAR_ADJUSTMENT, parseBarAdjustment } from "./market-data-types";
 import type {
+  BarAdjustment,
+  BarFetchOptions,
   MarketCandle,
   MarketCandlesResult,
   MarketOptionContract,
@@ -95,9 +97,13 @@ async function fetchBars(
   timeframe: string,
   startMs: number,
   endMs: number,
-  revalidateSeconds: number
+  revalidateSeconds: number,
+  adjustment: BarAdjustment = DEFAULT_BAR_ADJUSTMENT
 ): Promise<MarketCandlesResult> {
   const sym = normalizeSymbol(symbol);
+  // Validated here too: a bad value must never reach the URL. The adjustment is part of the URL, so Next's data cache
+  // keeps raw / split / all responses apart.
+  const adj = parseBarAdjustment(adjustment);
   // Snap the window to the cache window so equal requests build an identical URL and the fetch cache can hit.
   const win = snapWindow(startMs, endMs, revalidateSeconds);
   const raw: MarketCandle[] = [];
@@ -111,7 +117,7 @@ async function fetchBars(
       start: new Date(win.startMs).toISOString(),
       end: new Date(win.endMs).toISOString(),
       feed: "iex", // only feed available on the free/Basic plan
-      adjustment: "raw",
+      adjustment: adj, // "raw" | "split" | "all": see BarAdjustment; the caller chooses, the default is split
       sort: "desc", // newest first: a pagination cap can only ever lose the oldest bars
       limit: "10000",
     };
@@ -140,7 +146,7 @@ async function fetchBars(
     );
   }
   logReport(report);
-  return { candles, report };
+  return { candles, report, adjustment: adj, provider: "Alpaca" };
 }
 
 /**
@@ -154,18 +160,20 @@ export async function fetchMinuteBars(
   symbol: string,
   startDateMs: number,
   endDateMs: number,
-  revalidateSeconds: number
+  revalidateSeconds: number,
+  opts: BarFetchOptions = {}
 ): Promise<MarketCandle[]> {
-  return (await fetchBars(symbol, "1Min", startDateMs, endDateMs, revalidateSeconds)).candles;
+  return (await fetchBars(symbol, "1Min", startDateMs, endDateMs, revalidateSeconds, opts.adjustment)).candles;
 }
 
 export async function fetchDailyBars(
   symbol: string,
   startDateMs: number,
   endDateMs: number,
-  revalidateSeconds: number
+  revalidateSeconds: number,
+  opts: BarFetchOptions = {}
 ): Promise<MarketCandle[]> {
-  return (await fetchBars(symbol, "1Day", startDateMs, endDateMs, revalidateSeconds)).candles;
+  return (await fetchBars(symbol, "1Day", startDateMs, endDateMs, revalidateSeconds, opts.adjustment)).candles;
 }
 
 /** Arbitrary-timeframe entry point for chart-bars.ts — same underlying fetchBars as above. */
@@ -174,9 +182,10 @@ export async function fetchBarsForTimeframe(
   timeframe: string,
   startMs: number,
   endMs: number,
-  revalidateSeconds: number
+  revalidateSeconds: number,
+  opts: BarFetchOptions = {}
 ): Promise<MarketCandle[]> {
-  return (await fetchBars(symbol, timeframe, startMs, endMs, revalidateSeconds)).candles;
+  return (await fetchBars(symbol, timeframe, startMs, endMs, revalidateSeconds, opts.adjustment)).candles;
 }
 
 /** Same as fetchBarsForTimeframe but also returns what was cleaned or truncated (dropped counts, warnings). */
@@ -185,9 +194,10 @@ export async function fetchBarsForTimeframeDetailed(
   timeframe: string,
   startMs: number,
   endMs: number,
-  revalidateSeconds: number
+  revalidateSeconds: number,
+  opts: BarFetchOptions = {}
 ): Promise<MarketCandlesResult> {
-  return fetchBars(symbol, timeframe, startMs, endMs, revalidateSeconds);
+  return fetchBars(symbol, timeframe, startMs, endMs, revalidateSeconds, opts.adjustment);
 }
 
 interface AlpacaSnapshotResponse {
