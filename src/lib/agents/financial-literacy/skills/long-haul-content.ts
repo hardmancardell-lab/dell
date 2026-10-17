@@ -44,7 +44,10 @@ export const TRAILER = {
   maxSpeedMult: 0.68,
   turnRateMult: 0.65,
   accelMult: 0.6,
-  lagFrames: 14,
+  // History-buffer lag used to position the trailer mesh behind the car.
+  // 14 read as nearly glued to the car body in practice (confirmed by
+  // actually watching it drive) — raised for a visibly separate trailer.
+  lagFrames: 34,
 };
 
 export const ECONOMY = {

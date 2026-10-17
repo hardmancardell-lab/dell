@@ -18,9 +18,10 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
-  const [hud, setHud] = useState<LongHaulHud>({ speedMph: 0, fuel: 100, tollPaid: 0, trailerAttached: false, debt: 0 });
+  const [hud, setHud] = useState<LongHaulHud>({ speedMph: 0, speedFrac: 0, fuel: 100, tollPaid: 0, trailerAttached: false, debt: 0 });
   const [modalOpen, setModalOpen] = useState(false);
   const [summary, setSummary] = useState<LongHaulSummary | null>(null);
+  const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,7 +32,14 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
       try {
         const { LongHaulEngine } = await import("./long-haul-engine");
         if (cancelled) return;
-        const engine = new LongHaulEngine(container, {
+        // The wrapper around `container` is display:none until status flips
+        // to "ready" (below), so if the engine measures container.clientWidth/
+        // Height at construction time it reads 0x0 and the renderer never
+        // recovers — confirmed by actually loading this in a browser: the
+        // canvas existed but was 0x0 and nothing ever painted. Passing the
+        // known fixed size explicitly removes the race instead of patching
+        // around display timing.
+        const engine = new LongHaulEngine(container, CANVAS_WIDTH, CANVAS_HEIGHT, {
           onHud: (h) => setHud(h),
           onLoanPrompt: () => setModalOpen(true),
           onFinish: (s) => {
@@ -72,6 +80,22 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
     engineRef.current?.reset();
   }
 
+  function toggleMute() {
+    setMuted((m) => {
+      const next = !m;
+      engineRef.current?.setMuted(next);
+      return next;
+    });
+  }
+
+  // Semicircle speedometer, 0 at left (180°) to max at right (0°) — see
+  // long-haul-engine.ts's onHud callback for speedFrac.
+  const ARC_RADIUS = 40;
+  const ARC_LENGTH = Math.PI * ARC_RADIUS;
+  const needleAngleRad = ((180 - hud.speedFrac * 180) * Math.PI) / 180;
+  const needleX = 50 + 32 * Math.cos(needleAngleRad);
+  const needleY = 50 - 32 * Math.sin(needleAngleRad);
+
   if (status === "error") {
     return (
       <div className="text-sm py-3" style={{ color: "var(--verdict)" }}>
@@ -91,6 +115,17 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
           style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, maxWidth: "100%", borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)" }}
         />
 
+        {/* Speed-sensation vignette — darkens and tightens toward the edges as
+            speed climbs, a standard arcade-racer cue a static camera alone
+            can't convey. Pure CSS, no post-processing pipeline needed. */}
+        <div
+          style={{
+            position: "absolute", inset: 0, pointerEvents: "none", borderRadius: 8,
+            boxShadow: `inset 0 0 ${40 + hud.speedFrac * 90}px ${8 + hud.speedFrac * 18}px rgba(0,0,0,${0.15 + hud.speedFrac * 0.4})`,
+            transition: "box-shadow 0.15s linear",
+          }}
+        />
+
         {/* HUD overlay */}
         <div
           style={{
@@ -98,7 +133,27 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
             background: "rgba(10,12,16,0.6)", color: "var(--text-0)", fontSize: 12, minWidth: 170, pointerEvents: "none",
           }}
         >
-          <div className="flex justify-between"><span>Speed</span><span>{hud.speedMph}</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <svg viewBox="0 0 100 58" width={90} height={52}>
+              <path d="M10,50 A40,40 0 0 1 90,50" fill="none" stroke="var(--ink-700)" strokeWidth={6} strokeLinecap="round" />
+              <path
+                d="M10,50 A40,40 0 0 1 90,50"
+                fill="none"
+                stroke={hud.speedFrac > 0.85 ? "var(--verdict)" : "var(--signal)"}
+                strokeWidth={6}
+                strokeLinecap="round"
+                strokeDasharray={ARC_LENGTH}
+                strokeDashoffset={ARC_LENGTH * (1 - hud.speedFrac)}
+                style={{ transition: "stroke-dashoffset 0.1s linear" }}
+              />
+              <line x1={50} y1={50} x2={needleX} y2={needleY} stroke="var(--text-0)" strokeWidth={2} strokeLinecap="round" />
+              <circle cx={50} cy={50} r={3} fill="var(--text-0)" />
+              <text x={50} y={44} textAnchor="middle" fontSize={13} fontWeight={700} fill="var(--text-0)">
+                {hud.speedMph}
+              </text>
+            </svg>
+            <div style={{ fontSize: 10, color: "var(--text-2)" }}>mph</div>
+          </div>
           <div className="flex justify-between"><span>Fuel</span><span>{hud.fuel}</span></div>
           <div style={{ height: 6, borderRadius: 3, background: "var(--ink-700)", overflow: "hidden", margin: "4px 0 6px" }}>
             <div style={{ height: "100%", width: `${hud.fuel}%`, background: hud.fuel < 40 ? "var(--verdict)" : "var(--signal)" }} />
@@ -108,6 +163,14 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
             <div className="flex justify-between" style={{ color: "var(--verdict)" }}><span>Trailer debt</span><span>${hud.debt}</span></div>
           )}
         </div>
+
+        <button
+          onClick={toggleMute}
+          className="jv-btn-outline"
+          style={{ position: "absolute", top: 10, right: 10, padding: "4px 10px", fontSize: 11 }}
+        >
+          Sound: {muted ? "Off" : "On"}
+        </button>
 
         <div
           style={{
