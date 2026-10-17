@@ -35,6 +35,13 @@ interface DashboardResponse {
   washSaleFlags: WashSaleFlag[];
 }
 
+/** "as of 10:32 AM ET" text for the price notice, from the quote times the providers returned (not the page-load time). */
+function priceAsOfText(oldest: number | null | undefined, delayed: boolean | undefined): string {
+  if (typeof oldest !== "number") return "Quote times were not provided by the data source for these prices.";
+  const when = new Date(oldest).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return `The oldest price shown is as of ${when} ET${delayed ? " and some prices are delayed" : ""}.`;
+}
+
 export function ClientDashboardView({ slug }: { slug: string }) {
   const [state, setState] = useState<"loading" | "needs-passcode" | "ready" | "not-found" | "load-error">("loading");
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -159,7 +166,11 @@ export function ClientDashboardView({ slug }: { slug: string }) {
 
         <div className="jv-card" style={{ borderColor: "var(--signal-dim)" }}>
           <div className="text-xs" style={{ color: "var(--signal)" }}>
-            Prices and values on this page reflect real-time market data, refreshed each time you load this page — not delayed or simulated figures.
+            Prices are fetched each time you load this page and are shown as of the quote time given by the data source. They may be delayed,
+            and a price that could not be fetched is shown as unavailable and left out of the totals. {priceAsOfText(summary?.oldestPriceAsOf, summary?.anyPriceDelayed)}
+            {summary && (summary.unpricedCount ?? 0) > 0 && (
+              <span style={{ color: "var(--danger)" }}> {summary.unpricedCount} holding(s) have no price right now and are excluded from the totals.</span>
+            )}
           </div>
         </div>
 

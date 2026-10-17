@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { PaperOrderForm } from "./PaperOrderForm";
+import { PaperBadge, ResearchNotice } from "./ResearchNotice";
 import { StatCard } from "./StatCard";
 import { formatOptionLabel } from "@/lib/agents/trading-agent/skills/option-symbol";
 import type { PaperAccountSummary, PaperOptionFields } from "@/lib/agents/trading-agent/types";
@@ -128,11 +129,17 @@ export function PaperTradingTab() {
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <div>
+        <PaperBadge />
+      </div>
       <p className="jv-lede" style={{ marginBottom: 0 }}>
-        A long-only paper trading simulator on real quotes and real intraday price action — market, limit, stop,
-        stop-limit, and trailing-stop orders, real slippage, and real SEC/FINRA regulatory fees on sells. No fake
-        fills: limit/stop orders only execute when a real bar&apos;s high or low actually crosses the trigger level.
+        A long-only PAPER trading simulator: no real money and no real orders. It uses market quotes (which may be delayed) and
+        intraday price action — market, limit, stop, stop-limit, and trailing-stop orders, modeled slippage, and modeled SEC/FINRA
+        regulatory fees on sells. Limit/stop orders only fill in the simulation when a bar&apos;s high or low crosses the trigger level.
       </p>
+      <ResearchNotice source="market-data quotes and bars" hypothetical>
+        Simulated fills are an approximation of what a real broker would do and will differ from real trading.
+      </ResearchNotice>
 
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Total Equity" value={fmtUsd(summary.totalEquity)} />
@@ -161,7 +168,7 @@ export function PaperTradingTab() {
       <section>
         <div className="flex items-center justify-between gap-4 mb-3">
           <div className="jv-strip-title" style={{ marginBottom: 0 }}>
-            Place Order
+            Place Paper Order (simulated)
           </div>
         </div>
         <PaperOrderForm sessionId={sessionId} onFilled={() => loadAccount(sessionId)} />
@@ -210,15 +217,16 @@ export function PaperTradingTab() {
       <section>
         <div className="flex items-center justify-between gap-4 mb-3">
           <div className="jv-strip-title" style={{ marginBottom: 0 }}>
-            Open Orders
+            Open Paper Orders
           </div>
           <button
             onClick={handleCheckOrders}
             disabled={checking}
+            aria-label="Check open paper orders against recent prices"
             className="shrink-0 px-3 py-1 text-xs font-medium disabled:opacity-50"
             style={{ border: "1px solid var(--line-bright)", color: "var(--text-1)" }}
           >
-            {checking ? "Checking…" : "Check Orders"}
+            {checking ? "Checking…" : "Check Paper Orders"}
           </button>
         </div>
         {checkResultMsg && (
@@ -263,6 +271,7 @@ export function PaperTradingTab() {
                     <td>
                       <button
                         onClick={() => handleCancelOrder(o.id)}
+                        aria-label={`Cancel paper order for ${o.symbol}`}
                         className="text-xs px-2 py-1"
                         style={{ border: "1px solid var(--line-bright)", color: "var(--danger)" }}
                       >
@@ -278,7 +287,7 @@ export function PaperTradingTab() {
       </section>
 
       <section>
-        <div className="jv-strip-title">Recent Fills</div>
+        <div className="jv-strip-title">Recent Paper Fills (simulated)</div>
         {summary.recentFills.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-2)" }}>
             No fills yet.

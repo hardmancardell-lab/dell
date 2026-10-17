@@ -48,6 +48,13 @@ interface MyPortfolioResponse {
   washSaleFlags?: WashSaleFlag[];
 }
 
+/** "as of 10:32 AM ET" text for the price notice, from the quote times the providers returned (not the page-load time). */
+function priceAsOfText(oldest: number | null | undefined, delayed: boolean | undefined): string {
+  if (typeof oldest !== "number") return "Quote times were not provided by the data source for these prices.";
+  const when = new Date(oldest).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return `The oldest price shown is as of ${when} ET${delayed ? " and some prices are delayed" : ""}.`;
+}
+
 export function PortfolioDashboardTab() {
   const local = usePortfolio();
   const localRealized = useRealizedPnl();
@@ -282,15 +289,15 @@ export function PortfolioDashboardTab() {
           <div>
             <div className="text-xs uppercase tracking-wide" style={{ color: "var(--text-2)" }}>Managed by your advisor</div>
             <p className="jv-lede" style={{ marginBottom: 0 }}>
-              {linkedClientName}&apos;s starting allocation is pre-loaded here. Prices and values reflect real-time
-              market data, refreshed each time you load this page. You can add your own holdings alongside it, same
+              {linkedClientName}&apos;s starting allocation is pre-loaded here. Prices are fetched each time you load this page and are
+              shown as of the quote time; they may be delayed, and a price that could not be fetched is left out of the totals. {priceAsOfText(summary?.oldestPriceAsOf, summary?.anyPriceDelayed)} You can add your own holdings alongside it, same
               as any investor using this tracker.
             </p>
           </div>
         </>
       ) : (
         <p className="jv-lede" style={{ marginBottom: 0 }}>
-          Manually track real holdings — shares, cost basis, and acquisition date — valued against live market data
+          Manually track real holdings — shares, cost basis, and acquisition date — valued against market data that may be delayed (each price is as of its quote time)
           (same real providers as the rest of this app: Alpaca for equities, OANDA for forex, Coinbase for crypto, which can be held in fractions). No brokerage account
           linking; this is a read-only tracker, consistent with the rest of this app&apos;s data-and-analysis-only scope.
         </p>
@@ -562,6 +569,11 @@ export function PortfolioDashboardTab() {
 
       {summary && (
         <div className="flex flex-col gap-6">
+          {(summary.unpricedCount ?? 0) > 0 && (
+            <div className="jv-card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }} role="alert">
+              Price unavailable for {summary.unpricedCount} holding(s). They are excluded from Total Value, Cost Basis and gain/loss below, which cover the priced holdings only.
+            </div>
+          )}
           {mode === "local" && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <StatCard label="Total Value" value={fmtUsd(summary.totalValue)} />
