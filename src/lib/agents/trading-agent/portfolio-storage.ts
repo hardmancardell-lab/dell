@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { normalizeSymbolForClass, roundCryptoQuantity } from "./crypto-symbol";
+import { computeRealizedPnl, remainingQuantity, validateSaleInputs } from "./skills/realized-pnl";
 import type { AssetClass, PortfolioHolding, RealizedSale } from "./types";
 
 const STORAGE_KEY = "trading-agent-portfolio";
@@ -125,11 +126,13 @@ export function usePortfolio() {
    */
   const sellHolding = useCallback(
     (holdingId: string, sharesSold: number, salePricePerShare: number, fee: number, saleDate: string): RealizedSale | null => {
-      if (sharesSold <= 0) return null;
+      // NaN, Infinity and negative inputs are rejected: they used to write a NaN P&L row and a NaN lot.
+      if (validateSaleInputs(sharesSold, salePricePerShare, fee) !== null) return null;
       const holding = readStoredPortfolio().find((h) => h.id === holdingId);
       if (!holding || sharesSold > holding.shares) return null;
 
-      const realizedPnl = (salePricePerShare - holding.costBasisPerShare) * sharesSold - fee;
+      // Options (x100) and futures (contract multiplier) are scaled exactly as their unrealized P&L is.
+      const realizedPnl = computeRealizedPnl(holding, sharesSold, salePricePerShare, fee);
       const sale: RealizedSale = {
         id: crypto.randomUUID(),
         symbol: holding.symbol,
@@ -144,10 +147,9 @@ export function usePortfolio() {
       const nextSales = [sale, ...readStoredRealizedPnl()];
       window.localStorage.setItem(REALIZED_PNL_STORAGE_KEY, JSON.stringify(nextSales));
 
-      // Fractional coins leave float noise behind (0.3 - 0.1 - 0.2 is not 0), which would strand a dust lot that can
-      // never be sold; crypto quantities are kept to 8 decimals.
-      const remainingRaw = holding.shares - sharesSold;
-      const remaining = holding.assetClass === "crypto" ? roundCryptoQuantity(remainingRaw) : remainingRaw;
+      // Fractional quantities leave float noise behind (0.3 - 0.1 - 0.2 is not 0), which would strand a dust lot that can
+      // never be sold; quantities are kept to 8 decimals for every asset class.
+      const remaining = remainingQuantity(holding.shares, sharesSold);
       const next =
         remaining === 0
           ? readStoredPortfolio().filter((h) => h.id !== holdingId)

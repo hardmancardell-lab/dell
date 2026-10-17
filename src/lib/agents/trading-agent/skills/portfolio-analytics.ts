@@ -2,7 +2,9 @@ import { getDailyBars } from "./daily-bars";
 import { fetchQuote } from "@/lib/data/market-data";
 import { getCurrentRiskFreeRate } from "./options-calculator";
 import { valuatePortfolio } from "./portfolio-valuation";
-import { correlation, covariance, linearRegression, maxDrawdownFromReturns, mean, stdDev } from "../stats";
+import { correlation, covariance, linearRegression, maxDrawdownFromReturns, mean, median, stdDev } from "../stats";
+import { mulberry32, seedFromValues } from "./stats-tests";
+import { minimumVariance, tangencyPortfolio } from "./portfolio-optimizer";
 import type {
   CorrelationMatrixResult,
   EfficientFrontierPoint,
@@ -26,6 +28,10 @@ const TRADING_DAYS_PER_YEAR = 252;
 // Fallback only — used if the live FRED fetch fails, never presented as a live rate.
 const FALLBACK_ANNUAL_RISK_FREE_RATE = 0.04;
 const MIN_OVERLAPPING_DAYS = 30;
+/** Most distinct non-crypto symbols analysed in one request: runtime and response size grow with the square of this (500 assets took 16 s and 34 MB). */
+export const MAX_ANALYTICS_ASSETS = 40;
+/** A symbol whose return history is shorter than this share of the typical symbol is left out of the joint analysis and named. */
+const SHORT_HISTORY_SHARE = 0.6;
 // A simple, stated heuristic on annualized volatility — not a universal
 // standard, just a reasonable equity-market rule of thumb (broad index
 // funds run ~12-18%, individual growth/momentum names often 35%+).
@@ -45,26 +51,34 @@ export interface SymbolReturns {
   symbol: string;
   returnsByDate: Map<string, number>;
   error: string | null;
+  /** Daily returns skipped because a close was missing, not a number, or not above zero. */
+  droppedReturns?: number;
 }
 
 export async function fetchReturnsFor(symbol: string): Promise<SymbolReturns> {
   try {
     const bars = await getDailyBars(symbol, LOOKBACK_DAYS);
     const returnsByDate = new Map<string, number>();
+    let droppedReturns = 0;
     for (let i = 1; i < bars.length; i++) {
       const prevClose = bars[i - 1].close;
-      if (prevClose === 0) continue;
-      returnsByDate.set(bars[i].dateKey, (bars[i].close - prevClose) / prevClose);
+      const close = bars[i].close;
+      // A NaN, zero or negative close would poison variance, drawdown and VaR without any visible sign: skip and count it.
+      if (!(Number.isFinite(prevClose) && prevClose > 0 && Number.isFinite(close) && close > 0)) {
+        droppedReturns += 1;
+        continue;
+      }
+      returnsByDate.set(bars[i].dateKey, (close - prevClose) / prevClose);
     }
-    return { symbol, returnsByDate, error: null };
+    return { symbol, returnsByDate, error: null, droppedReturns };
   } catch (error) {
     return { symbol, returnsByDate: new Map(), error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
 
-/** Exponential(1)-draw simplex sampling — true Dirichlet(1,...,1), uniform over long-only weights summing to 1. */
-function randomWeights(n: number): number[] {
-  const draws = Array.from({ length: n }, () => -Math.log(Math.random()));
+/** Exponential(1)-draw simplex sampling — true Dirichlet(1,...,1), uniform over long-only weights summing to 1. `rand` is seeded, so the cloud is reproducible. */
+function randomWeights(n: number, rand: () => number): number[] {
+  const draws = Array.from({ length: n }, () => -Math.log(Math.max(rand(), 1e-12)));
   const total = draws.reduce((s, v) => s + v, 0);
   return draws.map((v) => v / total);
 }
@@ -88,13 +102,14 @@ function toPoint(
   weights: number[],
   expectedReturns: number[],
   covMatrix: number[][],
-  annualRiskFreeRate: number
+  annualRiskFreeRate: number,
+  includeWeights = true
 ): EfficientFrontierPoint {
   const expectedReturn = portfolioReturn(weights, expectedReturns);
   const volatility = portfolioVolatility(weights, covMatrix);
   const sharpeRatio = volatility > 0 ? (expectedReturn - annualRiskFreeRate) / volatility : 0;
   const weightsRecord: Record<string, number> = {};
-  symbols.forEach((s, i) => (weightsRecord[s] = weights[i]));
+  if (includeWeights) symbols.forEach((s, i) => (weightsRecord[s] = weights[i]));
   return { weights: weightsRecord, expectedReturn, volatility, sharpeRatio };
 }
 
@@ -104,7 +119,7 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
   }
 
   const dataLimitations: string[] = [
-    `Efficient frontier is a Monte Carlo approximation (${SIMULATIONS} random long-only portfolios), not an exact quadratic-programming solve — the true analytical frontier may sit slightly above the sampled cloud, especially with more holdings.`,
+    `The maximum-Sharpe and minimum-volatility portfolios are exact long-only optimisations (no short sales, weights sum to 1) of the historical mean and covariance, not picks from the scatter. The grey cloud is ${SIMULATIONS} seeded random long-only portfolios, shown for context. Both optima are in-sample: they maximise over about a year of past returns, which overstates what to expect going forward (estimation error), and sample means of one year are very noisy.`,
     `Beta/correlation use ~1 year of daily returns — short-history assumptions apply the same way they do elsewhere in this app (n<${MIN_OVERLAPPING_DAYS * 2} treat as directional only).`,
     `Risk tier is a stated heuristic on annualized volatility (Low <=${RISK_TIER_LOW_MAX}%, Medium <=${RISK_TIER_MEDIUM_MAX}%, High above), not a universal standard.`,
   ];
@@ -114,7 +129,13 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
   // (a Monday stock move spans the weekend, a Monday crypto move does not) and the 252-day annualisation would also
   // understate its volatility. Showing a number that looks precise but is not comparable is worse than showing none.
   const cryptoSymbols = [...new Set(holdings.filter((h) => h.assetClass === "crypto").map((h) => h.symbol))];
-  const uniqueSymbols = [...new Set(holdings.filter((h) => h.assetClass !== "crypto").map((h) => h.symbol))];
+  const allUniqueSymbols = [...new Set(holdings.filter((h) => h.assetClass !== "crypto").map((h) => h.symbol))];
+  const uniqueSymbols = allUniqueSymbols.slice(0, MAX_ANALYTICS_ASSETS);
+  if (allUniqueSymbols.length > MAX_ANALYTICS_ASSETS) {
+    dataLimitations.push(
+      `Too many distinct symbols for one analysis: ${allUniqueSymbols.length} held, the limit is ${MAX_ANALYTICS_ASSETS}. Only the first ${MAX_ANALYTICS_ASSETS} are analysed; left out: ${allUniqueSymbols.slice(MAX_ANALYTICS_ASSETS).join(", ")}.`
+    );
+  }
   if (cryptoSymbols.length > 0) {
     dataLimitations.push(
       `Crypto holdings (${cryptoSymbols.join(", ")}) are excluded from beta, correlation, the efficient frontier and the portfolio risk figures: crypto trades every day with UTC closes, so its returns do not line up with SPY's weekday closes and the 252-day annualisation does not fit it. The "current" point and risk figures below cover the non-crypto holdings only.`
@@ -134,6 +155,12 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
       : `Could not load the live risk-free rate — Sharpe ratio falls back to an assumed ${(FALLBACK_ANNUAL_RISK_FREE_RATE * 100).toFixed(0)}% annual rate.`
   );
 
+  const droppedWithData = symbolReturnsList.filter((s) => (s.droppedReturns ?? 0) > 0);
+  if (droppedWithData.length > 0) {
+    dataLimitations.push(
+      `Bad price data was skipped (missing, non-numeric or non-positive closes): ${droppedWithData.map((s) => `${s.symbol} ${s.droppedReturns} day(s)`).join(", ")}.`
+    );
+  }
   const failedSymbols = symbolReturnsList.filter((s) => s.error !== null);
   if (failedSymbols.length > 0) {
     dataLimitations.push(
@@ -207,7 +234,19 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
   // Symbols usable for the correlation matrix / frontier: fetched OK and
   // have enough overlapping history against every other included symbol,
   // determined via a common-date intersection across all of them at once.
-  const usable = symbolReturnsList.filter((s) => !s.error);
+  let usable = symbolReturnsList.filter((s) => !s.error);
+  // One short-history symbol used to shrink EVERY asset to its overlap (259 -> 34 observations) without a word, or empty the
+  // whole set. Symbols with far less history than the rest are left out of the joint analysis (their own beta stays) and named.
+  if (usable.length >= 2) {
+    const typical = median(usable.map((s) => s.returnsByDate.size)) ?? 0;
+    const shortOnes = usable.filter((s) => s.returnsByDate.size < Math.max(MIN_OVERLAPPING_DAYS, typical * SHORT_HISTORY_SHARE));
+    if (shortOnes.length > 0 && shortOnes.length < usable.length) {
+      dataLimitations.push(
+        `Short price history: ${shortOnes.map((s) => `${s.symbol} (${s.returnsByDate.size} daily returns)`).join(", ")} left out of the correlation matrix, efficient frontier and portfolio risk figures, because the other holdings have about ${Math.round(typical)} days and including a short series would cut every holding to the shortest overlap. Their individual betas are still shown.`
+      );
+      usable = usable.filter((s) => !shortOnes.includes(s));
+    }
+  }
   let commonDates = usable.length > 0 ? [...usable[0].returnsByDate.keys()] : [];
   for (const s of usable.slice(1)) {
     commonDates = commonDates.filter((d) => s.returnsByDate.has(d));
@@ -215,6 +254,9 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
   const includedSymbols = usable
     .filter((s) => commonDates.length >= MIN_OVERLAPPING_DAYS)
     .map((s) => s.symbol);
+  if (includedSymbols.length > 0) {
+    dataLimitations.push(`Correlation, frontier and risk figures use ${commonDates.length} common trading days across ${includedSymbols.length} symbol(s).`);
+  }
   if (usable.length > 0 && commonDates.length < MIN_OVERLAPPING_DAYS) {
     dataLimitations.push(
       `Only ${commonDates.length} trading day(s) overlap across all held symbols — too few for a reliable correlation matrix or efficient frontier (need ${MIN_OVERLAPPING_DAYS}+). Beta figures above are still per-symbol and unaffected.`
@@ -251,12 +293,21 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
       includedSymbols.map((b) => (covariance(returnSeriesBySymbol.get(a)!, returnSeriesBySymbol.get(b)!) ?? 0) * TRADING_DAYS_PER_YEAR)
     );
 
+    // Seeded from the data itself, so the same holdings always give the same cloud. Cloud points carry no weights map
+    // (the chart plots only volatility and return), which cuts the response from about 3 MB to a few hundred KB.
+    const rand = mulberry32(seedFromValues([...expectedReturns, ...covMatrix.flat()]));
     const simulatedPortfolios: EfficientFrontierPoint[] = Array.from({ length: SIMULATIONS }, () =>
-      toPoint(includedSymbols, randomWeights(includedSymbols.length), expectedReturns, covMatrix, annualRiskFreeRate)
+      toPoint(includedSymbols, randomWeights(includedSymbols.length, rand), expectedReturns, covMatrix, annualRiskFreeRate, false)
     );
 
-    const maxSharpe = simulatedPortfolios.reduce((best, p) => (p.sharpeRatio > best.sharpeRatio ? p : best), simulatedPortfolios[0]);
-    const minVolatility = simulatedPortfolios.reduce((best, p) => (p.volatility < best.volatility ? p : best), simulatedPortfolios[0]);
+    const minVolatility = toPoint(includedSymbols, minimumVariance(covMatrix), expectedReturns, covMatrix, annualRiskFreeRate);
+    const tangency = tangencyPortfolio(covMatrix, expectedReturns, annualRiskFreeRate);
+    const maxSharpe = tangency ? toPoint(includedSymbols, tangency.weights, expectedReturns, covMatrix, annualRiskFreeRate) : null;
+    if (!tangency) {
+      dataLimitations.push(
+        "No holding had an average return above the risk-free rate over this window, so there is no maximum-Sharpe portfolio to show (it would just be the least-bad mix)."
+      );
+    }
 
     // Current portfolio's actual weights, restricted to the included
     // symbols — weighted by real live market value (reusing
@@ -316,7 +367,7 @@ export async function runPortfolioAnalytics(holdings: PortfolioHolding[]): Promi
       // Historical-simulation VaR — the empirical 5th percentile of the
       // real daily-return sample (not a parametric/normal-distribution
       // approximation), reported as a positive percent of portfolio value.
-      const sorted = [...portfolioDailyReturnsPct].sort((a, b) => a - b);
+      const sorted = portfolioDailyReturnsPct.filter((r) => Number.isFinite(r)).sort((a, b) => a - b);
       if (sorted.length >= MIN_OVERLAPPING_DAYS) {
         const idx = Math.floor(sorted.length * 0.05);
         portfolioHistoricalVaR95Pct = -sorted[idx];

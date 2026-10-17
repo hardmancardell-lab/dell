@@ -1,7 +1,21 @@
 import type { PortfolioValuation, TaxLotImpact, TaxLotConsumption } from "../types";
 
-const LONG_TERM_THRESHOLD_DAYS = 365;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * U.S. rule: a gain is long-term only if the asset was held for MORE than one year. The holding period starts the day
+ * after acquisition, so a sale exactly on the one-year anniversary is still short-term; the first long-term day is the day
+ * after the anniversary. The test is calendar-date based (a 365-day count was wrong across a leap year, and `>= 365` was
+ * off by one). Acquired on Feb 29: the anniversary is taken as Mar 1 (the conservative reading).
+ * Dates are YYYY-MM-DD strings (or anything Date.parse reads in UTC).
+ */
+export function isLongTermHolding(acquiredDate: string, saleDate: string): boolean {
+  const a = new Date(Date.parse(acquiredDate));
+  const s = Date.parse(saleDate);
+  if (!Number.isFinite(a.getTime()) || !Number.isFinite(s)) return false;
+  const anniversary = Date.UTC(a.getUTCFullYear() + 1, a.getUTCMonth(), a.getUTCDate());
+  return s > anniversary;
+}
 
 /**
  * Pure math, zero I/O — same "sizes the trade, never executes it" spirit as
@@ -34,7 +48,7 @@ export function computeTaxLotImpact(
     if (sharesRemaining <= 0) break;
     const sharesFromLot = Math.min(lot.holding.shares, sharesRemaining);
     const holdingPeriodDays = Math.floor((Date.parse(asOfDate) - Date.parse(lot.holding.acquiredDate)) / MS_PER_DAY);
-    const isLongTerm = holdingPeriodDays >= LONG_TERM_THRESHOLD_DAYS;
+    const isLongTerm = isLongTermHolding(lot.holding.acquiredDate, asOfDate);
     const estimatedGainLoss = sharesFromLot * (currentPrice - lot.holding.costBasisPerShare);
 
     consumed.push({

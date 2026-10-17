@@ -54,12 +54,12 @@ export const PORTFOLIO_METHODOLOGY_OUTLINES: PortfolioMethodologyOutline[] = [
       {
         heading: "What this app computes for you",
         detail:
-          "The Modern Portfolio Theory tab computes each holding's beta (regression against the S&P 500 via SPY — how much it amplifies or dampens market moves), a full pairwise correlation matrix across your holdings, and an efficient frontier via Monte Carlo simulation (thousands of random long-only weight combinations), highlighting the max-Sharpe and minimum-volatility portfolios alongside your actual current weighting.",
+          "The Modern Portfolio Theory tab computes each holding's beta (regression against the S&P 500 via SPY — how much it amplifies or dampens market moves), a full pairwise correlation matrix across your holdings, and an efficient frontier: a seeded cloud of random long-only weight combinations for context, with the exact long-only maximum-Sharpe and minimum-volatility portfolios (found by quadratic optimisation, no short sales) highlighted alongside your actual current weighting. It is plain mean-variance (Markowitz) optimisation on about a year of history: it does not include Black-Litterman views, shrinkage or factor models, and it does not break returns into factor exposures.",
       },
       {
         heading: "Where it falls short",
         detail:
-          "Beta, correlation, and the frontier are all built from about a year of historical daily returns — history isn't a guarantee of future co-movement, especially in a market shock when correlations tend to rise together (\"diversification disappears exactly when you need it most\" is a well-known critique of this framework). The frontier itself is a random-sampling approximation, not an exact optimizer.",
+          "Beta, correlation, and the frontier are all built from about a year of historical daily returns — history isn't a guarantee of future co-movement, especially in a market shock when correlations tend to rise together (\"diversification disappears exactly when you need it most\" is a well-known critique of this framework). The maximum-Sharpe and minimum-volatility portfolios are exact optima of those in-sample estimates, which means they are tuned to the past year's noise: sample mean returns are very uncertain, so treat the weights as an illustration of the method, not a target allocation.",
       },
     ],
   },

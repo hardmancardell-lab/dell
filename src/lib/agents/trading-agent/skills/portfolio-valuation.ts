@@ -16,12 +16,14 @@ export function computeValuationFigures(holding: PortfolioHolding, currentPrice:
   const unrealizedPL = currentValue - costBasisTotal;
   // Holding Period Return — total return over the holding period, no
   // dividends/income factored in (this app has no dividend-history source).
-  const unrealizedPLPercent = costBasisTotal !== 0 ? (unrealizedPL / costBasisTotal) * 100 : null;
+  // Divide by the size of the cost basis: a short position (negative basis) that gained must not print a negative percent.
+  const unrealizedPLPercent = costBasisTotal !== 0 ? (unrealizedPL / Math.abs(costBasisTotal)) * 100 : null;
   // HPR compounded to a 365-day basis (CAGR-style) — undefined for
   // same-day holdings (division by zero) or a negative-100% HPR (total
   // wipeout, (1+hpr) would be 0 or negative, undefined fractional power).
   const annualizedReturnPercent =
-    unrealizedPLPercent !== null && holdingPeriodDays > 0 && unrealizedPLPercent > -100
+    // Annualising a gain over a few days prints absurd numbers (+5% in one day is 5e9 %), so it needs at least 30 days.
+    unrealizedPLPercent !== null && holdingPeriodDays >= 30 && unrealizedPLPercent > -100
       ? (Math.pow(1 + unrealizedPLPercent / 100, 365 / holdingPeriodDays) - 1) * 100
       : null;
   return { costBasisTotal, currentValue, unrealizedPL, unrealizedPLPercent, annualizedReturnPercent };
