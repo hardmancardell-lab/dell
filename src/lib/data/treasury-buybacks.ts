@@ -1,3 +1,4 @@
+import { providerJson } from "./provider-http";
 import type { BuybackOperation } from "../agents/trading-agent/types";
 
 /**
@@ -42,12 +43,8 @@ export async function fetchBuybackOperations(maturityBucket: string): Promise<Bu
     "operation_date,operation_type,maturity_bucket,total_par_amt_accepted,total_par_amt_offered,nbr_issues_accepted"
   );
 
-  const res = await fetch(url.toString(), { next: { revalidate: 60 * 60 * 12 } });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Treasury Fiscal Data request failed (${res.status}): ${text}`);
-  }
-  const json = (await res.json()) as RawBuybackResponse;
+  const json = await providerJson<RawBuybackResponse>(url.toString(), {}, { provider: "Treasury Fiscal Data", path: "buybacks_operations", revalidateSeconds: 60 * 60 * 12 });
+  if (!Array.isArray(json.data)) throw new Error("Treasury Fiscal Data returned no data array.");
 
   return json.data
     .filter((row) => row.total_par_amt_accepted !== null && row.total_par_amt_accepted !== "null")

@@ -1,4 +1,6 @@
 import { fetchQuote } from "@/lib/data/market-data";
+import { isNoPriceError, isUsablePrice } from "@/lib/data/market-data-types";
+import type { MarketQuote } from "@/lib/data/market-data-types";
 import { getDailyBars } from "./daily-bars";
 import { computeMomentum, computeVolumeDisplacement } from "./scan-signals";
 import { computeMeanReversion, withLiveTodayClose } from "./mean-reversion";
@@ -29,6 +31,18 @@ function fmtAlertPrice(v: number): string {
  * doc comment), macro_news_spike -> computeCoverageSpike. No new signal math
  * lives here — this is purely the dispatch + plain-language message layer.
  */
+/** fetchQuote that turns "no usable price" into a value instead of an exception, so a rule can report it and not fire. */
+async function safeQuote(ticker: string): Promise<{ ok: true; quote: MarketQuote } | { ok: false; message: string }> {
+  try {
+    const quote = await fetchQuote(ticker);
+    if (!isUsablePrice(quote.lastPrice)) return { ok: false, message: `${ticker}: price unavailable right now, so this rule was not evaluated.` };
+    return { ok: true, quote };
+  } catch (error) {
+    if (isNoPriceError(error)) return { ok: false, message: `${ticker}: price unavailable right now (market closed or no recent trade), so this rule was not evaluated.` };
+    throw error;
+  }
+}
+
 export async function evaluateAlertRule(rule: AlertRule): Promise<AlertEvaluation> {
   const ticker = rule.ticker.trim().toUpperCase();
 
@@ -43,12 +57,15 @@ export async function evaluateAlertRule(rule: AlertRule): Promise<AlertEvaluatio
       if (!Number.isFinite(targetPrice)) {
         throw new Error(`price_threshold rule for ${ticker} is missing a numeric targetPrice param.`);
       }
-      const quote = await fetchQuote(ticker);
-      const triggered = direction === "above" ? quote.lastPrice >= targetPrice : quote.lastPrice <= targetPrice;
-      const proximity = targetPrice !== 0 ? Math.abs(quote.lastPrice - targetPrice) / Math.abs(targetPrice) : null;
+      const quote = await safeQuote(ticker);
+      // A missing price is not a price of 0: the rule is not evaluated and cannot fire.
+      if (!quote.ok) return { triggered: false, message: quote.message, proximity: null };
+      const triggered = direction === "above" ? quote.quote.lastPrice >= targetPrice : quote.quote.lastPrice <= targetPrice;
+      const proximity = targetPrice !== 0 ? Math.abs(quote.quote.lastPrice - targetPrice) / Math.abs(targetPrice) : null;
+      const asOfNote = quote.quote.asOf ? ` Price as of ${new Date(quote.quote.asOf).toISOString().slice(0, 16).replace("T", " ")} UTC${quote.quote.delayed ? " (delayed)" : ""}.` : "";
       return {
         triggered,
-        message: `${ticker} is at $${fmtAlertPrice(quote.lastPrice)} (target: ${direction} $${fmtAlertPrice(targetPrice)}).`,
+        message: `${ticker} is at $${fmtAlertPrice(quote.quote.lastPrice)} (target: ${direction} $${fmtAlertPrice(targetPrice)}).${asOfNote}`,
         proximity,
       };
     }
@@ -88,8 +105,9 @@ export async function evaluateAlertRule(rule: AlertRule): Promise<AlertEvaluatio
       // doc comment. This is what lets the rule fire intraday, as soon as
       // the cron tick after the threshold is actually crossed, rather than
       // only ever reflecting a completed/stale daily close.
-      const quote = await fetchQuote(ticker);
-      const signal = computeMeanReversion(withLiveTodayClose(bars, quote.lastPrice));
+      const quote = await safeQuote(ticker);
+      if (!quote.ok) return { triggered: false, message: quote.message, proximity: null };
+      const signal = computeMeanReversion(withLiveTodayClose(bars, quote.quote.lastPrice));
       return {
         triggered: signal.triggered,
         message:

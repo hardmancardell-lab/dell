@@ -13,9 +13,11 @@ import { aggregateCandles } from "../agents/trading-agent/skills/candle-aggregat
 import type {
   MarketBidAsk,
   MarketCandle,
+  MarketCandlesResult,
   MarketOptionsChain,
   MarketQuote,
 } from "./market-data-types";
+import { emptyReport, isProductionRuntime } from "./provider-http";
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -49,7 +51,22 @@ function isMockMode(): boolean {
   // MARKET_DATA_MOCK_MODE is the new neutral flag; SCHWAB_MOCK_MODE is also
   // honored so the existing mock-mode instructions in
   // SCHWAB_INTEGRATION_NOTES.md keep working verbatim, unchanged.
-  return process.env.MARKET_DATA_MOCK_MODE === "true" || process.env.SCHWAB_MOCK_MODE === "true";
+  const flag = process.env.MARKET_DATA_MOCK_MODE === "true" || process.env.SCHWAB_MOCK_MODE === "true";
+  if (!flag) return false;
+  // Synthetic prices must never reach alerts, valuations or paper fills in a production build.
+  if (isProductionRuntime()) {
+    throw new Error("MARKET_DATA_MOCK_MODE / SCHWAB_MOCK_MODE is set in a production build. Mock data is refused in production: unset it.");
+  }
+  return true;
+}
+
+/** Marks generated candles as synthetic so no consumer can mistake them for market data. */
+function synthCandles(candles: MarketCandle[]): MarketCandle[] {
+  return candles.map((c) => ({ ...c, feed: "mock", synthetic: true }));
+}
+
+function synthQuote(q: MarketQuote): MarketQuote {
+  return { ...q, feed: "mock", synthetic: true, delayed: false };
 }
 
 function getProvider(): "alpaca" | "schwab" {
@@ -61,14 +78,65 @@ function getProvider(): "alpaca" | "schwab" {
   return process.env.ALPACA_API_KEY_ID && process.env.ALPACA_SECRET_KEY ? "alpaca" : "schwab";
 }
 
-// "EUR/USD"-shaped symbols only — same convention this app already uses in
-// watchlist placeholder text and MAJOR_PAIR_KEYWORDS (geopolitical-news.ts).
-function isForexSymbol(symbol: string): boolean {
-  return /^[A-Z]{3}\/[A-Z]{3}$/.test(symbol.trim().toUpperCase());
+/** ISO-4217 currencies OANDA quotes against each other. A "XXX/USD" pair whose base is not here is a crypto pair, not forex. */
+const FIAT_CODES = new Set([
+  "USD", "EUR", "GBP", "JPY", "CHF", "AUD", "NZD", "CAD", "CNH", "CNY", "SEK", "NOK", "DKK", "PLN", "HUF", "CZK",
+  "TRY", "ZAR", "MXN", "SGD", "HKD", "THB", "ILS", "RUB", "INR", "KRW", "BRL", "TWD", "AED", "SAR",
+]);
+
+export type SymbolKind = "crypto" | "forex" | "equity" | "unsupported";
+
+export interface SymbolClass {
+  kind: SymbolKind;
+  /** The symbol in the form the chosen provider expects ("BTC-USD", "EUR/USD", "BRK.B"); the input trimmed and uppercased when unsupported. */
+  symbol: string;
+  /** Why the symbol is unsupported (only set when kind is "unsupported"). */
+  reason?: string;
+}
+
+/**
+ * Decides which asset class and provider a symbol belongs to, and normalises it. Pure and exported for the routing test.
+ * - "BTC-USD" and "BTC/USD" are both crypto (Coinbase product id BTC-USD); they never go to OANDA.
+ * - "EUR/USD" is forex (OANDA).
+ * - Plain tickers (letters, digits, "." and "-", up to 10 chars) are equities.
+ * - Index/future syntaxes ("^GSPC", "/ES", "ES=F") and crypto quoted in a non-USD currency ("BTC-EUR") are unsupported:
+ *   no provider here serves them, so a clear error beats a 4xx from the equity endpoint.
+ */
+export function classifySymbol(input: string): SymbolClass {
+  const symbol = String(input ?? "").trim().toUpperCase();
+  if (symbol === "") return { kind: "unsupported", symbol, reason: "empty symbol" };
+  if (/^[A-Z0-9]{2,10}-USD$/.test(symbol)) return { kind: "crypto", symbol };
+  const slash = /^([A-Z0-9]{2,10})\/([A-Z]{3})$/.exec(symbol);
+  if (slash) {
+    const base = slash[1];
+    const quote = slash[2];
+    if (FIAT_CODES.has(base) && FIAT_CODES.has(quote)) return { kind: "forex", symbol };
+    if (quote === "USD") return { kind: "crypto", symbol: `${base}-USD` };
+    return { kind: "unsupported", symbol, reason: `${symbol} is not a forex pair or a USD crypto pair` };
+  }
+  if (/^[A-Z0-9]{2,10}-(EUR|GBP|JPY|USDT|USDC|BTC|ETH|CAD|AUD)$/.test(symbol)) {
+    return { kind: "unsupported", symbol, reason: `${symbol}: crypto is supported only against USD (for example BTC-USD)` };
+  }
+  if (/^[A-Z0-9][A-Z0-9.-]{0,9}$/.test(symbol)) return { kind: "equity", symbol };
+  return {
+    kind: "unsupported",
+    symbol,
+    reason: `${symbol} is not a stock, ETF, forex pair or USD crypto symbol (index and futures syntaxes are not supported)`,
+  };
 }
 
 function hasOandaToken(): boolean {
   return Boolean(process.env.OANDA_API_TOKEN);
+}
+
+/** Throws a clear error for symbols no provider serves, and for forex without an OANDA token (never falls through to the stock endpoint). */
+function routeOrThrow(symbol: string): SymbolClass {
+  const c = classifySymbol(symbol);
+  if (c.kind === "unsupported") throw new Error(`Unsupported symbol: ${c.reason}.`);
+  if (c.kind === "forex" && !hasOandaToken()) {
+    throw new Error(`${c.symbol} is a forex pair and OANDA_API_TOKEN is not set, so there is no source for it (it is not sent to the stock feed).`);
+  }
+  return c;
 }
 
 export async function fetchMinuteBars(
@@ -77,14 +145,13 @@ export async function fetchMinuteBars(
   endDateMs: number,
   revalidateSeconds: number
 ): Promise<MarketCandle[]> {
-  if (isMockMode()) return generateMockMinuteBars(symbol, startDateMs, endDateMs);
-  if (coinbase.isCryptoSymbol(symbol)) return coinbase.fetchMinuteBars(symbol, startDateMs, endDateMs, revalidateSeconds);
-  if (isForexSymbol(symbol) && hasOandaToken()) {
-    return oanda.fetchMinuteBars(symbol, startDateMs, endDateMs, revalidateSeconds);
-  }
+  if (isMockMode()) return synthCandles(generateMockMinuteBars(symbol, startDateMs, endDateMs));
+  const c = routeOrThrow(symbol);
+  if (c.kind === "crypto") return coinbase.fetchMinuteBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
+  if (c.kind === "forex") return oanda.fetchMinuteBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
   return getProvider() === "alpaca"
-    ? alpaca.fetchMinuteBars(symbol, startDateMs, endDateMs, revalidateSeconds)
-    : schwab.fetchMinuteBars(symbol, startDateMs, endDateMs, revalidateSeconds);
+    ? alpaca.fetchMinuteBars(c.symbol, startDateMs, endDateMs, revalidateSeconds)
+    : schwab.fetchMinuteBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
 }
 
 export async function fetchDailyBars(
@@ -93,14 +160,13 @@ export async function fetchDailyBars(
   endDateMs: number,
   revalidateSeconds: number
 ): Promise<MarketCandle[]> {
-  if (isMockMode()) return generateMockDailyBars(symbol, startDateMs, endDateMs);
-  if (coinbase.isCryptoSymbol(symbol)) return coinbase.fetchDailyBars(symbol, startDateMs, endDateMs, revalidateSeconds);
-  if (isForexSymbol(symbol) && hasOandaToken()) {
-    return oanda.fetchDailyBars(symbol, startDateMs, endDateMs, revalidateSeconds);
-  }
+  if (isMockMode()) return synthCandles(generateMockDailyBars(symbol, startDateMs, endDateMs));
+  const c = routeOrThrow(symbol);
+  if (c.kind === "crypto") return coinbase.fetchDailyBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
+  if (c.kind === "forex") return oanda.fetchDailyBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
   return getProvider() === "alpaca"
-    ? alpaca.fetchDailyBars(symbol, startDateMs, endDateMs, revalidateSeconds)
-    : schwab.fetchDailyBars(symbol, startDateMs, endDateMs, revalidateSeconds);
+    ? alpaca.fetchDailyBars(c.symbol, startDateMs, endDateMs, revalidateSeconds)
+    : schwab.fetchDailyBars(c.symbol, startDateMs, endDateMs, revalidateSeconds);
 }
 
 /**
@@ -122,6 +188,17 @@ export async function fetchBarsForTimeframe(
   endMs: number,
   revalidateSeconds: number
 ): Promise<MarketCandle[]> {
+  return (await fetchBarsForTimeframeDetailed(symbol, timeframe, startMs, endMs, revalidateSeconds)).candles;
+}
+
+/** Same as fetchBarsForTimeframe, plus what was cleaned or truncated (dropped counts, warnings) and whether the data is synthetic. */
+export async function fetchBarsForTimeframeDetailed(
+  symbol: string,
+  timeframe: string,
+  startMs: number,
+  endMs: number,
+  revalidateSeconds: number
+): Promise<MarketCandlesResult> {
   const bucketMs = parseTimeframeMs(timeframe);
 
   if (isMockMode()) {
@@ -129,35 +206,46 @@ export async function fetchBarsForTimeframe(
       bucketMs < DAY_MS
         ? generateMockMinuteBars(symbol, startMs, endMs)
         : generateMockDailyBars(symbol, startMs, endMs);
-    return aggregateCandles(raw, bucketMs);
+    return {
+      candles: synthCandles(aggregateCandles(raw, bucketMs)),
+      report: { ...emptyReport(), synthetic: true, warnings: ["Synthetic mock data (MARKET_DATA_MOCK_MODE): these are not market prices."] },
+    };
   }
 
-  if (coinbase.isCryptoSymbol(symbol)) {
-    return coinbase.fetchBarsForBucket(symbol, bucketMs, startMs, endMs, revalidateSeconds);
+  const c = routeOrThrow(symbol);
+
+  if (c.kind === "crypto") {
+    return { candles: await coinbase.fetchBarsForBucket(c.symbol, bucketMs, startMs, endMs, revalidateSeconds), report: emptyReport() };
   }
 
-  if (isForexSymbol(symbol) && hasOandaToken()) {
-    return oanda.fetchBarsForTimeframe(symbol, timeframe, startMs, endMs, revalidateSeconds);
+  if (c.kind === "forex") {
+    return oanda.fetchBarsForTimeframeDetailed(c.symbol, timeframe, startMs, endMs, revalidateSeconds);
   }
 
   if (getProvider() === "alpaca") {
-    return alpaca.fetchBarsForTimeframe(symbol, timeframe, startMs, endMs, revalidateSeconds);
+    return alpaca.fetchBarsForTimeframeDetailed(c.symbol, timeframe, startMs, endMs, revalidateSeconds);
   }
 
   // Schwab has no arbitrary-timeframe endpoint — use whichever of its two
   // supported granularities is closer, then aggregate to the exact bucket.
   const raw =
     bucketMs < DAY_MS
-      ? await schwab.fetchMinuteBars(symbol, startMs, endMs, revalidateSeconds)
-      : await schwab.fetchDailyBars(symbol, startMs, endMs, revalidateSeconds);
-  return aggregateCandles(raw, bucketMs);
+      ? await schwab.fetchMinuteBars(c.symbol, startMs, endMs, revalidateSeconds)
+      : await schwab.fetchDailyBars(c.symbol, startMs, endMs, revalidateSeconds);
+  return { candles: aggregateCandles(raw, bucketMs), report: emptyReport() };
 }
 
+/**
+ * Latest price. Contract: resolves to a quote whose lastPrice is a finite number above zero, or REJECTS (NoPriceError
+ * when the provider had no usable price). It never returns 0 for "unknown". `asOf`, `delayed` and `feed` describe how
+ * fresh the price is; mock-mode quotes carry `synthetic: true`.
+ */
 export async function fetchQuote(symbol: string): Promise<MarketQuote> {
-  if (isMockMode()) return generateMockQuote(symbol);
-  if (coinbase.isCryptoSymbol(symbol)) return coinbase.fetchQuote(symbol);
-  if (isForexSymbol(symbol) && hasOandaToken()) return oanda.fetchQuote(symbol);
-  return getProvider() === "alpaca" ? alpaca.fetchQuote(symbol) : schwab.fetchQuote(symbol);
+  if (isMockMode()) return synthQuote(generateMockQuote(symbol));
+  const c = routeOrThrow(symbol);
+  if (c.kind === "crypto") return coinbase.fetchQuote(c.symbol);
+  if (c.kind === "forex") return oanda.fetchQuote(c.symbol);
+  return getProvider() === "alpaca" ? alpaca.fetchQuote(c.symbol) : schwab.fetchQuote(c.symbol);
 }
 
 /**
@@ -179,15 +267,17 @@ export async function fetchForexBidAsk(
   revalidateSeconds: number
 ): Promise<MarketBidAsk[]> {
   if (isMockMode()) return [generateMockBidAsk(symbol)];
-  if (isForexSymbol(symbol) && hasOandaToken()) {
-    return oanda.fetchBidAsk(symbol, startMs, endMs, revalidateSeconds);
+  const c = classifySymbol(symbol);
+  if (c.kind === "forex" && hasOandaToken()) {
+    return oanda.fetchBidAsk(c.symbol, startMs, endMs, revalidateSeconds);
   }
   throw new Error(`No real bid/ask source for ${symbol} — requires a forex pair and OANDA_API_TOKEN.`);
 }
 
 export async function fetchLatestForexBidAsk(symbol: string): Promise<MarketBidAsk | null> {
   if (isMockMode()) return generateMockBidAsk(symbol);
-  if (isForexSymbol(symbol) && hasOandaToken()) return oanda.fetchLatestBidAsk(symbol);
+  const c = classifySymbol(symbol);
+  if (c.kind === "forex" && hasOandaToken()) return oanda.fetchLatestBidAsk(c.symbol);
   return null;
 }
 
@@ -197,7 +287,8 @@ export async function fetchLatestForexBidAsk(symbol: string): Promise<MarketBidA
  */
 export async function fetchLatestCryptoBidAsk(symbol: string): Promise<MarketBidAsk | null> {
   if (isMockMode()) return generateMockBidAsk(symbol);
-  if (coinbase.isCryptoSymbol(symbol)) return coinbase.fetchBidAsk(symbol);
+  const c = classifySymbol(symbol);
+  if (c.kind === "crypto") return coinbase.fetchBidAsk(c.symbol);
   return null;
 }
 
@@ -218,9 +309,11 @@ export async function fetchOptionsChain(
   symbol: string,
   expirationDate?: string
 ): Promise<MarketOptionsChain> {
-  if (isMockMode()) return generateMockOptionsChain(symbol);
-  if (hasTradierToken()) return tradier.fetchOptionsChain(symbol, expirationDate);
+  if (isMockMode()) return { ...generateMockOptionsChain(symbol), feed: "mock", synthetic: true };
+  const c = routeOrThrow(symbol);
+  if (c.kind !== "equity") throw new Error(`Options chains exist only for stocks and ETFs, not ${c.symbol}.`);
+  if (hasTradierToken()) return tradier.fetchOptionsChain(c.symbol, expirationDate);
   return getProvider() === "alpaca"
-    ? alpaca.fetchOptionsChain(symbol, expirationDate)
-    : schwab.fetchOptionsChain(symbol, expirationDate);
+    ? alpaca.fetchOptionsChain(c.symbol, expirationDate)
+    : schwab.fetchOptionsChain(c.symbol, expirationDate);
 }

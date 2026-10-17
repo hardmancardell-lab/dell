@@ -1,5 +1,7 @@
 import { createHash, createHmac, randomUUID } from "crypto";
+import { NoPriceError, isUsablePrice } from "./market-data-types";
 import type { MarketCandle, MarketQuote } from "./market-data-types";
+import { providerFetch, providerJson } from "./provider-http";
 
 /**
  * Webull OpenAPI market-data client. This is a market-data/trading API, not
@@ -102,24 +104,14 @@ function withAccessToken(headers: Record<string, string>): Record<string, string
 
 async function fetchWebull<T>(path: string, queryParams: Record<string, string>, revalidateSeconds: number): Promise<T> {
   const { url, headers } = signRequest(path, queryParams);
-  const res = await fetch(url, { headers: withAccessToken(headers), next: { revalidate: revalidateSeconds } });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Webull request failed for ${path}: ${res.status} ${body}`);
-  }
-  return (await res.json()) as T;
+  return providerJson<T>(url, { headers: withAccessToken(headers) }, { provider: "Webull", path, revalidateSeconds });
 }
 
 /** Signed POST — used for the token create/check calls below. No caching (these are one-off account actions, never repeated with the same args). */
 async function postWebull<T>(path: string, bodyObj: Record<string, unknown> = {}): Promise<T> {
   const bodyStr = JSON.stringify(bodyObj);
   const { url, headers } = signRequest(path, {}, bodyStr);
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { ...headers, "Content-Type": "application/json" },
-    body: bodyStr,
-    cache: "no-store",
-  });
+  const res = await providerFetch(url, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: bodyStr }, { provider: "Webull", path, noStore: true, maxRetries: 0 });
   const text = await res.text();
   if (!res.ok) {
     throw new Error(`Webull request failed for ${path}: ${res.status} ${text}`);
@@ -188,10 +180,13 @@ export async function fetchQuote(symbol: string): Promise<MarketQuote> {
   );
   const row = data.data?.[0];
   if (!row) throw new Error(`No snapshot data returned for ${symbol}`);
+  const price = Number(row.price ?? row.last_price);
+  if (!isUsablePrice(price)) throw new NoPriceError("Webull", symbol);
   return {
     symbol,
-    lastPrice: row.price ?? row.last_price ?? 0,
+    lastPrice: price,
     totalVolume: row.volume ?? row.total_volume ?? 0,
+    feed: "webull",
   };
 }
 

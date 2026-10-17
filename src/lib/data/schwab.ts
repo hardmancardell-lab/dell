@@ -1,4 +1,6 @@
 import { getValidAccessToken } from "./schwab-auth";
+import { NoPriceError, isUsablePrice } from "./market-data-types";
+import { isProductionRuntime, providerJson } from "./provider-http";
 import {
   generateMockDailyBars,
   generateMockMinuteBars,
@@ -16,7 +18,9 @@ const BASE_URL = "https://api.schwabapi.com/marketdata/v1";
  * mode takes priority over real credentials if both are present.
  */
 function isMockMode(): boolean {
-  return process.env.SCHWAB_MOCK_MODE === "true";
+  if (process.env.SCHWAB_MOCK_MODE !== "true") return false;
+  if (isProductionRuntime()) throw new Error("SCHWAB_MOCK_MODE is set in a production build. Mock data is refused in production: unset it.");
+  return true;
 }
 
 /**
@@ -42,17 +46,7 @@ async function fetchSchwab<T>(
     url.searchParams.set(key, value);
   }
 
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    next: { revalidate: revalidateSeconds },
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Schwab request failed for ${path}: ${res.status} ${body}`);
-  }
-
-  return (await res.json()) as T;
+  return providerJson<T>(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } }, { provider: "Schwab", path, revalidateSeconds });
 }
 
 export interface SchwabCandle {
@@ -161,9 +155,11 @@ export async function fetchQuote(symbol: string): Promise<SchwabQuote> {
     30 // live data, short cache
   );
   const entry = data[symbol];
+  const price = entry?.quote?.lastPrice;
+  if (!isUsablePrice(price)) throw new NoPriceError("Schwab", symbol);
   return {
     symbol,
-    lastPrice: entry?.quote?.lastPrice ?? 0,
+    lastPrice: price,
     totalVolume: entry?.quote?.totalVolume ?? 0,
   };
 }

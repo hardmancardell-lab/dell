@@ -1,4 +1,6 @@
-import type { MarketBidAsk, MarketCandle, MarketQuote } from "./market-data-types";
+import { NoPriceError, isUsablePrice, DELAYED_AFTER_MS } from "./market-data-types";
+import type { MarketBidAsk, MarketCandle, MarketCandlesResult, MarketQuote } from "./market-data-types";
+import { cleanCandles, logReport, providerJson, snapWindow } from "./provider-http";
 
 // LIVE account endpoint — confirmed live this session: the user's token
 // returned 401 against the practice environment (api-fxpractice.oanda.com)
@@ -42,18 +44,7 @@ async function fetchOanda<T>(
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
-
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
-    next: { revalidate: revalidateSeconds },
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`OANDA request failed for ${path}: ${res.status} ${body}`);
-  }
-
-  return (await res.json()) as T;
+  return providerJson<T>(url.toString(), { headers: { Authorization: `Bearer ${token}` } }, { provider: "OANDA", path, revalidateSeconds });
 }
 
 interface OandaCandle {
@@ -88,13 +79,17 @@ const GRANULARITY_MAP: Record<string, string> = {
 };
 
 function toCandle(c: OandaCandle): MarketCandle {
+  // A missing mid price stays NaN (never 0) so cleanCandles drops the candle instead of treating it as a real price.
+  const datetime = Date.parse(c.time);
   return {
-    datetime: Date.parse(c.time),
-    open: parseFloat(c.mid?.o ?? "0"),
-    high: parseFloat(c.mid?.h ?? "0"),
-    low: parseFloat(c.mid?.l ?? "0"),
-    close: parseFloat(c.mid?.c ?? "0"),
-    volume: c.volume,
+    datetime,
+    open: parseFloat(c.mid?.o ?? "NaN"),
+    high: parseFloat(c.mid?.h ?? "NaN"),
+    low: parseFloat(c.mid?.l ?? "NaN"),
+    close: parseFloat(c.mid?.c ?? "NaN"),
+    volume: Number(c.volume),
+    feed: "oanda-mid",
+    delayed: false,
   };
 }
 
@@ -116,22 +111,24 @@ const GRANULARITY_MS: Record<string, number> = {
 };
 const MAX_CANDLES_PER_REQUEST = 5000;
 
-export async function fetchBarsForTimeframe(
+export async function fetchBarsForTimeframeDetailed(
   symbol: string,
   timeframe: string,
   startMs: number,
   endMs: number,
   revalidateSeconds: number
-): Promise<MarketCandle[]> {
+): Promise<MarketCandlesResult> {
   const granularity = GRANULARITY_MAP[timeframe] ?? "D";
   const instrument = toOandaInstrument(symbol);
   const barMs = GRANULARITY_MS[granularity] ?? 86_400_000;
   const chunkMs = MAX_CANDLES_PER_REQUEST * barMs;
+  // Snap to the cache window so equal requests build an identical URL (callers pass Date.now()-based windows).
+  const win = snapWindow(startMs, endMs, revalidateSeconds);
 
   const allCandles: OandaCandle[] = [];
-  let chunkStart = startMs;
-  while (chunkStart < endMs) {
-    const chunkEnd = Math.min(chunkStart + chunkMs, endMs);
+  let chunkStart = win.startMs;
+  while (chunkStart < win.endMs) {
+    const chunkEnd = Math.min(chunkStart + chunkMs, win.endMs);
     const data = await fetchOanda<OandaCandlesResponse>(
       `/v3/instruments/${instrument}/candles`,
       {
@@ -148,7 +145,19 @@ export async function fetchBarsForTimeframe(
 
   // Only fully-closed candles — the in-progress "current" candle (complete:
   // false) would otherwise show a misleading partial bar.
-  return allCandles.filter((c) => c.complete).map(toCandle);
+  const { candles, report } = cleanCandles(allCandles.filter((c) => c.complete).map(toCandle), `OANDA ${instrument} ${granularity}`);
+  logReport(report);
+  return { candles, report };
+}
+
+export async function fetchBarsForTimeframe(
+  symbol: string,
+  timeframe: string,
+  startMs: number,
+  endMs: number,
+  revalidateSeconds: number
+): Promise<MarketCandle[]> {
+  return (await fetchBarsForTimeframeDetailed(symbol, timeframe, startMs, endMs, revalidateSeconds)).candles;
 }
 
 export async function fetchMinuteBars(
@@ -180,23 +189,22 @@ export async function fetchDailyBars(
  */
 export async function fetchBidAsk(symbol: string, startMs: number, endMs: number, revalidateSeconds: number): Promise<MarketBidAsk[]> {
   const instrument = toOandaInstrument(symbol);
+  const win = snapWindow(startMs, endMs, revalidateSeconds);
   const data = await fetchOanda<OandaCandlesResponse>(
     `/v3/instruments/${instrument}/candles`,
     {
       granularity: "M1",
       price: "BA",
-      from: new Date(startMs).toISOString(),
-      to: new Date(endMs).toISOString(),
+      from: new Date(win.startMs).toISOString(),
+      to: new Date(win.endMs).toISOString(),
     },
     revalidateSeconds
   );
   return (data.candles ?? [])
     .filter((c) => c.complete && c.bid && c.ask)
-    .map((c) => ({
-      datetime: Date.parse(c.time),
-      bid: parseFloat(c.bid!.c),
-      ask: parseFloat(c.ask!.c),
-    }));
+    .map((c) => ({ datetime: Date.parse(c.time), bid: parseFloat(c.bid!.c), ask: parseFloat(c.ask!.c) }))
+    .filter((b) => Number.isFinite(b.datetime) && isUsablePrice(b.bid) && isUsablePrice(b.ask) && b.ask >= b.bid)
+    .sort((a, b) => a.datetime - b.datetime);
 }
 
 /** The most recent real bid/ask, for a market order filling right now. */
@@ -215,11 +223,18 @@ export async function fetchLatestBidAsk(symbol: string): Promise<MarketBidAsk | 
  */
 export async function fetchQuote(symbol: string): Promise<MarketQuote> {
   const now = Date.now();
+  const sym = symbol.trim().toUpperCase();
   const candles = await fetchBarsForTimeframe(symbol, "1Min", now - 10 * 60 * 1000, now, 15);
   const last = candles[candles.length - 1];
+  // Weekend, holiday, or the gap before the first complete candle: no candle means no price, not a price of 0.
+  if (!last || !isUsablePrice(last.close)) throw new NoPriceError("OANDA", sym, "no complete 1-minute candle in the last 10 minutes (market closed?)");
+  const asOf = last.datetime + 60_000; // the candle's close time: its open time plus one minute
   return {
-    symbol: symbol.trim().toUpperCase(),
-    lastPrice: last?.close ?? 0,
-    totalVolume: last?.volume ?? 0,
+    symbol: sym,
+    lastPrice: last.close,
+    totalVolume: last.volume,
+    asOf,
+    delayed: now - asOf > DELAYED_AFTER_MS,
+    feed: "oanda-m1-close",
   };
 }

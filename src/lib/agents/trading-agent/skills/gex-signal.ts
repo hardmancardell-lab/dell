@@ -1,6 +1,7 @@
 import { blackScholesGreeks } from "../black-scholes";
 import { classifyQuadrant } from "./gex-sign";
 import { fetchOptionsChain, fetchQuote } from "@/lib/data/market-data";
+import { isNoPriceError, isUsablePrice } from "@/lib/data/market-data-types";
 import * as tradier from "@/lib/data/tradier";
 import type { MarketOptionsChain } from "@/lib/data/market-data-types";
 import type {
@@ -336,7 +337,14 @@ export async function computeGexSignal(underlying: string): Promise<GexSignalRes
     "Call wall = the strike above spot with the most call gamma; put wall = the strike below spot with the most put gamma, summed over the expirations in the window. They show where option positioning is concentrated, not where price will stop. Open interest is the prior day's figure.",
   ];
 
-  const quote = await fetchQuote(symbol);
+  let quote;
+  try {
+    quote = await fetchQuote(symbol);
+  } catch (error) {
+    if (isNoPriceError(error)) throw new Error(`No usable spot price for ${symbol} right now (market closed or no recent trade), so the GEX signal cannot be computed.`);
+    throw error;
+  }
+  if (!isUsablePrice(quote.lastPrice)) throw new Error(`No usable spot price for ${symbol} right now, so the GEX signal cannot be computed.`);
   const now = Date.now();
 
   let nearExpiration: string | undefined;

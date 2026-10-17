@@ -1,3 +1,5 @@
+import { providerJson } from "./provider-http";
+
 const FRED_BASE_URL = "https://api.stlouisfed.org/fred";
 
 export interface FredObservation {
@@ -40,25 +42,16 @@ export async function fetchFredSeries(
   url.searchParams.set("sort_order", "desc");
   url.searchParams.set("limit", String(limit));
 
-  const res = await fetch(url.toString(), {
-    // FRED series update at most daily; avoid re-fetching every request.
-    next: { revalidate: 60 * 60 * 12 },
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(
-      `FRED request failed for series ${seriesId}: ${res.status} ${body}`
-    );
-  }
-
-  const data = (await res.json()) as FredObservationsResponse;
+  // FRED series update at most daily; avoid re-fetching every request.
+  const data = await providerJson<FredObservationsResponse>(url.toString(), {}, { provider: "FRED", path: `series ${seriesId}`, revalidateSeconds: 60 * 60 * 12 });
+  if (!Array.isArray(data.observations)) throw new Error(`FRED returned no observations array for series ${seriesId}.`);
 
   return data.observations
-    .map((obs) => ({
-      date: obs.date,
-      value: obs.value === "." ? null : Number(obs.value),
-    }))
+    .map((obs) => {
+      // "." is FRED's missing-value marker; any other non-numeric value is also missing, never NaN.
+      const n = obs.value === "." ? NaN : Number(obs.value);
+      return { date: obs.date, value: Number.isFinite(n) ? n : null };
+    })
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 

@@ -819,8 +819,14 @@ export interface PortfolioValuation {
   holdingPeriodDays: number;
   annualizedReturnPercent: number | null; // HPR compounded to a 365-day basis (CAGR-style), null when holdingPeriodDays is 0
   sector: string | null;
-  marketCapUsd: number | null; // real-time-ish snapshot from FMP's /profile — null for non-equities or when FMP has no figure (e.g. some ETFs)
+  marketCapUsd: number | null; // snapshot from FMP's /profile (not real-time) — null for non-equities or when FMP has no figure (e.g. some ETFs)
   error: string | null;
+  /** True when no usable price was available: the holding is shown as "price unavailable" and left out of every total. */
+  priceUnavailable?: boolean;
+  /** Epoch ms of the trade or candle the price comes from, when the provider gave one. */
+  priceAsOf?: number | null;
+  /** True when the price is known or observed to be delayed. */
+  priceDelayed?: boolean;
 }
 
 export interface AllocationSlice {
@@ -832,9 +838,18 @@ export interface AllocationSlice {
 export interface PortfolioSummary {
   valuations: PortfolioValuation[];
   totalValue: number;
+  /** Cost basis of PRICED holdings only: unpriced holdings are excluded from every total (see unpricedCount). */
   totalCostBasis: number;
   totalUnrealizedPL: number;
   totalUnrealizedPLPercent: number | null;
+  /** Number of holdings left out of the totals because no price was available. */
+  unpricedCount?: number;
+  /** Cost basis of the holdings left out of the totals. */
+  unpricedCostBasis?: number;
+  /** Oldest price time among the priced holdings (epoch ms), so the page can say "prices as of ...". */
+  oldestPriceAsOf?: number | null;
+  /** True when any priced holding's price is delayed. */
+  anyPriceDelayed?: boolean;
   allocationByAssetClass: AllocationSlice[];
   allocationBySector: AllocationSlice[];
   dataLimitations: string[];

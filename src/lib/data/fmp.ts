@@ -1,3 +1,5 @@
+import { providerJson } from "./provider-http";
+
 const FMP_BASE_URL = "https://financialmodelingprep.com/stable";
 
 function getApiKey(): string {
@@ -22,16 +24,7 @@ async function fetchFmp<T>(
   }
   url.searchParams.set("apikey", apiKey);
 
-  const res = await fetch(url.toString(), {
-    next: { revalidate: revalidateSeconds },
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`FMP request failed for ${path}: ${res.status} ${body}`);
-  }
-
-  const data = (await res.json()) as T | { "Error Message": string };
+  const data = await providerJson<T | { "Error Message": string }>(url.toString(), {}, { provider: "FMP", path, revalidateSeconds });
   if (data && typeof data === "object" && "Error Message" in data) {
     throw new Error(`FMP error for ${path}: ${(data as { "Error Message": string })["Error Message"]}`);
   }

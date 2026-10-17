@@ -58,7 +58,7 @@ export async function getPegDeviationSnapshot(pair: string): Promise<PegDeviatio
   return {
     pair: peg.pair,
     currentRate: quote.lastPrice,
-    asOfDate: new Date().toISOString().slice(0, 10),
+    asOfDate: new Date(quote.asOf ?? Date.now()).toISOString().slice(0, 10),
     targetRate: target,
     deviationPct,
     outsideBand,

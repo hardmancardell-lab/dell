@@ -1,9 +1,12 @@
+import { NoPriceError, isUsablePrice, DELAYED_AFTER_MS } from "./market-data-types";
 import type {
   MarketCandle,
+  MarketCandlesResult,
   MarketOptionContract,
   MarketOptionsChain,
   MarketQuote,
 } from "./market-data-types";
+import { cleanCandles, logReport, normalizeSymbol, providerJson, snapWindow } from "./provider-http";
 
 const DATA_BASE_URL = "https://data.alpaca.markets/v2";
 
@@ -15,6 +18,9 @@ const DATA_BASE_URL = "https://data.alpaca.markets/v2";
  * this was written). See ALPACA_INTEGRATION_NOTES.md for what specifically
  * needs checking on first real use, same treatment SCHWAB_INTEGRATION_NOTES.md
  * gives the Schwab client.
+ *
+ * Every request goes through providerJson (provider-http.ts): 15 s timeout, up to 2 retries on 429/5xx honouring
+ * Retry-After, and errors that name the provider and carry at most 160 characters of the response body.
  */
 
 function getCredentials(): { keyId: string; secretKey: string } {
@@ -38,21 +44,11 @@ async function fetchAlpaca<T>(
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
-
-  const res = await fetch(url.toString(), {
-    headers: {
-      "APCA-API-KEY-ID": keyId,
-      "APCA-API-SECRET-KEY": secretKey,
-    },
-    next: { revalidate: revalidateSeconds },
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Alpaca request failed for ${path}: ${res.status} ${body}`);
-  }
-
-  return (await res.json()) as T;
+  return providerJson<T>(
+    url.toString(),
+    { headers: { "APCA-API-KEY-ID": keyId, "APCA-API-SECRET-KEY": secretKey } },
+    { provider: "Alpaca", path, revalidateSeconds }
+  );
 }
 
 interface AlpacaBar {
@@ -71,22 +67,22 @@ interface AlpacaBarsResponse {
 }
 
 function toCandle(bar: AlpacaBar): MarketCandle {
+  // Missing fields stay NaN (never 0) so cleanCandles drops the bar instead of treating it as a real price.
   return {
     datetime: Date.parse(bar.t),
-    open: bar.o,
-    high: bar.h,
-    low: bar.l,
-    close: bar.c,
-    volume: bar.v,
+    open: Number(bar.o ?? NaN),
+    high: Number(bar.h ?? NaN),
+    low: Number(bar.l ?? NaN),
+    close: Number(bar.c ?? NaN),
+    volume: Number(bar.v ?? NaN),
+    feed: "iex",
   };
 }
 
-// Safety cap on pagination loops — the free tier's 200 req/min limit means a
-// long minute-bar backfill (e.g. HISTORICAL_COMPOSITE_LOOKBACK_DAYS=180) could
-// otherwise fire dozens of sequential page requests. Unverified how many
-// pages that actually costs live; this cap exists so a misconfigured lookback
-// window fails loud (returns partial data) rather than hammering the API.
-const MAX_PAGES = 20;
+// Safety cap on pagination loops (free tier: 200 req/min). Raised from 20 to 100 pages of 10 000 bars. Bars are
+// requested newest-first (sort=desc), so if the cap is ever reached the OLDEST bars are the ones missing and the
+// newest bars are always kept; the result is then flagged truncated with a warning instead of looking complete.
+export const ALPACA_MAX_PAGES = 100;
 
 /**
  * Alpaca's timeframe param accepts arbitrary "{N}Min"/"{N}Hour"/"1Day"/
@@ -100,35 +96,51 @@ async function fetchBars(
   startMs: number,
   endMs: number,
   revalidateSeconds: number
-): Promise<MarketCandle[]> {
-  const candles: MarketCandle[] = [];
+): Promise<MarketCandlesResult> {
+  const sym = normalizeSymbol(symbol);
+  // Snap the window to the cache window so equal requests build an identical URL and the fetch cache can hit.
+  const win = snapWindow(startMs, endMs, revalidateSeconds);
+  const raw: MarketCandle[] = [];
   let pageToken: string | undefined;
   let pages = 0;
+  let truncated = false;
 
   do {
     const params: Record<string, string> = {
       timeframe,
-      start: new Date(startMs).toISOString(),
-      end: new Date(endMs).toISOString(),
+      start: new Date(win.startMs).toISOString(),
+      end: new Date(win.endMs).toISOString(),
       feed: "iex", // only feed available on the free/Basic plan
       adjustment: "raw",
-      sort: "asc",
+      sort: "desc", // newest first: a pagination cap can only ever lose the oldest bars
       limit: "10000",
     };
     if (pageToken) params.page_token = pageToken;
 
     const data = await fetchAlpaca<AlpacaBarsResponse>(
-      `/stocks/${encodeURIComponent(symbol)}/bars`,
+      `/stocks/${encodeURIComponent(sym)}/bars`,
       params,
       revalidateSeconds
     );
     // Alpaca returns bars: null (not []) for a symbol it doesn't recognize at all.
-    candles.push(...(data.bars ?? []).map(toCandle));
+    raw.push(...(data.bars ?? []).map(toCandle));
     pageToken = data.next_page_token ?? undefined;
     pages += 1;
-  } while (pageToken && pages < MAX_PAGES);
+    if (pageToken && pages >= ALPACA_MAX_PAGES) {
+      truncated = true;
+      break;
+    }
+  } while (pageToken);
 
-  return candles;
+  const { candles, report } = cleanCandles(raw, `Alpaca ${sym} ${timeframe}`);
+  if (truncated) {
+    report.truncated = true;
+    report.warnings.push(
+      `Alpaca ${sym} ${timeframe}: stopped after ${ALPACA_MAX_PAGES} pages; the oldest bars of the requested range are missing (the newest are complete).`
+    );
+  }
+  logReport(report);
+  return { candles, report };
 }
 
 /**
@@ -144,7 +156,7 @@ export async function fetchMinuteBars(
   endDateMs: number,
   revalidateSeconds: number
 ): Promise<MarketCandle[]> {
-  return fetchBars(symbol, "1Min", startDateMs, endDateMs, revalidateSeconds);
+  return (await fetchBars(symbol, "1Min", startDateMs, endDateMs, revalidateSeconds)).candles;
 }
 
 export async function fetchDailyBars(
@@ -153,7 +165,7 @@ export async function fetchDailyBars(
   endDateMs: number,
   revalidateSeconds: number
 ): Promise<MarketCandle[]> {
-  return fetchBars(symbol, "1Day", startDateMs, endDateMs, revalidateSeconds);
+  return (await fetchBars(symbol, "1Day", startDateMs, endDateMs, revalidateSeconds)).candles;
 }
 
 /** Arbitrary-timeframe entry point for chart-bars.ts — same underlying fetchBars as above. */
@@ -164,29 +176,49 @@ export async function fetchBarsForTimeframe(
   endMs: number,
   revalidateSeconds: number
 ): Promise<MarketCandle[]> {
+  return (await fetchBars(symbol, timeframe, startMs, endMs, revalidateSeconds)).candles;
+}
+
+/** Same as fetchBarsForTimeframe but also returns what was cleaned or truncated (dropped counts, warnings). */
+export async function fetchBarsForTimeframeDetailed(
+  symbol: string,
+  timeframe: string,
+  startMs: number,
+  endMs: number,
+  revalidateSeconds: number
+): Promise<MarketCandlesResult> {
   return fetchBars(symbol, timeframe, startMs, endMs, revalidateSeconds);
 }
 
 interface AlpacaSnapshotResponse {
-  latestTrade?: { p?: number };
+  latestTrade?: { p?: number; t?: string };
   dailyBar?: { v?: number };
 }
 
 /**
- * Free-tier REST data (including this snapshot) carries a documented
- * 15-minute delay — only Alpaca's websocket stream is true real-time. Worth
- * knowing for anything treated as "right now" (e.g. PM-Volume Tracker).
+ * Free-tier REST data (including this snapshot) may carry a delay: only Alpaca's websocket stream is true real-time.
+ * The trade's own timestamp (latestTrade.t) is returned as `asOf`, and `delayed` is set when that trade is older than
+ * DELAYED_AFTER_MS, so a caller can show "as of 10:32" instead of presenting the price as live.
+ * Throws NoPriceError when the snapshot has no usable trade price (never returns 0).
  */
 export async function fetchQuote(symbol: string): Promise<MarketQuote> {
+  const sym = normalizeSymbol(symbol);
   const data = await fetchAlpaca<AlpacaSnapshotResponse>(
-    `/stocks/${encodeURIComponent(symbol)}/snapshot`,
+    `/stocks/${encodeURIComponent(sym)}/snapshot`,
     { feed: "iex" },
     30
   );
+  const price = data.latestTrade?.p;
+  if (!isUsablePrice(price)) throw new NoPriceError("Alpaca", sym, "snapshot has no latest trade price");
+  const tradeMs = data.latestTrade?.t ? Date.parse(data.latestTrade.t) : NaN;
+  const asOf = Number.isFinite(tradeMs) ? tradeMs : undefined;
+  const volume = Number(data.dailyBar?.v);
   return {
-    symbol,
-    lastPrice: data.latestTrade?.p ?? 0,
-    totalVolume: data.dailyBar?.v ?? 0,
+    symbol: sym,
+    lastPrice: price,
+    totalVolume: Number.isFinite(volume) && volume >= 0 ? volume : 0,
+    feed: "iex",
+    ...(asOf !== undefined ? { asOf, delayed: Date.now() - asOf > DELAYED_AFTER_MS } : {}),
   };
 }
 
@@ -213,16 +245,15 @@ async function fetchAlpacaOptions<T>(path: string, params: Record<string, string
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
-  const res = await fetch(url.toString(), {
-    headers: { "APCA-API-KEY-ID": keyId, "APCA-API-SECRET-KEY": secretKey },
-    next: { revalidate: 300 },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Alpaca options request failed for ${path}: ${res.status} ${body}`);
-  }
-  return (await res.json()) as T;
+  return providerJson<T>(
+    url.toString(),
+    { headers: { "APCA-API-KEY-ID": keyId, "APCA-API-SECRET-KEY": secretKey } },
+    { provider: "Alpaca options", path, revalidateSeconds: 300 }
+  );
 }
+
+/** Cap on option-snapshot pages followed. */
+const ALPACA_OPTIONS_MAX_PAGES = 10;
 
 /**
  * OCC option symbol format: {root, space-padded to 6 chars}{YYMMDD}{C|P}{strike*1000, 8 digits}.
@@ -254,23 +285,33 @@ function parseOccSymbol(occ: string): { expirationDate: string; type: "call" | "
  * provider even if putCallVolumeRatio (used by the Options flow-skew signal)
  * works. The endpoint path, base URL version, and OCC-symbol parsing above
  * are all unverified against a real response.
+ *
+ * Follows next_page_token (up to ALPACA_OPTIONS_MAX_PAGES pages) so a chain larger than one page is not cut silently.
  */
 export async function fetchOptionsChain(
   symbol: string,
   expirationDate?: string
 ): Promise<MarketOptionsChain> {
-  const params: Record<string, string> = { feed: "indicative" };
-  if (expirationDate) params.expiration_date = expirationDate;
+  const sym = normalizeSymbol(symbol);
+  const baseParams: Record<string, string> = { feed: "indicative" };
+  if (expirationDate) baseParams.expiration_date = expirationDate;
 
-  const data = await fetchAlpacaOptions<AlpacaOptionSnapshotsResponse>(
-    `/snapshots/${encodeURIComponent(symbol)}`,
-    params
-  );
+  const snapshots: Record<string, AlpacaOptionSnapshot> = {};
+  let pageToken: string | undefined;
+  let pages = 0;
+  do {
+    const params = pageToken ? { ...baseParams, page_token: pageToken } : baseParams;
+    const data = await fetchAlpacaOptions<AlpacaOptionSnapshotsResponse>(`/snapshots/${encodeURIComponent(sym)}`, params);
+    Object.assign(snapshots, data.snapshots ?? {});
+    pageToken = data.next_page_token ?? undefined;
+    pages += 1;
+  } while (pageToken && pages < ALPACA_OPTIONS_MAX_PAGES);
+  if (pageToken) console.warn(`[market-data] Alpaca options ${sym}: stopped after ${ALPACA_OPTIONS_MAX_PAGES} pages; the chain is incomplete.`);
 
   const calls: MarketOptionContract[] = [];
   const puts: MarketOptionContract[] = [];
 
-  for (const [occSymbol, snap] of Object.entries(data.snapshots ?? {})) {
+  for (const [occSymbol, snap] of Object.entries(snapshots)) {
     const meta = parseOccSymbol(occSymbol);
     if (!meta) continue;
 
@@ -296,5 +337,6 @@ export async function fetchOptionsChain(
     else puts.push(contract);
   }
 
-  return { symbol, calls, puts };
+  // The indicative feed is not the real OPRA feed: mark it so a UI can say so.
+  return { symbol: sym, calls, puts, feed: "alpaca-indicative", delayed: true };
 }

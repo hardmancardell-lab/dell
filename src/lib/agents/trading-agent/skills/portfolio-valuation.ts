@@ -1,4 +1,5 @@
 import { fetchQuote } from "@/lib/data/market-data";
+import { isUsablePrice } from "@/lib/data/market-data-types";
 import { fetchProfile } from "@/lib/data/fmp";
 import { assetClassLabel } from "../asset-class-label";
 import { normalizeCryptoSymbol } from "../crypto-symbol";
@@ -36,6 +37,8 @@ async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation
   const costBasisTotal = computeValuationFigures(holding, 0, 0).costBasisTotal;
 
   let currentPrice: number | null = null;
+  let priceAsOf: number | null = null;
+  let priceDelayed = false;
   let sector: string | null = null;
   let marketCapUsd: number | null = null;
 
@@ -49,16 +52,25 @@ async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation
       const contract = await getOptionContractQuote(holding.underlyingSymbol, holding.expirationDate, holding.strikePrice, holding.optionRight);
       if (!contract) throw new Error(`No matching contract found for ${holding.symbol} (may have expired).`);
       currentPrice = (contract.bid + contract.ask) / 2;
+      // Option quotes come from the chain provider (Tradier sandbox is about 15 minutes behind), so treat them as delayed.
+      priceDelayed = true;
+      if (!isUsablePrice(currentPrice)) throw new Error(`No two-sided quote for ${holding.symbol} (bid and ask are both zero).`);
     } else if (holding.assetClass === "crypto") {
       // A crypto holding is priced only from Coinbase. A symbol that is not a USD product id (for example a stock ticker
       // entered under Crypto) must not fall through to the equity quote path and come back with an unrelated price.
       const pair = normalizeCryptoSymbol(holding.symbol);
       if (!pair) throw new Error(`${holding.symbol} is not a Coinbase USD pair (use a symbol like BTC-USD).`);
-      currentPrice = (await fetchQuote(pair)).lastPrice;
+      const q = await fetchQuote(pair);
+      currentPrice = q.lastPrice;
+      priceAsOf = q.asOf ?? null;
+      priceDelayed = q.delayed ?? false;
     } else {
       const quote = await fetchQuote(holding.symbol);
       currentPrice = quote.lastPrice;
+      priceAsOf = quote.asOf ?? null;
+      priceDelayed = quote.delayed ?? false;
     }
+    if (!isUsablePrice(currentPrice)) throw new Error("Price unavailable.");
   } catch (error) {
     return {
       holding,
@@ -71,7 +83,10 @@ async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation
       annualizedReturnPercent: null,
       sector: null,
       marketCapUsd: null,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: `Price unavailable: ${error instanceof Error ? error.message : "unknown error"}`,
+      priceUnavailable: true,
+      priceAsOf: null,
+      priceDelayed: false,
     };
   }
 
@@ -107,6 +122,9 @@ async function valuateOne(holding: PortfolioHolding): Promise<PortfolioValuation
     sector,
     marketCapUsd,
     error: null,
+    priceUnavailable: false,
+    priceAsOf,
+    priceDelayed,
   };
 }
 
@@ -139,8 +157,13 @@ export async function valuatePortfolio(holdings: PortfolioHolding[]): Promise<Po
 
   const valuations = await Promise.all(holdings.map(valuateOne));
 
-  const totalValue = valuations.reduce((s, v) => s + (v.currentValue ?? 0), 0);
-  const totalCostBasis = valuations.reduce((s, v) => s + v.costBasisTotal, 0);
+  // An unpriced holding is left out of EVERY total (value, cost and P/L), never booked as a 100% loss.
+  const priced = valuations.filter((v) => v.currentValue !== null);
+  const unpriced = valuations.filter((v) => v.currentValue === null);
+  const totalValue = priced.reduce((s, v) => s + (v.currentValue ?? 0), 0);
+  const totalCostBasis = priced.reduce((s, v) => s + v.costBasisTotal, 0);
+  const unpricedCostBasis = unpriced.reduce((s, v) => s + v.costBasisTotal, 0);
+  const asOfTimes = priced.map((v) => v.priceAsOf).filter((t): t is number => typeof t === "number");
   const totalUnrealizedPL = totalValue - totalCostBasis;
   const totalUnrealizedPLPercent = totalCostBasis !== 0 ? (totalUnrealizedPL / totalCostBasis) * 100 : null;
 
@@ -167,7 +190,12 @@ export async function valuatePortfolio(holdings: PortfolioHolding[]): Promise<Po
     );
   }
   if (failedCount > 0) {
-    dataLimitations.push(`${failedCount} of ${holdings.length} holding(s) failed to price — see individual error messages below.`);
+    dataLimitations.push(
+      `${failedCount} of ${holdings.length} holding(s) have no price available and are EXCLUDED from the totals below (value, cost basis and gain/loss cover the priced holdings only). See the individual messages.`
+    );
+  }
+  if (priced.some((v) => v.priceDelayed)) {
+    dataLimitations.push("Some prices are delayed (free-tier equity quotes and the options sandbox feed can be many minutes old). Each price is as of the quote time shown, not necessarily now.");
   }
 
   return {
@@ -176,6 +204,10 @@ export async function valuatePortfolio(holdings: PortfolioHolding[]): Promise<Po
     totalCostBasis,
     totalUnrealizedPL,
     totalUnrealizedPLPercent,
+    unpricedCount: unpriced.length,
+    unpricedCostBasis,
+    oldestPriceAsOf: asOfTimes.length > 0 ? Math.min(...asOfTimes) : null,
+    anyPriceDelayed: priced.some((v) => v.priceDelayed),
     allocationByAssetClass,
     allocationBySector,
     dataLimitations,

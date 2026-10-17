@@ -6,6 +6,8 @@
  * one gets a hard 403. SEC_EDGAR_USER_AGENT is a contact string, not a secret.
  */
 
+import { providerJson } from "./provider-http";
+
 const SEC_BASE_URL = "https://data.sec.gov";
 const TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 
@@ -29,11 +31,7 @@ type SecTickerMap = Record<string, SecTickerEntry>;
 // ~1MB and effectively static day-to-day — cached far longer than any market
 // data in this app (24h), consistent with how rarely ticker<->CIK mappings change.
 async function fetchTickerMap(): Promise<SecTickerMap> {
-  const res = await fetch(TICKERS_URL, { headers: secHeaders(), next: { revalidate: 60 * 60 * 24 } });
-  if (!res.ok) {
-    throw new Error(`SEC company_tickers.json request failed: ${res.status}`);
-  }
-  return res.json();
+  return providerJson<SecTickerMap>(TICKERS_URL, { headers: secHeaders() }, { provider: "SEC", path: "company_tickers.json", revalidateSeconds: 60 * 60 * 24 });
 }
 
 export async function resolveCik(ticker: string): Promise<string | null> {
@@ -72,14 +70,11 @@ export async function fetchRecentFilings(ticker: string, forms: string[] = DEFAU
     throw new Error(`No SEC CIK found for ticker "${ticker.trim().toUpperCase()}" — may not be a US-listed filer.`);
   }
 
-  const res = await fetch(`${SEC_BASE_URL}/submissions/CIK${cik}.json`, {
-    headers: secHeaders(),
-    next: { revalidate: 60 * 15 },
-  });
-  if (!res.ok) {
-    throw new Error(`SEC submissions request failed for CIK${cik}: ${res.status}`);
-  }
-  const data = (await res.json()) as SecSubmissionsResponse;
+  const data = await providerJson<SecSubmissionsResponse>(
+    `${SEC_BASE_URL}/submissions/CIK${cik}.json`,
+    { headers: secHeaders() },
+    { provider: "SEC", path: `submissions/CIK${cik}.json`, revalidateSeconds: 60 * 15 }
+  );
   const recent = data.filings?.recent;
   if (!recent) return [];
 

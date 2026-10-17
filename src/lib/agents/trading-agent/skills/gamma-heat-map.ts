@@ -1,4 +1,5 @@
 import { fetchQuote } from "@/lib/data/market-data";
+import { isNoPriceError, isUsablePrice } from "@/lib/data/market-data-types";
 import * as tradier from "@/lib/data/tradier";
 import {
   GEX_WINDOW_DAYS,
@@ -58,8 +59,15 @@ export async function computeGammaHeatMap(underlying: string): Promise<GammaHeat
     throw new Error("The gamma heat map needs real open interest, which only Tradier provides here, and TRADIER_ACCESS_TOKEN is not set.");
   }
 
-  const quote = await fetchQuote(symbol);
+  let quote;
+  try {
+    quote = await fetchQuote(symbol);
+  } catch (error) {
+    if (isNoPriceError(error)) throw new Error(`No usable spot price for ${symbol} right now (market closed or no recent trade), so the gamma heat map cannot be drawn.`);
+    throw error;
+  }
   const spot = quote.lastPrice;
+  if (!isUsablePrice(spot)) throw new Error(`No usable spot price for ${symbol} right now, so the gamma heat map cannot be drawn.`);
   const now = Date.now();
   const expirations = await tradier.getExpirations(symbol);
   if (expirations.length === 0) throw new Error(`No option expirations found for "${symbol}". Is it optionable?`);

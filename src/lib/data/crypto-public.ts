@@ -40,7 +40,7 @@ export function createCryptoPublic(deps: CryptoPublicDeps = {}) {
 
   /** GET with retries and backoff. Throws a short Error on failure. `raw` returns the body as text. */
   async function get(url: string, opts: { raw?: boolean; coingecko?: boolean; retries?: number } = {}): Promise<unknown> {
-    const retries = opts.retries ?? 3;
+    const retries = opts.retries ?? 2; // 3 attempts x 10 s timeout stays inside a 60 s serverless budget
     let lastError = "request failed";
     for (let attempt = 0; attempt <= retries; attempt++) {
       if (opts.coingecko) {
@@ -49,7 +49,7 @@ export function createCryptoPublic(deps: CryptoPublicDeps = {}) {
         lastCoinGeckoAt = now();
       }
       try {
-        const res = await doFetch(url, { headers: { "User-Agent": UA, Accept: opts.raw ? "text/html,*/*" : "application/json" }, cache: "no-store", signal: AbortSignal.timeout(20_000) });
+        const res = await doFetch(url, { headers: { "User-Agent": UA, Accept: opts.raw ? "text/html,*/*" : "application/json" }, cache: "no-store", signal: AbortSignal.timeout(10_000) });
         if (res.status === 429 || res.status >= 500) {
           lastError = `HTTP ${res.status}`;
           if (attempt < retries) await sleep(4000 * (attempt + 1));

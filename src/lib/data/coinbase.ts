@@ -1,5 +1,7 @@
 import { aggregateCandles } from "../agents/trading-agent/skills/candle-aggregation";
+import { NoPriceError, isUsablePrice, DELAYED_AFTER_MS } from "./market-data-types";
 import type { MarketBidAsk, MarketCandle, MarketQuote } from "./market-data-types";
+import { cleanCandles, logReport, providerJson, snapWindow } from "./provider-http";
 
 /**
  * Crypto price history from Coinbase Exchange's public market-data API (no key, real exchange trades, 24/7). Symbols
@@ -46,26 +48,24 @@ export function parseCandles(rows: unknown): MarketCandle[] {
     if (!Array.isArray(r) || r.length < 6) continue;
     const [t, low, high, open, close, volume] = r.map(Number);
     if (![t, low, high, open, close, volume].every(Number.isFinite)) continue;
-    out.push({ datetime: t * 1000, open, high, low, close, volume });
+    if (low <= 0 || high <= 0 || open <= 0 || close <= 0 || volume < 0 || high < low) continue;
+    out.push({ datetime: t * 1000, open, high, low, close, volume, feed: "coinbase", delayed: false });
   }
   return out;
 }
 
 async function getJson(path: string, revalidateSeconds: number): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "User-Agent": "dellegate-research/1.0", Accept: "application/json" },
-    next: { revalidate: revalidateSeconds },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Coinbase request failed for ${path.split("?")[0]}: ${res.status} ${body.slice(0, 160)}`);
-  }
-  return res.json();
+  return providerJson<unknown>(
+    `${BASE_URL}${path}`,
+    { headers: { "User-Agent": "dellegate-research/1.0", Accept: "application/json" } },
+    { provider: "Coinbase", path: path.split("?")[0], revalidateSeconds }
+  );
 }
 
 async function fetchCandles(symbol: string, granularitySec: number, startMs: number, endMs: number, revalidateSeconds: number): Promise<MarketCandle[]> {
   const product = symbol.trim().toUpperCase();
-  const windows = planWindows(startMs, endMs, granularitySec);
+  const win = snapWindow(startMs, endMs, revalidateSeconds); // stable URLs inside one cache window
+  const windows = planWindows(win.startMs, win.endMs, granularitySec);
   const byTime = new Map<number, MarketCandle>();
   for (let i = 0; i < windows.length; i += PARALLEL_REQUESTS) {
     const batch = windows.slice(i, i + PARALLEL_REQUESTS);
@@ -79,7 +79,9 @@ async function fetchCandles(symbol: string, granularitySec: number, startMs: num
     );
     for (const rows of results) for (const c of parseCandles(rows)) byTime.set(c.datetime, c);
   }
-  return [...byTime.values()].sort((a, b) => a.datetime - b.datetime);
+  const { candles, report } = cleanCandles([...byTime.values()], `Coinbase ${product} ${granularitySec}s`);
+  logReport(report);
+  return candles;
 }
 
 export async function fetchDailyBars(symbol: string, startMs: number, endMs: number, revalidateSeconds: number): Promise<MarketCandle[]> {
@@ -109,10 +111,18 @@ export async function fetchBarsForBucket(symbol: string, bucketMs: number, start
 
 export async function fetchQuote(symbol: string): Promise<MarketQuote> {
   const product = symbol.trim().toUpperCase();
-  const j = (await getJson(`/products/${encodeURIComponent(product)}/ticker`, 15)) as { price?: string; volume?: string };
+  const j = (await getJson(`/products/${encodeURIComponent(product)}/ticker`, 15)) as { price?: string; volume?: string; time?: string };
   const price = Number(j.price);
-  if (!Number.isFinite(price) || price <= 0) throw new Error(`Coinbase returned no price for ${product}.`);
-  return { symbol: product, lastPrice: price, totalVolume: Number(j.volume) || 0 };
+  if (!isUsablePrice(price)) throw new NoPriceError("Coinbase", product);
+  const t = j.time ? Date.parse(j.time) : NaN;
+  const asOf = Number.isFinite(t) ? t : undefined;
+  return {
+    symbol: product,
+    lastPrice: price,
+    totalVolume: Number(j.volume) || 0,
+    feed: "coinbase",
+    ...(asOf !== undefined ? { asOf, delayed: Date.now() - asOf > DELAYED_AFTER_MS } : {}),
+  };
 }
 
 /** Live best bid and ask from the same ticker endpoint; null when Coinbase returns no usable two-sided book. */

@@ -1,4 +1,5 @@
 import type { MarketOptionContract, MarketOptionsChain } from "./market-data-types";
+import { normalizeSymbol, providerJson } from "./provider-http";
 
 // Sandbox endpoint, not production (api.tradier.com) — confirmed live this
 // session: Tradier's sandbox environment returns real (non-simulated) market
@@ -103,20 +104,12 @@ async function fetchTradier<T>(path: string, params: Record<string, string>, opt
   }
 
   const fresh = opts.fresh || feed === "production";
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
-    ...(fresh ? { cache: "no-store" as const, signal: AbortSignal.timeout(15_000) } : { next: { revalidate: 300 } }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Tradier request failed for ${path}: ${res.status} ${body}`);
-  }
-
-  return (await res.json()) as T;
+  // 15 s timeout and up to 2 retries on 429/5xx (Retry-After honoured) on every call, fresh or cached.
+  return providerJson<T>(
+    url.toString(),
+    { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } },
+    { provider: "Tradier", path, ...(fresh ? { noStore: true } : { revalidateSeconds: 300 }) }
+  );
 }
 
 interface TradierExpirationsResponse {
@@ -127,13 +120,14 @@ interface TradierExpirationsResponse {
 export async function getExpirations(symbol: string, opts: TradierFetchOptions = {}): Promise<string[]> {
   const data = await fetchTradier<TradierExpirationsResponse>(
     "/markets/options/expirations",
-    { symbol, includeAllRoots: "false" },
+    { symbol: normalizeSymbol(symbol), includeAllRoots: "false" },
     opts
   );
   const raw = data.expirations?.date;
   if (!raw) return [];
   const dates = Array.isArray(raw) ? raw : [raw];
-  return [...dates].sort();
+  // Keep only well-formed YYYY-MM-DD dates, de-duplicated, soonest first.
+  return [...new Set(dates.filter((d): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
 }
 
 interface TradierGreeks {
@@ -147,7 +141,7 @@ interface TradierGreeks {
 interface TradierOptionContract {
   strike: number;
   expiration_date: string;
-  option_type: "call" | "put";
+  option_type: string;
   bid?: number;
   ask?: number;
   last?: number;
@@ -175,15 +169,28 @@ interface TradierChainResponse {
   options: { option: TradierOptionContract[] | TradierOptionContract } | null;
 }
 
+/** Largest implied volatility (percent) accepted as real; anything above is treated as a bad value and stored as 0 (unknown). */
+const MAX_PLAUSIBLE_IV_PERCENT = 1000;
+
+function num(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function fetchOptionsChain(symbol: string, expirationDate?: string, opts: TradierFetchOptions = {}): Promise<MarketOptionsChain> {
-  const expiration = expirationDate ?? (await getExpirations(symbol, opts))[0];
+  const sym = normalizeSymbol(symbol);
+  const feed: TradierFeed = opts.feed === "production" ? "production" : "sandbox";
+  const feedLabel = `tradier-${feed}`;
+  // The sandbox is delayed about 15 minutes; the production feed is real-time for account holders.
+  const delayed = feed === "sandbox";
+  const expiration = expirationDate ?? (await getExpirations(sym, opts))[0];
   if (!expiration) {
-    return { symbol, calls: [], puts: [] };
+    return { symbol: sym, calls: [], puts: [], feed: feedLabel, delayed };
   }
 
   const data = await fetchTradier<TradierChainResponse>(
     "/markets/options/chains",
-    { symbol, expiration, greeks: "true" },
+    { symbol: sym, expiration, greeks: "true" },
     opts
   );
 
@@ -192,31 +199,54 @@ export async function fetchOptionsChain(symbol: string, expirationDate?: string,
 
   const calls: MarketOptionContract[] = [];
   const puts: MarketOptionContract[] = [];
+  const seen = new Set<string>();
+  let newestMs: number | undefined;
 
   for (const c of contracts) {
+    // Strict option_type: only "call" or "put" (any case). Anything else is skipped, never filed as a put.
+    const type = typeof c.option_type === "string" ? c.option_type.trim().toLowerCase() : "";
+    if (type !== "call" && type !== "put") continue;
+    const strike = num(c.strike);
+    if (strike === null || strike <= 0) continue;
+    const expirationMs = typeof c.expiration_date === "string" ? Date.parse(c.expiration_date) : NaN;
+    if (!Number.isFinite(expirationMs)) continue;
+    const key = `${type}|${strike}|${c.expiration_date}`;
+    if (seen.has(key)) continue; // duplicate contract rows would double-count open interest and gamma
+    seen.add(key);
+
+    // Negative or non-numeric quotes become 0 (unknown); a crossed market (ask < bid) is zeroed on both sides.
+    let bid = num(c.bid) ?? 0;
+    let ask = num(c.ask) ?? 0;
+    if (bid < 0) bid = 0;
+    if (ask < 0) ask = 0;
+    if (bid > 0 && ask > 0 && ask < bid) {
+      bid = 0;
+      ask = 0;
+    }
+    const ivPercent = (num(c.greeks?.mid_iv) ?? 0) * 100;
     const contract: MarketOptionContract = {
-      strikePrice: c.strike,
+      strikePrice: strike,
       expirationDate: c.expiration_date,
-      daysToExpiration: Math.max(
-        0,
-        Math.round((Date.parse(c.expiration_date) - Date.now()) / (24 * 60 * 60 * 1000))
-      ),
-      bid: c.bid ?? 0,
-      ask: c.ask ?? 0,
-      last: c.last ?? 0,
-      openInterest: c.open_interest ?? 0, // real, unlike Alpaca's hardcoded 0
-      totalVolume: c.volume ?? 0,
-      volatility: (c.greeks?.mid_iv ?? 0) * 100,
-      delta: c.greeks?.delta ?? 0,
-      gamma: c.greeks?.gamma ?? 0,
-      theta: c.greeks?.theta ?? 0,
-      vega: c.greeks?.vega ?? 0,
+      daysToExpiration: Math.max(0, Math.round((expirationMs - Date.now()) / (24 * 60 * 60 * 1000))),
+      bid,
+      ask,
+      last: Math.max(0, num(c.last) ?? 0),
+      openInterest: Math.max(0, num(c.open_interest) ?? 0), // real, unlike Alpaca's hardcoded 0
+      totalVolume: Math.max(0, num(c.volume) ?? 0),
+      volatility: ivPercent >= 0 && ivPercent <= MAX_PLAUSIBLE_IV_PERCENT ? ivPercent : 0,
+      delta: num(c.greeks?.delta) ?? 0,
+      gamma: num(c.greeks?.gamma) ?? 0,
+      theta: num(c.greeks?.theta) ?? 0,
+      vega: num(c.greeks?.vega) ?? 0,
     };
     const quoteTimeMs = newestQuoteTimeMs(c);
-    if (quoteTimeMs !== undefined) contract.quoteTimeMs = quoteTimeMs;
-    if (c.option_type === "call") calls.push(contract);
+    if (quoteTimeMs !== undefined) {
+      contract.quoteTimeMs = quoteTimeMs;
+      if (newestMs === undefined || quoteTimeMs > newestMs) newestMs = quoteTimeMs;
+    }
+    if (type === "call") calls.push(contract);
     else puts.push(contract);
   }
 
-  return { symbol, calls, puts };
+  return { symbol: sym, calls, puts, feed: feedLabel, delayed, ...(newestMs !== undefined ? { asOf: newestMs } : {}) };
 }
