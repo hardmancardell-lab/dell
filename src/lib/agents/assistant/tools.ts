@@ -21,6 +21,10 @@ import { getRecentHypotheses, isHypothesisLedgerConfigured } from "@/lib/data/hy
 import { fetchQuote } from "@/lib/data/market-data";
 import { submitFeedback, type FeedbackCategory } from "@/lib/analytics/feedback";
 import type { LlmToolSchema } from "./llm-client";
+import { validateToolInput } from "./tool-validation";
+import { CONFIRMABLE_TOOLS, describePending, type ConfirmableTool } from "./confirmations";
+import { SlidingWindowLimiter } from "@/lib/access/rate-limit";
+import { isValidSessionId } from "@/lib/data/postgrest-safe";
 import type { AssetClass } from "../trading-agent/types";
 
 // Defensive cap on any single tool result serialized back to the model —
@@ -156,7 +160,7 @@ export const ASSISTANT_TOOLS: LlmToolSchema[] = [
   {
     name: "open_paper_trading_ticket",
     description:
-      "Surfaces a real 'Open Paper Trading' button in the chat for the user to click — it does NOT place any order itself. Use this when the conversation naturally arrives at a specific, concrete paper-trading action the user could take (e.g. after discussing a ticker's setup or a specific option contract) and you want to offer a one-click way to go set it up. Never call this to execute a trade — navigation only, the user still has to fill in and submit the ticket themselves.",
+      "Proposes a real 'Open Paper Trading' button in the chat (it appears only after the user confirms) — it does NOT place any order itself. Use this when the conversation naturally arrives at a specific, concrete paper-trading action the user could take (e.g. after discussing a ticker's setup or a specific option contract) and you want to offer a one-click way to go set it up. Never call this to execute a trade — navigation only, the user still has to fill in and submit the ticket themselves.",
     input_schema: {
       type: "object",
       properties: {
@@ -172,7 +176,7 @@ export const ASSISTANT_TOOLS: LlmToolSchema[] = [
   {
     name: "submit_feedback",
     description:
-      "Logs a suggestion, bug report, or other feedback the user is giving about this app so the team can review it later. Call this whenever the user offers a feature idea, reports something broken or confusing, or explicitly says they want to leave feedback — don't just acknowledge it in text, actually call this tool. Use the user's own words for the message, not a paraphrase that loses specifics.",
+      "Logs a suggestion, bug report, or other feedback the user is giving about this app so the team can review it later. Call this whenever the user offers a feature idea, reports something broken or confusing, or explicitly says they want to leave feedback — don't just acknowledge it in text, actually call this tool. The feedback is stored only after the user confirms the draft, so after calling it tell them what will be sent and ask them to confirm. Use the user's own words for the message, not a paraphrase that loses specifics.",
     input_schema: {
       type: "object",
       properties: {
@@ -184,102 +188,162 @@ export const ASSISTANT_TOOLS: LlmToolSchema[] = [
   },
 ];
 
+const MAX_ROWS = 25;
+
+/**
+ * Keep a tool result inside the context budget WITHOUT silently losing the fact that it was cut: oversized arrays are
+ * trimmed by row, any other oversized payload is cut at the character cap, and both carry a dataLimitations note that
+ * the route copies into the response shown to the user.
+ */
 function truncate(payload: unknown): unknown {
+  if (Array.isArray(payload) && payload.length > MAX_ROWS) {
+    const trimmed = { rows: payload.slice(0, MAX_ROWS), totalRows: payload.length, dataLimitations: [`Showing the first ${MAX_ROWS} of ${payload.length} rows.`] };
+    return truncate(trimmed);
+  }
   const json = JSON.stringify(payload);
-  if (json.length <= MAX_RESULT_CHARS) return payload;
-  return { truncated: true, preview: json.slice(0, MAX_RESULT_CHARS) };
+  if (json === undefined || json.length <= MAX_RESULT_CHARS) return payload;
+  return {
+    truncated: true,
+    dataLimitations: [`A tool result was longer than ${MAX_RESULT_CHARS} characters and was cut off; the answer may be missing detail.`],
+    preview: json.slice(0, MAX_RESULT_CHARS),
+  };
 }
 
-export async function dispatchTool(
+export interface ToolOutcome {
+  result: unknown;
+  /** True when the call failed validation or threw; the route sets is_error on the tool_result. */
+  isError: boolean;
+  /** Set for submit_feedback / open_paper_trading_ticket before the user has confirmed: nothing has happened yet. */
+  pending?: { tool: ConfirmableTool; input: Record<string, unknown>; summary: string };
+}
+
+// Best-effort, per-instance: at most 5 confirmed feedback submissions per hour per session id.
+const feedbackLimiter = new SlidingWindowLimiter(5, 60 * 60_000);
+
+const TOOL_SCHEMAS = new Map(ASSISTANT_TOOLS.map((t) => [t.name, t]));
+
+/**
+ * Validates the model's input against the tool schema, then runs the tool. Confirmable tools do NOT run on the
+ * model's say-so: without `confirmed` they return a pending proposal (see confirmations.ts).
+ */
+export async function runTool(
   name: string,
-  input: Record<string, unknown>,
-  sessionId?: string
-): Promise<unknown> {
+  rawInput: unknown,
+  sessionId?: string,
+  opts: { confirmed?: boolean } = {}
+): Promise<ToolOutcome> {
+  const schema = TOOL_SCHEMAS.get(name);
+  if (!schema) return { result: { error: `Unknown tool: ${String(name).slice(0, 60)}` }, isError: true };
+
+  const checked = validateToolInput(schema, name, rawInput);
+  if (!checked.ok) return { result: { error: `Invalid input for ${name}: ${checked.error}` }, isError: true };
+  const input = checked.input;
+
+  if ((CONFIRMABLE_TOOLS as readonly string[]).includes(name) && !opts.confirmed) {
+    const tool = name as ConfirmableTool;
+    return {
+      result: {
+        status: "awaiting_user_confirmation",
+        note: "Nothing has been submitted or opened yet. Tell the user exactly what will happen and ask them to confirm (they can click Confirm or reply yes). Do not call this tool again.",
+      },
+      isError: false,
+      pending: { tool, input, summary: describePending(tool, input) },
+    };
+  }
+
   try {
     switch (name) {
       case "get_macro_overview":
-        return truncate(await getMacroOverview());
+        return ok(truncate(await getMacroOverview()));
       case "get_sector_recommendations":
-        return truncate(await getSectorRecommendations(await getMacroOverview()));
+        return ok(truncate(await getSectorRecommendations(await getMacroOverview())));
       case "get_sector_fundamentals":
-        return truncate(await getSectorFundamentals(String(input.sector ?? "")));
+        return ok(truncate(await getSectorFundamentals(String(input.sector))));
       case "get_security_analysis":
-        return truncate(await getSecurityAnalysis(String(input.ticker ?? "")));
+        return ok(truncate(await getSecurityAnalysis(String(input.ticker))));
       case "get_sector_peer_ranking":
-        return truncate(await getSectorPeerRanking(String(input.ticker ?? "")));
+        return ok(truncate(await getSectorPeerRanking(String(input.ticker))));
       case "get_quote":
-        return truncate(await fetchQuote(String(input.ticker ?? "")));
+        return ok(truncate(await fetchQuote(String(input.ticker))));
       case "get_gex_signal":
-        return truncate(await computeGexSignal(String(input.ticker ?? "")));
+        return ok(truncate(await computeGexSignal(String(input.ticker))));
       case "get_crypto_regime": {
-        const etf = typeof input.etfFlowsMtdMusd === "number" && Number.isFinite(input.etfFlowsMtdMusd) ? input.etfFlowsMtdMusd : undefined;
-        return truncate(await getCryptoRegime({ etfFlowsMtdMusd: etf }));
+        const etf = typeof input.etfFlowsMtdMusd === "number" ? input.etfFlowsMtdMusd : undefined;
+        return ok(truncate(await getCryptoRegime({ etfFlowsMtdMusd: etf })));
       }
       case "get_catalyst_calendar": {
         const days = typeof input.days === "number" ? input.days : 30;
-        const impact = ["low", "medium", "high"].includes(String(input.minImpact)) ? (String(input.minImpact) as CatalystImpact) : "low";
-        const symbol = typeof input.symbol === "string" && input.symbol.trim() ? input.symbol.trim() : undefined;
-        return truncate(upcomingCatalysts({ days, symbol, minImpact: impact }));
+        const impact = (typeof input.minImpact === "string" ? input.minImpact : "low") as CatalystImpact;
+        const symbol = typeof input.symbol === "string" ? input.symbol : undefined;
+        return ok(truncate(upcomingCatalysts({ days, symbol, minImpact: impact })));
       }
       case "get_options_chain_summary": {
-        const chain = await getOptionsChainSummary(String(input.ticker ?? ""));
-        return truncate({
-          ticker: chain.ticker,
-          expirationDate: chain.expirationDate,
-          totalCallOpenInterest: chain.totalCallOpenInterest,
-          totalPutOpenInterest: chain.totalPutOpenInterest,
-          totalCallVolume: chain.totalCallVolume,
-          totalPutVolume: chain.totalPutVolume,
-          putCallVolumeRatio: chain.putCallVolumeRatio,
-          putCallOpenInterestRatio: chain.putCallOpenInterestRatio,
-          skew: classifyPutCallSkew(chain.putCallVolumeRatio),
-          unusualActivity: computeChainWideUnusualActivity(chain),
-          dataLimitations: chain.dataLimitations,
-        });
+        const chain = await getOptionsChainSummary(String(input.ticker));
+        return ok(
+          truncate({
+            ticker: chain.ticker,
+            expirationDate: chain.expirationDate,
+            totalCallOpenInterest: chain.totalCallOpenInterest,
+            totalPutOpenInterest: chain.totalPutOpenInterest,
+            totalCallVolume: chain.totalCallVolume,
+            totalPutVolume: chain.totalPutVolume,
+            putCallVolumeRatio: chain.putCallVolumeRatio,
+            putCallOpenInterestRatio: chain.putCallOpenInterestRatio,
+            skew: classifyPutCallSkew(chain.putCallVolumeRatio),
+            unusualActivity: computeChainWideUnusualActivity(chain),
+            dataLimitations: chain.dataLimitations,
+          })
+        );
       }
       case "get_correlations": {
-        const candidates = Array.isArray(input.candidates) && input.candidates.length > 0
-          ? (input.candidates as string[])
-          : DEFAULT_CORRELATION_CANDIDATES;
-        return truncate(await findCorrelations(String(input.baseSymbol ?? ""), candidates));
+        const candidates = Array.isArray(input.candidates) && input.candidates.length > 0 ? (input.candidates as string[]) : DEFAULT_CORRELATION_CANDIDATES;
+        return ok(truncate(await findCorrelations(String(input.baseSymbol), candidates)));
       }
       case "get_rolling_move_stats": {
-        const assetClass = (String(input.assetClass ?? "equity")) as AssetClass;
-        return truncate(await getRollingMoveStats(String(input.ticker ?? ""), assetClass));
+        const assetClass = (typeof input.assetClass === "string" ? input.assetClass : "equity") as AssetClass;
+        return ok(truncate(await getRollingMoveStats(String(input.ticker), assetClass)));
       }
       case "get_strategy_hypotheses": {
         if (!isHypothesisLedgerConfigured()) {
-          return { error: "Strategy hypothesis ledger is not configured yet." };
+          return { result: { error: "Strategy hypothesis ledger is not configured yet." }, isError: true };
         }
-        return truncate(await getRecentHypotheses(50));
+        return ok(truncate(await getRecentHypotheses(50)));
       }
       case "open_paper_trading_ticket": {
-        const symbol = String(input.symbol ?? "").trim();
-        if (!symbol) return { error: "No symbol provided." };
-        const assetClass = String(input.assetClass ?? "equity") as AssetClass;
-        return {
+        return ok({
           action: "open_paper_trading_ticket",
           target: { primaryId: "trading", secondaryId: "paper-trading" },
           prefill: {
-            symbol,
-            assetClass,
-            optionRight: input.optionRight ? String(input.optionRight) : null,
+            symbol: String(input.symbol),
+            assetClass: String(input.assetClass),
+            optionRight: typeof input.optionRight === "string" ? input.optionRight : null,
             strikePrice: typeof input.strikePrice === "number" ? input.strikePrice : null,
-            expirationDate: input.expirationDate ? String(input.expirationDate) : null,
+            expirationDate: typeof input.expirationDate === "string" ? input.expirationDate : null,
           },
-        };
+        });
       }
       case "submit_feedback": {
-        const category = String(input.category ?? "other") as FeedbackCategory;
-        const message = String(input.message ?? "").trim();
-        if (!message) return { error: "No feedback message provided." };
-        const result = await submitFeedback({ sessionId: sessionId ?? "unknown", category, message });
-        return result;
+        const sid = isValidSessionId(sessionId) ? sessionId : "unknown";
+        const limited = feedbackLimiter.hit(sid);
+        if (!limited.allowed) return { result: { error: "Too many feedback submissions from this session; try again later." }, isError: true };
+        const result = await submitFeedback({ sessionId: sid, category: input.category as FeedbackCategory, message: String(input.message), source: "assistant_chat" });
+        return ok(result);
       }
       default:
-        return { error: `Unknown tool: ${name}` };
+        return { result: { error: `Unknown tool: ${name}` }, isError: true };
     }
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Unknown error running this tool." };
+    // Upstream error text can contain URLs, table names or key hints; keep it in the server log, give the model a stable message.
+    console.error(`assistant tool ${name} failed:`, error instanceof Error ? error.message.slice(0, 300) : "unknown error");
+    return { result: { error: `The ${name} tool is unavailable right now (data source error).`, code: "tool_failed" }, isError: true };
   }
+}
+
+function ok(result: unknown): ToolOutcome {
+  return { result, isError: false };
+}
+
+/** Legacy entry point (kept for existing callers and tests): runs a tool as if the user had already confirmed nothing. */
+export async function dispatchTool(name: string, input: Record<string, unknown>, sessionId?: string): Promise<unknown> {
+  return (await runTool(name, input, sessionId)).result;
 }
