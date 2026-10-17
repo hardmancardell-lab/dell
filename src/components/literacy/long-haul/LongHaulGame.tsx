@@ -88,7 +88,10 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
       <div style={{ position: "relative", width: CANVAS_WIDTH, maxWidth: "100%", display: status === "ready" ? "block" : "none" }}>
         <div
           ref={containerRef}
-          style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, maxWidth: "100%", borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)" }}
+          tabIndex={0}
+          role="application"
+          aria-label="The Long Haul driving game. Focus here, then drive with W A S D or the arrow keys, or use the on-screen buttons below. The lessons give the same ideas in text, so this game is optional."
+          style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, maxWidth: "100%", borderRadius: 8, overflow: "hidden", border: "1px solid var(--line-control)" }}
         />
 
         {/* HUD overlay */}
@@ -105,7 +108,7 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
           </div>
           <div className="flex justify-between"><span>Tolls</span><span>${hud.tollPaid}</span></div>
           {hud.trailerAttached && (
-            <div className="flex justify-between" style={{ color: "var(--verdict)" }}><span>Trailer debt</span><span>${hud.debt}</span></div>
+            <div className="flex justify-between" style={{ color: "var(--verdict)" }}><span>Loan owed</span><span>${hud.debt.toFixed(2)}</span></div>
           )}
         </div>
 
@@ -115,7 +118,7 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
             background: "rgba(10,12,16,0.5)", color: "var(--text-2)", fontSize: 11, pointerEvents: "none",
           }}
         >
-          WASD / Arrows to drive · left lane = Back Roads (free, rough) · right lane = Highway (toll, smooth)
+          Click or Tab to the game, then WASD / Arrows · left lane = Back Roads (free, rough) · right lane = Highway (toll, smooth)
         </div>
 
         {modalOpen && (
@@ -149,7 +152,7 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
                 </button>
               </div>
               <p className="text-xs" style={{ color: "var(--text-2)" }}>
-                Taking it refuels you instantly, but attaches a real weight to the car — worse handling, lower top speed — until it&apos;s paid off.
+                Taking it refuels you instantly, but attaches a real weight to the car — worse handling, lower top speed — until it&apos;s paid off. If it is not repaid it rolls over, and the ${ECONOMY.loanAmount} loan keeps adding a fee.
               </p>
             </div>
           </div>
@@ -171,7 +174,10 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
               {summary.tookLoan ? (
                 <>
                   <p className="text-xs mb-1" style={{ color: "var(--text-1)" }}>
-                    Quick-cash loan taken: <strong>${summary.debt} owed</strong>, {ECONOMY.loanAPR}% APR.
+                    Quick-cash loan taken: <strong>${summary.debt.toFixed(2)} owed</strong> on a ${ECONOMY.loanAmount} loan at {ECONOMY.loanAPR}% APR
+                    {summary.rollovers > 0
+                      ? ` — it rolled over ${summary.rollovers} time${summary.rollovers === 1 ? "" : "s"}, adding a fee each time, and the $${ECONOMY.loanAmount} you borrowed was never paid down.`
+                      : "."}
                   </p>
                   <p className="text-xs mb-3" style={{ color: "var(--verdict)" }}>{ECONOMY.rolloverRateText}</p>
                 </>
@@ -183,6 +189,33 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
           </div>
         )}
       </div>
+
+      {/* On-screen controls: the same inputs as the keys, for touch, mouse and switch users. */}
+      <div role="group" aria-label="Driving controls" className="flex flex-wrap gap-2 mt-2" style={{ display: status === "ready" ? "flex" : "none" }}>
+        {([
+          ["left", "Steer left"],
+          ["right", "Steer right"],
+          ["up", "Accelerate"],
+          ["down", "Brake"],
+        ] as const).map(([control, label]) => (
+          <button
+            key={control}
+            type="button"
+            aria-label={label}
+            className="jv-btn-outline"
+            style={{ touchAction: "none", userSelect: "none" }}
+            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); engineRef.current?.setControl(control, true); }}
+            onPointerUp={() => engineRef.current?.setControl(control, false)}
+            onPointerCancel={() => engineRef.current?.setControl(control, false)}
+            onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); engineRef.current?.setControl(control, true); } }}
+            onKeyUp={(e) => { if (e.key === " " || e.key === "Enter") engineRef.current?.setControl(control, false); }}
+            onBlur={() => engineRef.current?.setControl(control, false)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
     </div>
   );
 }

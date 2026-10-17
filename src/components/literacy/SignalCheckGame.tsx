@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SIGNAL_CHECK_LEVELS } from "@/lib/agents/financial-literacy/skills/signal-check-content";
 import type { SignalCard, SignalCheckLevel } from "@/lib/agents/financial-literacy/types";
 
@@ -37,6 +37,7 @@ export function SignalCheckGame({
   onLevelComplete: (levelId: string, xpAwarded: number) => void;
 }) {
   const [stage, setStage] = useState<Stage>("menu");
+  const nextButtonRef = useRef<HTMLButtonElement>(null);
   const [round, setRound] = useState<RoundState | null>(null);
   const [lastResult, setLastResult] = useState<{
     level: SignalCheckLevel;
@@ -44,6 +45,12 @@ export function SignalCheckGame({
     xpAwarded: number;
     misses: { card: SignalCard; picked: boolean }[];
   } | null>(null);
+
+  // After a pick, move keyboard focus to the Next button so play continues without hunting for it.
+  const revealedNow = round?.revealed === true;
+  useEffect(() => {
+    if (revealedNow) nextButtonRef.current?.focus();
+  }, [revealedNow]);
 
   const nextSuggestedId =
     SIGNAL_CHECK_LEVELS.find((lvl) => !completedLevelIds.includes(lvl.id))?.id ?? SIGNAL_CHECK_LEVELS[0].id;
@@ -163,7 +170,14 @@ export function SignalCheckGame({
   const isLast = round.cardIndex + 1 >= round.level.cards.length;
 
   return (
-    <div className="jv-card">
+    <div
+      className="jv-card"
+      onKeyDown={(e) => {
+        if (round.revealed) return;
+        if (e.key === "n" || e.key === "N") pick(false);
+        else if (e.key === "s" || e.key === "S") pick(true);
+      }}
+    >
       <div className="flex items-center justify-between mb-3">
         <div className="text-xs font-mono" style={{ color: "var(--text-2)" }}>{round.level.title}</div>
         <div className="text-xs" style={{ color: "var(--text-2)" }}>
@@ -176,15 +190,19 @@ export function SignalCheckGame({
 
       <div className="p-4 mb-3" style={{ background: "var(--ink-800)" }}>
         <div className="text-sm font-medium" style={{ color: "var(--text-0)" }}>{card.text}</div>
+        <div className="text-xs mt-2" style={{ color: "var(--text-2)" }}>Keys: S for Signal, N for Noise.</div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <button
           onClick={() => pick(false)}
           disabled={round.revealed}
-          className="rounded-lg px-3 py-4 text-sm font-semibold text-white disabled:cursor-default transition-opacity"
+          aria-keyshortcuts="N"
+          aria-label="Noise (press N)"
+          className="rounded-lg px-3 py-4 text-sm font-semibold disabled:cursor-default transition-opacity"
           style={{
             background: "var(--danger)",
+            color: "var(--ink-950)",
             // Highlight whichever button is actually correct once revealed,
             // regardless of what was picked — a wrong pick should show where
             // the truth was, not just dim itself.
@@ -199,10 +217,12 @@ export function SignalCheckGame({
         <button
           onClick={() => pick(true)}
           disabled={round.revealed}
+          aria-keyshortcuts="S"
+          aria-label="Signal (press S)"
           className="rounded-lg px-3 py-4 text-sm font-semibold disabled:cursor-default transition-opacity"
           style={{
             background: "var(--signal)",
-            color: "#04201c",
+            color: "var(--ink-950)",
             opacity: round.revealed && !card.isSignal ? 0.4 : 1,
           }}
         >
@@ -215,6 +235,8 @@ export function SignalCheckGame({
 
       {round.revealed && (
         <div
+          role="status"
+          aria-live="polite"
           className="text-sm rounded-lg p-3 mb-3"
           style={
             correct
@@ -230,7 +252,7 @@ export function SignalCheckGame({
       )}
 
       {round.revealed && (
-        <button onClick={next} className="jv-btn">
+        <button ref={nextButtonRef} onClick={next} className="jv-btn">
           {isLast ? "See Results" : "Next Card"}
         </button>
       )}

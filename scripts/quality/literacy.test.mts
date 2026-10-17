@@ -3,6 +3,8 @@
 // Financial Literacy integrity checks: answer-key pattern simulations (always-A..D, longest, shortest, absolute-word
 // avoidance) over the lesson checks, content shape, and the Quiz Mode XP caps.
 import { LITERACY_MODULES, PLACEMENT_QUESTIONS } from "../../src/lib/agents/financial-literacy/skills/curriculum-content.ts";
+import { SIGNAL_CHECK_LEVELS } from "../../src/lib/agents/financial-literacy/skills/signal-check-content.ts";
+import { planDeltaRound, deltaOutcome, contractCost, CLEAR_TARGET, XP_ON_CLEAR, XP_ON_ATTEMPT } from "../../src/lib/agents/financial-literacy/skills/delta-defender-rules.ts";
 import { applyQuizXp, EMPTY_QUIZ_XP, QUIZ_XP_DAILY_CAP, localDateKey, quizQuestionKey } from "../../src/lib/agents/financial-literacy/quiz-xp.ts";
 
 let bad = 0, passed = 0;
@@ -68,6 +70,42 @@ t("the last XP of the day is trimmed to fit the cap", partial.awarded === 5 && p
 t("negative or zero requests award nothing", applyQuizXp(EMPTY_QUIZ_XP, "y#0", -5, today).awarded === 0);
 t("localDateKey is the local calendar day", localDateKey(new Date(2026, 9, 17, 23, 30)) === "2026-10-17");
 t("a lifetime of 144 questions can never pay more than 1440 XP from quiz answers", 144 * 10 === 1440);
+
+// ---------- Signal Check: order and cue balance (audit: N,S,N,S order; an urgency-word rule scored 84%)
+const URG = /(act now|right now|\bnow\b|before|don.t miss|miss out|guaranteed|sure thing|secret|trick|congratulations|immediately|instantly|press 1|no risk|never loses|proven|erase|pennies|expires?|\bDM\b|follow|whales|insiders|too late|loading up|everyone|limited|urgent|today|hurry|last chance|free)/i;
+let scTotal = 0, urgOk = 0, digitOk = 0;
+for (const lvl of SIGNAL_CHECK_LEVELS) {
+  const seq = lvl.cards.map((c) => (c.isSignal ? "S" : "N")).join("");
+  const n = lvl.cards.length, sig = lvl.cards.filter((c) => c.isSignal).length;
+  t(`signal check L${lvl.order}: half Signal, half Noise (${sig}/${n})`, sig * 2 === n);
+  const alt = [...seq].filter((ch, i) => i > 0 && ch !== seq[i - 1]).length / (n - 1);
+  t(`signal check L${lvl.order}: order ${seq} is not alternating (flip rate ${(alt * 100).toFixed(0)}%)`, alt <= 0.75 && !/^(NS)+N?$|^(SN)+S?$/.test(seq));
+  t(`signal check L${lvl.order}: no run of more than 2 identical answers`, !/(S{3}|N{3})/.test(seq));
+  const alternator = lvl.cards.filter((c, i) => c.isSignal === (i % 2 === 1)).length / n;
+  t(`signal check L${lvl.order}: an alternate-guess bot scores at most 70% (${(alternator * 100).toFixed(0)}%)`, Math.max(alternator, 1 - alternator) <= 0.7);
+  for (const c of lvl.cards) { scTotal++; if (!URG.test(c.text) === c.isSignal) urgOk++; if (/\d/.test(c.text) === c.isSignal) digitOk++; }
+  t(`signal check L${lvl.order}: every card has an explanation and a domain`, lvl.cards.every((c) => c.explanation.length > 10 && !!c.domain));
+}
+t(`signal check: the urgency-word rule scores ${(100 * urgOk / scTotal).toFixed(0)}% over ${scTotal} cards (was 84%; limit 62%)`, urgOk / scTotal <= 0.62);
+t(`signal check: the has-a-number rule scores ${(100 * digitOk / scTotal).toFixed(0)}% (limit 62%)`, digitOk / scTotal <= 0.62);
+
+// ---------- Delta Defender: the clear bonus must be affordable (audit: 8 contracts cost $2,330-$5,764 vs $2,000)
+const Ncdf = (x: number) => { const sgn = Math.sign(x); const ax = Math.abs(x) / Math.SQRT2; const tt = 1 / (1 + 0.3275911 * ax); const y = 1 - (((((1.061405429 * tt - 1.453152027) * tt) + 1.421413741) * tt - 0.284496736) * tt + 0.254829592) * tt * Math.exp(-ax * ax); return 0.5 * (1 + sgn * y); };
+const bsCall = (S: number, K: number, T: number, r: number, v: number) => { const d1 = (Math.log(S / K) + (r + v * v / 2) * T) / (v * Math.sqrt(T)); const d2 = d1 - v * Math.sqrt(T); return { price: S * Ncdf(d1) - K * Math.exp(-r * T) * Ncdf(d2), delta: Ncdf(d1) }; };
+let scen = 0, reachable = 0, notAll = 0;
+for (const S of [450, 520, 600, 680]) for (const v of [0.12, 0.14, 0.2, 0.3]) for (const days of [2, 7, 14, 30]) {
+  scen++;
+  const chain = []; for (let k = Math.round(S) - 4; k <= Math.round(S) + 3; k++) { const c = bsCall(S, k, days / 365, 0.04, v); if (c.price * 0.98 > 0) chain.push({ bid: c.price * 0.98, delta: c.delta }); }
+  const plan = planDeltaRound(chain);
+  const costs = chain.map(contractCost).sort((a, b) => a - b);
+  if (costs.slice(0, plan.clearTarget).reduce((a, b) => a + b, 0) <= plan.capital) reachable++;
+  if (costs.reduce((a, b) => a + b, 0) > plan.capital) notAll++;
+}
+t(`delta defender: the goal (${CLEAR_TARGET} contracts) is affordable in ${reachable}/${scen} modeled chains`, reachable === scen);
+t(`delta defender: engaging all 8 is NOT affordable in most modeled chains (${notAll}/${scen}), so cost still forces choices`, notAll / scen >= 0.6);
+t("delta defender: zero engaged pays no XP and does not complete the module", deltaOutcome(0, 5).award === false && deltaOutcome(0, 5).xp === 0);
+t("delta defender: reaching the goal pays the clear XP, fewer pays the attempt XP", deltaOutcome(5, 5).xp === XP_ON_CLEAR && deltaOutcome(5, 5).cleared && deltaOutcome(2, 5).xp === XP_ON_ATTEMPT && !deltaOutcome(2, 5).cleared);
+t("delta defender: a 3-contract chain sets its goal to 3", planDeltaRound([{ bid: 1 }, { bid: 2 }, { bid: 3 }]).clearTarget === 3);
 
 console.log(bad ? `${bad} FAILED, ${passed} passed` : `ALL PASS (${passed} checks)`);
 process.exit(bad ? 1 : 0);

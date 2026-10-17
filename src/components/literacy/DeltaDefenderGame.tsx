@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Phaser from "phaser";
 import type { MarketOptionContract } from "@/lib/data/market-data-types";
+import { JARVIS, toPhaserColor } from "@/lib/design/tokens";
+import { MAX_TARGETS, contractCost, deltaOutcome, planDeltaRound, type DeltaRoundPlan } from "@/lib/agents/financial-literacy/skills/delta-defender-rules";
 
 // Expert-tier arcade game — real computed targets, not placeholders. Fetches
 // a real live options chain (same /api/option-expirations +
@@ -19,12 +21,20 @@ import type { MarketOptionContract } from "@/lib/data/market-data-types";
 // broke and be unable to fire.
 
 const TICKER = "SPY";
-const STARTING_CAPITAL = 2000;
-const MAX_TARGETS = 8;
 const SPAWN_STAGGER_MS = 1400;
 const FALL_DURATION_MS = 6500;
-const XP_ON_CLEAR = 30;
-const XP_ON_ATTEMPT = 15;
+
+// Palette comes from the jarvis tokens (Phaser cannot read CSS variables).
+const C = {
+  bg: JARVIS.ink950,
+  panel: toPhaserColor(JARVIS.ink700),
+  panelHover: toPhaserColor(JARVIS.lineBright),
+  text: JARVIS.text0,
+  muted: JARVIS.text1,
+  signal: JARVIS.signal,
+  signalNum: toPhaserColor(JARVIS.signal),
+  warn: JARVIS.verdict,
+};
 
 interface GameOutcome {
   engaged: number;
@@ -35,12 +45,16 @@ interface GameOutcome {
 
 class DeltaDefenderScene extends Phaser.Scene {
   private contracts: MarketOptionContract[] = [];
-  private capital = STARTING_CAPITAL;
+  private plan: DeltaRoundPlan = { capital: 0, clearTarget: 0 };
+  private capital = 0;
   private score = 0;
   private engaged = 0;
   private resolved = 0;
   private hud!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
+  // One entry per spawned target, in contract order, so number keys 1-8 can engage them without a mouse.
+  private engageByIndex: Array<(() => void) | null> = [];
+  private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor() {
     super("DeltaDefender");
@@ -48,81 +62,102 @@ class DeltaDefenderScene extends Phaser.Scene {
 
   create() {
     this.contracts = this.registry.get("contracts") as MarketOptionContract[];
-    this.capital = STARTING_CAPITAL;
+    this.plan = this.registry.get("plan") as DeltaRoundPlan;
+    this.capital = this.plan.capital;
     this.score = 0;
     this.engaged = 0;
     this.resolved = 0;
-    this.cameras.main.setBackgroundColor("#050814");
+    this.engageByIndex = [];
+    this.setKeys(null);
+    this.cameras.main.setBackgroundColor(C.bg);
     this.showRecon();
+  }
+
+  /** Replace the scene's single keyboard handler (null removes it). Keyboard play is the alternative to the mouse. */
+  private setKeys(handler: ((e: KeyboardEvent) => void) | null) {
+    const kb = this.input.keyboard;
+    if (!kb) return;
+    if (this.keyHandler) kb.off("keydown", this.keyHandler);
+    this.keyHandler = handler;
+    if (handler) kb.on("keydown", handler);
   }
 
   private showRecon() {
     this.add.text(20, 16, `Delta Defender — ${TICKER} real chain, ${this.contracts.length} contracts`, {
       fontFamily: "sans-serif",
       fontSize: "15px",
-      color: "#e2e8f0",
+      color: C.text,
     });
     this.add.text(
       20,
       44,
       "Real recon before engagement — top 3 contracts by delta:",
-      { fontFamily: "sans-serif", fontSize: "12px", color: "#94a3b8" }
+      { fontFamily: "sans-serif", fontSize: "12px", color: C.muted }
     );
     const top3 = [...this.contracts].sort((a, b) => b.delta - a.delta).slice(0, 3);
     top3.forEach((c, i) => {
       this.add.text(
         30,
         70 + i * 20,
-        `$${c.strikePrice} Call · Δ${c.delta.toFixed(2)} · IV ${c.volatility.toFixed(1)}% · bid $${c.bid.toFixed(2)} (cost $${(c.bid * 100).toFixed(0)})`,
-        { fontFamily: "sans-serif", fontSize: "12px", color: "#4fe8d0" }
+        `$${c.strikePrice} Call · Δ${c.delta.toFixed(2)} · IV ${c.volatility.toFixed(1)}% · bid $${c.bid.toFixed(2)} (cost $${contractCost(c).toFixed(0)})`,
+        { fontFamily: "sans-serif", fontSize: "12px", color: C.signal }
       );
     });
-    this.add.text(20, 150, `Starting capital: $${STARTING_CAPITAL}. Click a falling contract to engage it — cost is its real bid x 100.`, {
-      fontFamily: "sans-serif",
-      fontSize: "12px",
-      color: "#e2e8f0",
-      wordWrap: { width: 440 },
-    });
+    this.add.text(
+      20,
+      136,
+      `Capital this round: $${this.plan.capital}. Goal: engage ${this.plan.clearTarget} contracts. Each one costs its real bid x 100, and high-delta contracts cost the most, so you cannot take them all. Click a falling contract, or press its number key (1-${this.contracts.length}).`,
+      { fontFamily: "sans-serif", fontSize: "12px", color: C.text, wordWrap: { width: 440 } }
+    );
 
-    const engageBg = this.add.rectangle(20, 190, 160, 44, 0x1e293b).setOrigin(0, 0).setInteractive({ useHandCursor: true });
-    const engageLabel = this.add.text(48, 206, "Engage", { fontFamily: "sans-serif", fontSize: "15px", color: "#4fe8d0", fontStyle: "bold" });
-    engageBg.on("pointerover", () => engageBg.setFillStyle(0x334155));
-    engageBg.on("pointerout", () => engageBg.setFillStyle(0x1e293b));
-    engageBg.on("pointerdown", () => {
+    const engageBg = this.add.rectangle(20, 206, 160, 44, C.panel).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+    this.add.text(36, 222, "Engage (Enter)", { fontFamily: "sans-serif", fontSize: "15px", color: C.signal, fontStyle: "bold" });
+    engageBg.on("pointerover", () => engageBg.setFillStyle(C.panelHover));
+    engageBg.on("pointerout", () => engageBg.setFillStyle(C.panel));
+    const begin = () => {
       this.children.removeAll(true);
       this.startWave();
+    };
+    engageBg.on("pointerdown", begin);
+    this.setKeys((e) => {
+      if (e.key === "Enter" || e.key === " ") begin();
     });
   }
 
   private startWave() {
-    this.hud = this.add.text(20, 12, "", { fontFamily: "sans-serif", fontSize: "13px", color: "#e2e8f0" });
-    this.messageText = this.add.text(20, 34, "", { fontFamily: "sans-serif", fontSize: "12px", color: "#f59e0b" });
+    this.hud = this.add.text(20, 12, "", { fontFamily: "sans-serif", fontSize: "13px", color: C.text });
+    this.messageText = this.add.text(20, 34, "", { fontFamily: "sans-serif", fontSize: "12px", color: C.warn });
     this.updateHud();
+    this.engageByIndex = this.contracts.map(() => null);
+    this.setKeys((e) => {
+      const n = Number(e.key);
+      if (Number.isInteger(n) && n >= 1 && n <= this.engageByIndex.length) this.engageByIndex[n - 1]?.();
+    });
 
     this.contracts.forEach((contract, i) => {
-      this.time.delayedCall(i * SPAWN_STAGGER_MS, () => this.spawnTarget(contract));
+      this.time.delayedCall(i * SPAWN_STAGGER_MS, () => this.spawnTarget(contract, i));
     });
   }
 
   private updateHud() {
     this.hud.setText(
-      `Capital: $${this.capital.toFixed(0)}   Score: ${this.score}   Targets: ${this.resolved}/${this.contracts.length}`
+      `Capital: $${this.capital.toFixed(0)}   Engaged: ${this.engaged}/${this.plan.clearTarget} goal   Score: ${this.score}   Targets: ${this.resolved}/${this.contracts.length}`
     );
   }
 
-  private spawnTarget(contract: MarketOptionContract) {
+  private spawnTarget(contract: MarketOptionContract, index: number) {
     const x = 40 + Math.random() * 400;
-    const cost = contract.bid * 100;
+    const cost = contractCost(contract);
     const container = this.add.container(x, -20);
-    const bg = this.add.rectangle(0, 0, 130, 40, 0x1e293b).setStrokeStyle(1, 0x4fe8d0).setOrigin(0.5);
-    const label = this.add.text(0, -8, `$${contract.strikePrice}C`, { fontFamily: "sans-serif", fontSize: "13px", color: "#e2e8f0" }).setOrigin(0.5);
-    const sub = this.add.text(0, 9, `Δ${contract.delta.toFixed(2)} · $${cost.toFixed(0)}`, { fontFamily: "sans-serif", fontSize: "10px", color: "#94a3b8" }).setOrigin(0.5);
+    const bg = this.add.rectangle(0, 0, 130, 40, C.panel).setStrokeStyle(1, C.signalNum).setOrigin(0.5);
+    const label = this.add.text(0, -8, `${index + 1}: $${contract.strikePrice}C`, { fontFamily: "sans-serif", fontSize: "13px", color: C.text }).setOrigin(0.5);
+    const sub = this.add.text(0, 9, `Δ${contract.delta.toFixed(2)} · $${cost.toFixed(0)}`, { fontFamily: "sans-serif", fontSize: "10px", color: C.muted }).setOrigin(0.5);
     container.add([bg, label, sub]);
     container.setSize(130, 40);
     container.setInteractive({ hitArea: new Phaser.Geom.Rectangle(-65, -20, 130, 40), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
 
     let resolved = false;
-    container.on("pointerdown", () => {
+    const engage = () => {
       if (resolved) return;
       if (this.capital < cost) {
         this.messageText.setText(`Not enough capital for $${contract.strikePrice}C (need $${cost.toFixed(0)}).`);
@@ -130,6 +165,7 @@ class DeltaDefenderScene extends Phaser.Scene {
         return;
       }
       resolved = true;
+      this.engageByIndex[index] = null;
       this.capital -= cost;
       this.score += Math.round(contract.delta * 100);
       this.engaged += 1;
@@ -146,7 +182,9 @@ class DeltaDefenderScene extends Phaser.Scene {
           this.checkEnd();
         },
       });
-    });
+    };
+    this.engageByIndex[index] = engage;
+    container.on("pointerdown", engage);
 
     this.tweens.add({
       targets: container,
@@ -155,6 +193,7 @@ class DeltaDefenderScene extends Phaser.Scene {
       onComplete: () => {
         if (resolved) return;
         resolved = true;
+        this.engageByIndex[index] = null;
         this.resolved += 1;
         this.updateHud();
         container.destroy();
@@ -175,25 +214,25 @@ class DeltaDefenderScene extends Phaser.Scene {
   }
 
   private showEnding(outcome: GameOutcome) {
-    const cleared = outcome.engaged >= outcome.total;
-    this.add.text(
-      20,
-      160,
-      cleared
-        ? `All ${outcome.total} contracts engaged — score ${outcome.score}, $${outcome.capitalRemaining.toFixed(0)} capital left.`
-        : `Engaged ${outcome.engaged}/${outcome.total} — score ${outcome.score}, $${outcome.capitalRemaining.toFixed(0)} capital left.`,
-      { fontFamily: "sans-serif", fontSize: "14px", color: "#e2e8f0", wordWrap: { width: 440 } }
-    );
+    const result = deltaOutcome(outcome.engaged, this.plan.clearTarget);
+    const summary = result.cleared
+      ? `Goal met: engaged ${outcome.engaged} of ${outcome.total}, score ${outcome.score}, $${outcome.capitalRemaining.toFixed(0)} capital left.`
+      : outcome.engaged > 0
+        ? `Engaged ${outcome.engaged} of ${this.plan.clearTarget} needed — score ${outcome.score}, $${outcome.capitalRemaining.toFixed(0)} capital left.`
+        : "Nothing engaged, so no XP this round. Try again and engage at least one contract.";
+    this.add.text(20, 160, summary, { fontFamily: "sans-serif", fontSize: "14px", color: C.text, wordWrap: { width: 440 } });
 
-    const replayBg = this.add.rectangle(20, 210, 170, 44, 0x1e293b).setOrigin(0, 0).setInteractive({ useHandCursor: true });
-    const replayLabel = this.add.text(34, 226, "Play again", { fontFamily: "sans-serif", fontSize: "14px", color: "#e2e8f0" });
-    replayBg.on("pointerover", () => replayBg.setFillStyle(0x334155));
-    replayBg.on("pointerout", () => replayBg.setFillStyle(0x1e293b));
+    const replayBg = this.add.rectangle(20, 210, 190, 44, C.panel).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+    this.add.text(34, 226, "Play again (R)", { fontFamily: "sans-serif", fontSize: "14px", color: C.text });
+    replayBg.on("pointerover", () => replayBg.setFillStyle(C.panelHover));
+    replayBg.on("pointerout", () => replayBg.setFillStyle(C.panel));
     replayBg.on("pointerdown", () => this.create());
+    this.setKeys((e) => {
+      if (e.key === "r" || e.key === "R" || e.key === "Enter") this.create();
+    });
 
-    const xp = cleared ? XP_ON_CLEAR : XP_ON_ATTEMPT;
     const onComplete = this.registry.get("onComplete") as ((xp: number, cleared: boolean) => void) | undefined;
-    onComplete?.(xp, cleared);
+    if (result.award) onComplete?.(result.xp, result.cleared);
   }
 }
 
@@ -204,6 +243,13 @@ export function DeltaDefenderGame({ onComplete }: { onComplete: (xpAwarded: numb
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const hasAwardedRef = useRef(false);
+  // The parent passes a fresh arrow function on every render. Keeping the latest one in a ref (and out of the
+  // effect dependencies) stops the Phaser game being destroyed and rebuilt whenever the parent re-renders,
+  // for example when completing the module updates XP. Audit finding F1.
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     let cancelled = false;
@@ -271,13 +317,18 @@ export function DeltaDefenderGame({ onComplete }: { onComplete: (xpAwarded: numb
       height: 280,
       parent: container,
       scene: [DeltaDefenderScene],
-      backgroundColor: "#050814",
+      backgroundColor: JARVIS.ink950,
+      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_HORIZONTALLY },
+      // Key presses only reach the game while its (focusable) container has focus, so two games on one page
+      // do not both react to the same key and typing elsewhere is never captured.
+      input: { keyboard: { target: container } },
     });
     game.registry.set("contracts", contracts);
+    game.registry.set("plan", planDeltaRound(contracts));
     game.registry.set("onComplete", (xp: number, cleared: boolean) => {
       if (hasAwardedRef.current) return;
       hasAwardedRef.current = true;
-      onComplete(xp, cleared);
+      onCompleteRef.current(xp, cleared);
     });
     gameRef.current = game;
 
@@ -286,18 +337,26 @@ export function DeltaDefenderGame({ onComplete }: { onComplete: (xpAwarded: numb
       gameRef.current = null;
       container.innerHTML = "";
     };
-  }, [status, contracts, onComplete]);
+  }, [status, contracts]);
 
   if (status === "loading") {
-    return <div className="text-sm text-zinc-400 py-6">Loading a real {TICKER} options chain…</div>;
+    return <div className="text-sm py-6" style={{ color: "var(--text-2)" }}>Loading a real {TICKER} options chain…</div>;
   }
   if (status === "error") {
     return (
-      <div className="text-sm text-amber-700 dark:text-amber-500 py-3">
+      <div className="text-sm py-3" role="status" style={{ color: "var(--verdict)" }}>
         Delta Defender needs a real, live options chain to play (this app never fabricates contract data) —{" "}
         {error}
       </div>
     );
   }
-  return <div ref={containerRef} className="rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800" />;
+  return (
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      role="application"
+      aria-label="Delta Defender arcade game. Press Enter to start, then press a contract's number key (1 to 8) to engage it as it falls. R plays again. The expert lessons cover the same ideas in text, so this game is optional."
+      style={{ maxWidth: 480, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line-control)" }}
+    />
+  );
 }

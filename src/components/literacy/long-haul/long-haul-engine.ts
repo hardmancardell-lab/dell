@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
-import { TRACK, VEHICLE, TRAILER, ECONOMY, XP } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { TRACK, VEHICLE, TRAILER, ECONOMY } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { advanceLoan, fuelAfter, NO_LOAN, shouldOfferLoan, stepSpeed, takeLoan, type LoanState } from "@/lib/agents/financial-literacy/skills/long-haul-rules";
 
 /**
  * Three.js + Rapier engine for "The Long Haul", framework-agnostic on
@@ -30,7 +31,9 @@ export interface LongHaulSummary {
   elapsedSeconds: number;
   tollPaid: number;
   tookLoan: boolean;
+  /** Total owed at the finish: the original loan plus every rollover fee. */
   debt: number;
+  rollovers: number;
 }
 
 export interface LongHaulCallbacks {
@@ -57,7 +60,7 @@ export class LongHaulEngine {
   private fuel = 100;
   private tollPaid = 0;
   private trailerAttached = false;
-  private debt = 0;
+  private loan: LoanState = NO_LOAN;
   private gasStationResolved = false;
   private tollCharged = false;
   private startTime = performance.now();
@@ -67,8 +70,12 @@ export class LongHaulEngine {
   private rafId: number | null = null;
   private disposed = false;
 
-  private readonly onKeyDown = (e: KeyboardEvent) => this.setKey(e.code, true);
-  private readonly onKeyUp = (e: KeyboardEvent) => this.setKey(e.code, false);
+  // Key handling lives on the (focusable) game container, not on window: arrow keys no longer
+  // scroll the page or fire while the player types in another field, and handled keys call
+  // preventDefault. Releasing focus clears the keys so the car cannot get stuck on throttle.
+  private readonly onKeyDown = (e: KeyboardEvent) => { if (this.setKey(e.code, true)) e.preventDefault(); };
+  private readonly onKeyUp = (e: KeyboardEvent) => { if (this.setKey(e.code, false)) e.preventDefault(); };
+  private readonly onBlur = () => { this.keys = { up: false, down: false, left: false, right: false }; };
   private readonly onResize = () => this.handleResize();
 
   constructor(private container: HTMLElement, private callbacks: LongHaulCallbacks) {
@@ -90,8 +97,9 @@ export class LongHaulEngine {
     );
     this.trailerMesh.visible = false;
 
-    window.addEventListener("keydown", this.onKeyDown);
-    window.addEventListener("keyup", this.onKeyUp);
+    container.addEventListener("keydown", this.onKeyDown);
+    container.addEventListener("keyup", this.onKeyUp);
+    container.addEventListener("blur", this.onBlur);
     window.addEventListener("resize", this.onResize);
   }
 
@@ -175,11 +183,19 @@ export class LongHaulEngine {
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.9, 0.5, 1.7).setMass(1), this.carRigid);
   }
 
-  private setKey(code: string, val: boolean) {
+  /** Returns true when the key is one the game uses. */
+  private setKey(code: string, val: boolean): boolean {
     if (code === "KeyW" || code === "ArrowUp") this.keys.up = val;
-    if (code === "KeyS" || code === "ArrowDown") this.keys.down = val;
-    if (code === "KeyA" || code === "ArrowLeft") this.keys.left = val;
-    if (code === "KeyD" || code === "ArrowRight") this.keys.right = val;
+    else if (code === "KeyS" || code === "ArrowDown") this.keys.down = val;
+    else if (code === "KeyA" || code === "ArrowLeft") this.keys.left = val;
+    else if (code === "KeyD" || code === "ArrowRight") this.keys.right = val;
+    else return false;
+    return true;
+  }
+
+  /** On-screen controls (touch, mouse, switch devices) press and release the same inputs as the keys. */
+  setControl(control: "up" | "down" | "left" | "right", pressed: boolean) {
+    this.keys[control] = pressed;
   }
 
   private handleResize() {
@@ -212,7 +228,7 @@ export class LongHaulEngine {
   acceptLoan() {
     if (this.phase !== "modal") return;
     this.trailerAttached = true;
-    this.debt = ECONOMY.loanAmount;
+    this.loan = takeLoan();
     this.fuel = 100;
     this.phase = "driving";
   }
@@ -231,7 +247,7 @@ export class LongHaulEngine {
     this.fuel = 100;
     this.tollPaid = 0;
     this.trailerAttached = false;
-    this.debt = 0;
+    this.loan = NO_LOAN;
     this.gasStationResolved = false;
     this.tollCharged = false;
     this.startTime = performance.now();
@@ -255,11 +271,7 @@ export class LongHaulEngine {
       if (this.keys.left) steer = -1;
       else if (this.keys.right) steer = 1;
 
-      if (throttle > 0) this.speed += tuning.accel * dt;
-      else if (throttle < 0) this.speed -= VEHICLE.brakeDecel * dt;
-      else this.speed -= Math.sign(this.speed) * VEHICLE.coastDecel * dt;
-      this.speed = Math.max(-tuning.maxSpeed * 0.5, Math.min(tuning.maxSpeed, this.speed));
-      if (Math.abs(this.speed) < 0.05) this.speed = 0;
+      this.speed = stepSpeed(this.speed, throttle as -1 | 0 | 1, tuning, dt);
 
       const speedFrac = Math.abs(this.speed) / tuning.maxSpeed;
       const turnAmount = steer * tuning.turnRate * Math.max(0.2, Math.min(1, speedFrac + 0.2)) * dt;
@@ -274,8 +286,9 @@ export class LongHaulEngine {
         true
       );
 
-      const drain = ECONOMY.fuelDrainIdle + (throttle > 0 ? ECONOMY.fuelDrainAtFullThrottle : 0);
-      this.fuel = Math.max(0, this.fuel - drain * dt);
+      this.fuel = fuelAfter(this.fuel, throttle > 0, dt);
+      // An open loan rolls over every ECONOMY.rolloverIntervalSeconds and adds its fee (long-haul-rules.ts).
+      this.loan = advanceLoan(this.loan, dt);
 
       const pos = this.carRigid.translation();
 
@@ -286,7 +299,7 @@ export class LongHaulEngine {
 
       if (!this.gasStationResolved && pos.z <= TRACK.gasStationZ) {
         this.gasStationResolved = true;
-        if (this.fuel < TRACK.gasStationFuelThreshold) {
+        if (shouldOfferLoan(this.fuel)) {
           this.pauseCar();
           this.phase = "modal";
           this.callbacks.onLoanPrompt();
@@ -301,7 +314,8 @@ export class LongHaulEngine {
           elapsedSeconds,
           tollPaid: this.tollPaid,
           tookLoan: this.trailerAttached,
-          debt: this.debt,
+          debt: this.loan.debt,
+          rollovers: this.loan.rollovers,
         });
       }
 
@@ -350,7 +364,7 @@ export class LongHaulEngine {
       fuel: Math.round(this.fuel),
       tollPaid: this.tollPaid,
       trailerAttached: this.trailerAttached,
-      debt: this.debt,
+      debt: this.loan.debt,
     });
 
     this.renderer.render(this.scene, this.camera);
@@ -359,8 +373,9 @@ export class LongHaulEngine {
   dispose() {
     this.disposed = true;
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
-    window.removeEventListener("keydown", this.onKeyDown);
-    window.removeEventListener("keyup", this.onKeyUp);
+    this.container.removeEventListener("keydown", this.onKeyDown);
+    this.container.removeEventListener("keyup", this.onKeyUp);
+    this.container.removeEventListener("blur", this.onBlur);
     window.removeEventListener("resize", this.onResize);
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement === this.container) {

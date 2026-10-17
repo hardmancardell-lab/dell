@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
+import { JARVIS, toPhaserColor } from "@/lib/design/tokens";
 
 // A real save/spend/earn simulation for the Beginner tier — a simulation-
 // style game, not more trivia, per the game-based-learning literature cited
@@ -30,6 +31,18 @@ interface GameState {
   wantsFulfilled: number;
 }
 
+// Palette comes from the jarvis tokens (Phaser cannot read CSS variables).
+const C = {
+  bg: JARVIS.ink950,
+  panel: toPhaserColor(JARVIS.ink700),
+  panelHover: toPhaserColor(JARVIS.lineBright),
+  track: toPhaserColor(JARVIS.ink700),
+  text: JARVIS.text0,
+  muted: JARVIS.text1,
+  signal: JARVIS.signal,
+  signalNum: toPhaserColor(JARVIS.signal),
+};
+
 const WANTS = ["a comic book", "a video game skin", "candy at the store", "a toy from the vending machine", "a movie ticket", "stickers"];
 
 class SaveSpendEarnScene extends Phaser.Scene {
@@ -46,25 +59,37 @@ class SaveSpendEarnScene extends Phaser.Scene {
 
   create() {
     this.state = { round: 1, savings: 0, wantsFulfilled: 0 };
-    this.cameras.main.setBackgroundColor("#0f172a");
+    this.setKeys(null);
+    this.cameras.main.setBackgroundColor(C.bg);
 
     this.add.text(20, 16, "Piggy Bank Quest — save $60 for a bike in 6 weeks", {
       fontFamily: "sans-serif",
       fontSize: "16px",
-      color: "#e2e8f0",
+      color: C.text,
     });
 
-    this.roundText = this.add.text(20, 48, "", { fontFamily: "sans-serif", fontSize: "14px", color: "#94a3b8" });
-    this.savingsText = this.add.text(20, 70, "", { fontFamily: "sans-serif", fontSize: "22px", color: "#4fe8d0", fontStyle: "bold" });
+    this.roundText = this.add.text(20, 48, "", { fontFamily: "sans-serif", fontSize: "14px", color: C.muted });
+    this.savingsText = this.add.text(20, 70, "", { fontFamily: "sans-serif", fontSize: "22px", color: C.signal, fontStyle: "bold" });
 
-    this.add.rectangle(20, 104, 360, 14, 0x1e293b).setOrigin(0, 0.5);
-    this.progressBarFill = this.add.rectangle(20, 104, 0, 14, 0x4fe8d0).setOrigin(0, 0.5);
+    this.add.rectangle(20, 104, 360, 14, C.track).setOrigin(0, 0.5);
+    this.progressBarFill = this.add.rectangle(20, 104, 0, 14, C.signalNum).setOrigin(0, 0.5);
 
-    this.promptText = this.add.text(20, 140, "", { fontFamily: "sans-serif", fontSize: "15px", color: "#e2e8f0", wordWrap: { width: 360 } });
+    this.promptText = this.add.text(20, 140, "", { fontFamily: "sans-serif", fontSize: "15px", color: C.text, wordWrap: { width: 360 } });
 
     this.buttonContainer = this.add.container(0, 0);
 
     this.renderRound();
+  }
+
+  private keyHandler: ((e: KeyboardEvent) => void) | null = null;
+
+  /** Keyboard alternative to the mouse: replace the single key handler (null removes it). */
+  private setKeys(handler: ((e: KeyboardEvent) => void) | null) {
+    const kb = this.input.keyboard;
+    if (!kb) return;
+    if (this.keyHandler) kb.off("keydown", this.keyHandler);
+    this.keyHandler = handler;
+    if (handler) kb.on("keydown", handler);
   }
 
   private renderRound() {
@@ -84,18 +109,23 @@ class SaveSpendEarnScene extends Phaser.Scene {
     );
 
     const choices: { label: string; sub: string; action: () => void }[] = [
-      { label: "Save it", sub: `+$${ALLOWANCE} to savings`, action: () => this.choose(ALLOWANCE, false) },
-      { label: "Spend it", sub: "Buy the want, $0 saved", action: () => this.choose(0, true) },
-      { label: "Do a chore too", sub: `+$${ALLOWANCE + CHORE_BONUS} to savings`, action: () => this.choose(ALLOWANCE + CHORE_BONUS, false) },
+      { label: "1. Save it", sub: `+$${ALLOWANCE} to savings`, action: () => this.choose(ALLOWANCE, false) },
+      { label: "2. Spend it", sub: "Buy the want, $0 saved", action: () => this.choose(0, true) },
+      { label: "3. Do a chore too", sub: `+$${ALLOWANCE + CHORE_BONUS} to savings`, action: () => this.choose(ALLOWANCE + CHORE_BONUS, false) },
     ];
+
+    this.setKeys((e) => {
+      const n = Number(e.key);
+      if (Number.isInteger(n) && n >= 1 && n <= choices.length) choices[n - 1].action();
+    });
 
     choices.forEach((c, i) => {
       const y = 190 + i * 56;
-      const bg = this.add.rectangle(20, y, 360, 44, 0x1e293b).setOrigin(0, 0).setInteractive({ useHandCursor: true });
-      const label = this.add.text(34, y + 8, c.label, { fontFamily: "sans-serif", fontSize: "15px", color: "#e2e8f0", fontStyle: "bold" });
-      const sub = this.add.text(34, y + 26, c.sub, { fontFamily: "sans-serif", fontSize: "12px", color: "#94a3b8" });
-      bg.on("pointerover", () => bg.setFillStyle(0x334155));
-      bg.on("pointerout", () => bg.setFillStyle(0x1e293b));
+      const bg = this.add.rectangle(20, y, 360, 44, C.panel).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+      const label = this.add.text(34, y + 8, c.label, { fontFamily: "sans-serif", fontSize: "15px", color: C.text, fontStyle: "bold" });
+      const sub = this.add.text(34, y + 26, c.sub, { fontFamily: "sans-serif", fontSize: "12px", color: C.muted });
+      bg.on("pointerover", () => bg.setFillStyle(C.panelHover));
+      bg.on("pointerout", () => bg.setFillStyle(C.panel));
       bg.on("pointerdown", () => c.action());
       this.buttonContainer.add([bg, label, sub]);
     });
@@ -116,11 +146,14 @@ class SaveSpendEarnScene extends Phaser.Scene {
       : `You saved $${this.state.savings} — short of the $${GOAL} goal. You fulfilled ${this.state.wantsFulfilled} want(s), which meant less saved for the bike.`;
     this.promptText.setText(summary);
 
-    const replayBg = this.add.rectangle(20, 190, 170, 44, 0x1e293b).setOrigin(0, 0).setInteractive({ useHandCursor: true });
-    const replayLabel = this.add.text(34, 206, "Play again", { fontFamily: "sans-serif", fontSize: "14px", color: "#e2e8f0" });
-    replayBg.on("pointerover", () => replayBg.setFillStyle(0x334155));
-    replayBg.on("pointerout", () => replayBg.setFillStyle(0x1e293b));
+    const replayBg = this.add.rectangle(20, 190, 170, 44, C.panel).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+    const replayLabel = this.add.text(34, 206, "Play again (R)", { fontFamily: "sans-serif", fontSize: "14px", color: C.text });
+    replayBg.on("pointerover", () => replayBg.setFillStyle(C.panelHover));
+    replayBg.on("pointerout", () => replayBg.setFillStyle(C.panel));
     replayBg.on("pointerdown", () => this.create());
+    this.setKeys((e) => {
+      if (e.key === "r" || e.key === "R" || e.key === "Enter") this.create();
+    });
     this.buttonContainer.add([replayBg, replayLabel]);
 
     const xp = metGoal ? XP_ON_GOAL_MET : XP_ON_ATTEMPT;
@@ -133,6 +166,11 @@ export function SaveSpendEarnGame({ onComplete }: { onComplete: (xpAwarded: numb
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const hasAwardedRef = useRef(false);
+  // Latest callback in a ref so a parent re-render never rebuilds the game (the effect below only runs once).
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -148,14 +186,18 @@ export function SaveSpendEarnGame({ onComplete }: { onComplete: (xpAwarded: numb
       height: 260,
       parent: container,
       scene: [SaveSpendEarnScene],
-      backgroundColor: "#0f172a",
+      backgroundColor: JARVIS.ink950,
+      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_HORIZONTALLY },
+      // Key presses only reach the game while its (focusable) container has focus, so two games on one page
+      // do not both react to the same key and typing elsewhere is never captured.
+      input: { keyboard: { target: container } },
     });
     game.registry.set("onComplete", (xp: number, metGoal: boolean) => {
       // A replay can finish more than once — only the first completion of a
       // session awards XP, so replaying for fun doesn't farm XP.
       if (hasAwardedRef.current) return;
       hasAwardedRef.current = true;
-      onComplete(xp, metGoal);
+      onCompleteRef.current(xp, metGoal);
     });
     gameRef.current = game;
 
@@ -166,8 +208,15 @@ export function SaveSpendEarnGame({ onComplete }: { onComplete: (xpAwarded: numb
       // Phaser's own cleanup timing.
       container.innerHTML = "";
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={containerRef} className="rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800" />;
+  return (
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      role="application"
+      aria-label="Piggy Bank Quest. Press 1 to save, 2 to spend, or 3 to do a chore each week, and R to play again. The lessons cover the same ideas in text, so this game is optional."
+      style={{ maxWidth: 400, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line-control)" }}
+    />
+  );
 }

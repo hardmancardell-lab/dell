@@ -48,11 +48,20 @@ export const TRAILER = {
 };
 
 export const ECONOMY = {
-  fuelDrainAtFullThrottle: 6, // per second
+  // Raised from 6 to 9 so that holding the throttle on the HIGHWAY reaches the
+  // gas station below gasStationFuelThreshold (25 fuel vs 49 before) and the
+  // loan offer is actually shown on both lanes; a lighter foot (about half
+  // throttle) still finishes clean, so fuel management is a real choice.
+  // Checked by scripts/quality/long-haul.test.mts.
+  fuelDrainAtFullThrottle: 9, // per second
   fuelDrainIdle: 0.5, // per second
   tollCost: 5,
   loanAmount: 50,
   loanAPR: 391, // sourced — see file comment
+  // Game-balance choice: this many seconds of driving stand in for one 14-day
+  // loan term. If the loan is still open when it passes, it rolls over and the
+  // fee ($7.50 on $50 at 391%) is added again (long-haul-rules.ts).
+  rolloverIntervalSeconds: 3,
   rolloverRateText:
     "Real-world rollover rate on loans like this: about 80% aren't paid off within 14 days — most people still owe this again next time.",
 };

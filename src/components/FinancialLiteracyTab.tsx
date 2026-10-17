@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { isTierUnlocked, deriveBadges, useLiteracyProgress } from "@/lib/agents/financial-literacy/literacy-storage";
@@ -827,6 +827,12 @@ function CurriculumView({
 }) {
   const badges = deriveBadges(progress);
   const placedIndex = LITERACY_TIER_ORDER.indexOf(placementTier);
+  // Stable callbacks for the games. A fresh inline arrow on every render used to rebuild the Phaser game each time
+  // the parent re-rendered (completing the module updates XP, which re-renders), restarting rounds mid-play.
+  const onSaveSpendComplete = useCallback((xp: number) => completeModule(SAVE_SPEND_EARN_MODULE_ID, xp), [completeModule]);
+  const onLongHaulComplete = useCallback((xp: number) => completeModule(LONG_HAUL_MODULE_ID, xp), [completeModule]);
+  const onDeltaComplete = useCallback((xp: number) => completeModule(DELTA_DEFENDER_MODULE_ID, xp), [completeModule]);
+  const onSignalLevelComplete = useCallback((levelId: string, xp: number) => completeModule(levelId, xp), [completeModule]);
 
   return (
     <div>
@@ -906,9 +912,7 @@ function CurriculumView({
                     <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
                       A save/spend/earn simulation, not another quiz — make 6 weekly choices and see whether they add up to the goal.
                     </p>
-                    <SaveSpendEarnGame
-                      onComplete={(xp) => completeModule(SAVE_SPEND_EARN_MODULE_ID, xp)}
-                    />
+                    <SaveSpendEarnGame onComplete={onSaveSpendComplete} />
                   </div>
                 )}
                 {tier === "beginner" && (
@@ -923,9 +927,7 @@ function CurriculumView({
                       quick-cash loan is worth it. Taking one attaches a real trailer to your car: worse
                       handling and a lower top speed until it&apos;s paid off.
                     </p>
-                    <LongHaulGame
-                      onComplete={(xp) => completeModule(LONG_HAUL_MODULE_ID, xp)}
-                    />
+                    <LongHaulGame onComplete={onLongHaulComplete} />
                   </div>
                 )}
                 {tier === "intermediate" && (
@@ -942,7 +944,7 @@ function CurriculumView({
                       completedLevelIds={progress.completedModuleIds.filter((id) =>
                         SIGNAL_CHECK_LEVELS.some((lvl) => lvl.id === id)
                       )}
-                      onLevelComplete={(levelId, xp) => completeModule(levelId, xp)}
+                      onLevelComplete={onSignalLevelComplete}
                     />
                   </div>
                 )}
@@ -956,9 +958,7 @@ function CurriculumView({
                     <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
                       A real-data arcade defense — targets are real live SPY option contracts (strike, delta, IV, bid), and each shot spends real paper-trading capital priced at the contract&apos;s own bid.
                     </p>
-                    <DeltaDefenderGame
-                      onComplete={(xp) => completeModule(DELTA_DEFENDER_MODULE_ID, xp)}
-                    />
+                    <DeltaDefenderGame onComplete={onDeltaComplete} />
                   </div>
                 )}
                 {modules.map((m) => (
