@@ -1,10 +1,8 @@
 import { cookies } from "next/headers";
+import { verifyAdminCookie } from "@/lib/access/tokens";
 
-/** Shared admin_session cookie check for Route Handlers — same cookie/secret /admin/login already sets, reused here rather than building a second admin auth path. */
+/** Shared admin_session cookie check for Route Handlers and admin pages. The cookie is a signed, expiring token issued by /api/admin/login, not the secret itself. */
 export async function isAdminSessionValid(): Promise<boolean> {
-  const expected = process.env.ADMIN_ANALYTICS_SECRET;
-  if (!expected) return false;
   const cookieStore = await cookies();
-  const session = cookieStore.get("admin_session")?.value;
-  return Boolean(session && session === expected);
+  return verifyAdminCookie(cookieStore.get("admin_session")?.value);
 }

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { verifyClientCookie } from "@/lib/access/tokens";
 import { NextResponse } from "next/server";
 import { getAdvisorClientBySlug, listClientHoldings, listRealizedPnl } from "@/lib/data/advisor-clients-db";
 import { valuatePortfolio } from "@/lib/agents/trading-agent/skills/portfolio-valuation";
@@ -11,7 +12,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 
   const cookieStore = await cookies();
   const session = cookieStore.get(`client_session_${slug}`)?.value;
-  if (!session || session !== client.passcodeHash) {
+  if (!(await verifyClientCookie(slug, client.passcodeHash, session))) {
     return NextResponse.json({ error: "Passcode required.", requiresPasscode: true }, { status: 401 });
   }
 

@@ -1,3 +1,4 @@
+import { verifyAdminCookie } from "@/lib/access/tokens";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getBookRiskSummary } from "@/lib/agents/trading-agent/skills/book-risk";
@@ -77,10 +78,9 @@ function Dashboard({ data }: { data: BookRiskSummary }) {
 }
 
 export default async function AdminBookRiskPage() {
-  const expected = process.env.ADMIN_ANALYTICS_SECRET;
   const cookieStore = await cookies();
   const session = cookieStore.get("admin_session")?.value;
-  if (!expected || !session || session !== expected) {
+  if (!(await verifyAdminCookie(session))) {
     notFound();
   }
   const data = await getBookRiskSummary();
