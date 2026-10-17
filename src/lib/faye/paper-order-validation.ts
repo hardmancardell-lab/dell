@@ -5,11 +5,22 @@
  * widget rebuilds the order from whitelisted, range-checked fields and forces
  * the attribution origin to "faye". The paper-trading route sanitizes again on
  * the server; this layer exists so a bad proposal never reaches the network and
- * so the confirm card can only ever place what it displays.
+ * so the confirm card can only ever place what it displays: the card text is built from the object this validator
+ * returns (see action-validation.ts describePaperOrder), not from anything the server wrote.
  */
 
 export const MAX_SHARES = 100_000;
 export const MAX_CONTRACTS = 1_000;
+export const MAX_STRIKE = 1_000_000;
+
+/** A real calendar date: rejects 2026-13-45 and 2026-02-30. */
+function realDate(v: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d && y >= 1990;
+}
 
 const SYMBOL = /^[A-Za-z][A-Za-z0-9.-]{0,9}$/; // BRK.B, BF-B; no slashes (stock and option underlyings only)
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -46,6 +57,7 @@ export function validatePaperOrder(raw: unknown): PaperOrderValidation {
   const attribution = { ...attr, origin: "faye" };
 
   if (assetClass === "equity") {
+    if (!Number.isInteger(quantity)) return bad("Stock paper orders are whole shares.");
     if (quantity > MAX_SHARES) return bad(`A paper order is limited to ${MAX_SHARES.toLocaleString()} shares.`);
     return { ok: true, order: { symbol: symbol.toUpperCase(), assetClass, side, orderType, quantity, attribution } };
   }
@@ -53,9 +65,10 @@ export function validatePaperOrder(raw: unknown): PaperOrderValidation {
   const { underlyingSymbol, expirationDate, optionRight, strikePrice } = raw;
   if (!Number.isInteger(quantity) || quantity > MAX_CONTRACTS) return bad(`Option paper orders are 1 to ${MAX_CONTRACTS} whole contracts.`);
   if (typeof underlyingSymbol !== "string" || !SYMBOL.test(underlyingSymbol)) return bad("The option had an invalid underlying.");
-  if (typeof expirationDate !== "string" || !ISO_DATE.test(expirationDate)) return bad("The option had an invalid expiration.");
+  if (typeof expirationDate !== "string" || !ISO_DATE.test(expirationDate) || !realDate(expirationDate)) return bad("The option had an invalid expiration.");
+  if (symbol.toUpperCase() !== underlyingSymbol.toUpperCase()) return bad("The option's symbol did not match its underlying.");
   if (optionRight !== "call" && optionRight !== "put") return bad("The option had an invalid right.");
-  if (typeof strikePrice !== "number" || !Number.isFinite(strikePrice) || strikePrice <= 0) return bad("The option had an invalid strike.");
+  if (typeof strikePrice !== "number" || !Number.isFinite(strikePrice) || strikePrice <= 0 || strikePrice > MAX_STRIKE) return bad("The option had an invalid strike.");
   return {
     ok: true,
     order: {

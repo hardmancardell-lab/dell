@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
-import { validatePaperOrder } from "@/lib/faye/paper-order-validation";
+import { validateProposedAction, type ValidatedAction } from "@/lib/faye/action-validation";
+import { MAX_CALLS_PER_RUN, MAX_PLAN_TURNS, SseParser, sanitizePlanCalls } from "@/lib/faye/plan-guards";
 
 // Faye's server still lives at the /pilp/* routes (see Documents/Pilp_Assistant) —
 // only her displayed name changed, not the underlying package/endpoints.
@@ -33,7 +34,6 @@ const ALLOWED_TOOLS: Record<string, "GET" | "POST"> = {
 };
 const SAFE_PARAM = /^[A-Za-z0-9.\-_/ ]{1,40}$/;
 const SAFE_SYMBOL = /^[A-Za-z0-9.\-/]{1,12}$/;
-const MAX_PLAN_TURNS = 6;
 const TOOL_CONCURRENCY = 4;
 const TOOL_TIMEOUT_MS = 90_000;
 
@@ -57,10 +57,10 @@ interface ToolResult {
 const blocked = (error: string): ToolResult => ({ ok: false, status: 0, data: null, error });
 
 async function executeCall(c: PlanCall): Promise<ToolResult> {
-  if (ALLOWED_TOOLS[c.path] !== c.method) return blocked("blocked: not an allowed read-only tool");
+  if (typeof c.path !== "string" || !Object.prototype.hasOwnProperty.call(ALLOWED_TOOLS, c.path) || ALLOWED_TOOLS[c.path] !== c.method) return blocked("blocked: not an allowed read-only tool");
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(c.params ?? {})) {
-    if (!/^[A-Za-z]{1,30}$/.test(k) || !SAFE_PARAM.test(String(v))) return blocked("blocked: unsafe parameter");
+    if (!/^[A-Za-z]{1,30}$/.test(k) || (typeof v !== "string" && typeof v !== "number") || !SAFE_PARAM.test(String(v))) return blocked("blocked: unsafe parameter");
     qs.set(k, String(v));
   }
   let body: string | undefined;
@@ -100,7 +100,7 @@ async function executeCall(c: PlanCall): Promise<ToolResult> {
 // A bounded pool: a deep dive asks for a dozen option chains at once, and the
 // app's own backend should not be hit with all of them simultaneously.
 async function runCalls(calls: PlanCall[]): Promise<Record<string, ToolResult>> {
-  const out: Record<string, ToolResult> = {};
+  const out: Record<string, ToolResult> = Object.create(null);
   let next = 0;
   const worker = async () => {
     while (next < calls.length) {
@@ -114,13 +114,6 @@ async function runCalls(calls: PlanCall[]): Promise<Record<string, ToolResult>> 
 
 type FayeStatus = "checking" | "available" | "unavailable";
 
-type ProposedAction =
-  | { type: "add_holding"; params: { symbol: string; assetClass: string; shares: number; costBasisPerShare: number; acquiredDate: string } }
-  | { type: "sell_holding"; params: { symbol: string; sharesSold: number; salePricePerShare: number; fee: number; saleDate: string } }
-  | { type: "remove_holding"; params: { symbol: string } }
-  // Untrusted until validatePaperOrder() accepts it; placed via the app's own paper-trading route.
-  | { type: "paper_order"; params: Record<string, unknown> };
-
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -128,7 +121,8 @@ interface ChatMessage {
   kind?: "generated" | "conduct" | "guardrail" | "action_proposal" | "tool_calls" | "final";
   toolLog?: string[];
   error?: boolean;
-  action?: ProposedAction | null;
+  // Rebuilt by validateProposedAction(): the card text and the executed values both come from this, never from server text.
+  action?: ValidatedAction | null;
   actionStatus?: "pending" | "placing" | "done" | "cancelled" | "error";
   actionResultText?: string;
 }
@@ -190,12 +184,18 @@ export function FayeChatWidget() {
   async function runPlan(messageId: string, firstCalls: PlanCall[], firstState: unknown) {
     let calls: PlanCall[] | null = firstCalls;
     let state: unknown = firstState;
+    let callsRun = 0;
     const log: string[] = [];
     const label = (c: PlanCall) => {
       const p = Object.values(c.params ?? {});
       return `${c.agent} · ${c.tool}${p.length ? ` (${p.join(", ")})` : ""}`;
     };
     for (let turn = 0; calls && turn < MAX_PLAN_TURNS; turn++) {
+      // Every turn's calls are rebuilt from whitelisted fields and capped (per turn and per run) before anything is fetched.
+      const checked = sanitizePlanCalls(calls, callsRun);
+      if (!checked.ok) throw new Error(checked.error);
+      calls = checked.calls as PlanCall[];
+      callsRun += calls.length;
       const results = await runCalls(calls);
       for (const c of calls) {
         const r = results[c.id];
@@ -210,7 +210,7 @@ export function FayeChatWidget() {
       if (!json?.ok) throw new Error(json?.error ?? "Faye couldn't continue that run.");
       const snapshot = [...log];
       if (json.kind === "tool_calls") {
-        calls = json.calls as PlanCall[];
+        calls = json.calls as PlanCall[]; // checked at the top of the next turn
         state = json.state;
         setMessages((prev) =>
           prev.map((m) => (m.id === messageId ? { ...m, text: String(json.text ?? ""), toolLog: snapshot } : m))
@@ -219,16 +219,16 @@ export function FayeChatWidget() {
       }
       // A final turn may end in a proposal (e.g. a paper order for a signal). It is
       // shown as a confirm card and does nothing until the user clicks Confirm.
-      const finalAction =
-        json.action && typeof json.action === "object" && json.action.type === "paper_order"
-          ? (json.action as ProposedAction)
-          : null;
+      // Only a paper order can end a run; it is re-validated, and the card shows the validated order.
+      const finalCheck = json.action && typeof json.action === "object" && json.action.type === "paper_order" ? validateProposedAction(json.action) : null;
+      const finalAction = finalCheck && finalCheck.ok ? finalCheck.action : null;
+      const rejectedNote = finalCheck && !finalCheck.ok ? `\n\n(Faye proposed an order that failed validation, so none is offered: ${finalCheck.error})` : "";
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId
             ? {
                 ...m,
-                text: String(json.text ?? ""),
+                text: String(json.text ?? "") + rejectedNote,
                 kind: "final",
                 toolLog: snapshot,
                 action: finalAction,
@@ -239,7 +239,7 @@ export function FayeChatWidget() {
       );
       return;
     }
-    throw new Error("That run took more steps than expected, so I stopped it.");
+    throw new Error(`That run took more than ${MAX_PLAN_TURNS} steps or ${MAX_CALLS_PER_RUN} tool calls, so I stopped it.`);
   }
 
   async function sendMessage(e: React.FormEvent) {
@@ -262,44 +262,44 @@ export function FayeChatWidget() {
 
       const reader = res.body.getReader();
       const dec = new TextDecoder();
-      let buf = "";
+      const parser = new SseParser(); // keeps partial events between chunks, skips corrupt ones, caps total size
       let text = "";
       let plan: { calls: PlanCall[]; state: unknown } | null = null;
 
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const blocks = buf.split("\n\n");
-        for (const block of blocks) {
-          if (!block.includes("event:")) continue;
-          const event = block.match(/event: (\w+)/)?.[1];
-          const dataMatch = block.match(/data: (.*)/);
-          const data = dataMatch ? JSON.parse(dataMatch[1]) : {};
+        for (const { event, data: raw } of parser.push(dec.decode(value, { stream: true }))) {
+          const data = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown> & { action?: unknown; calls?: unknown; state?: unknown; kind?: unknown; text?: unknown; error?: unknown };
           if (event === "chunk" && typeof data.text === "string") {
             text += data.text;
             const snapshot = text;
             setMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, text: snapshot } : m)));
           } else if (event === "done") {
             const kind = data.kind as ChatMessage["kind"];
-            const action = (data.action ?? null) as ProposedAction | null;
+            // First-turn actions come from Faye's parse of the user's own words; each one is validated and the card is
+            // built from the validated values. Anything unrecognised or out of range is dropped with a note.
+            const check = data.action ? validateProposedAction(data.action) : null;
+            const action = check && check.ok ? check.action : null;
+            const rejectedNote = check && !check.ok ? `\n\n(Faye proposed an action that failed validation, so none is offered: ${check.error})` : "";
             if (kind === "tool_calls" && Array.isArray(data.calls) && data.state) {
-              plan = { calls: data.calls as PlanCall[], state: data.state };
+              const planCheck = sanitizePlanCalls(data.calls, 0);
+              if (!planCheck.ok) throw new Error(planCheck.error);
+              plan = { calls: planCheck.calls as PlanCall[], state: data.state };
             }
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
-                  ? { ...m, kind, action, actionStatus: action ? "pending" : undefined }
+                  ? { ...m, kind, text: m.text + rejectedNote, action, actionStatus: action ? "pending" : undefined }
                   : m
               )
             );
           } else if (event === "error") {
             setMessages((prev) =>
-              prev.map((m) => (m.id === assistantId ? { ...m, text: data.error ?? "Something went wrong.", error: true } : m))
+              prev.map((m) => (m.id === assistantId ? { ...m, text: typeof data.error === "string" ? data.error : "Something went wrong.", error: true } : m))
             );
           }
         }
-        buf = buf.slice(buf.lastIndexOf("\n\n") + 2);
       }
       if (plan) await runPlan(assistantId, plan.calls, plan.state);
     } catch (err) {
@@ -323,15 +323,11 @@ export function FayeChatWidget() {
   // A paper order goes through the app's own paper-trading route, which fills
   // it at the simulator's price and writes the trade log. The strategy and KPIs
   // in the proposal travel with the order so the log can attribute the fill.
-  async function placePaperOrder(messageId: string, raw: Record<string, unknown>) {
+  async function placePaperOrder(messageId: string, validated: Extract<ValidatedAction, { type: "paper_order" }>["params"]) {
     const setStatus = (actionStatus: ChatMessage["actionStatus"], actionResultText: string) =>
       setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, actionStatus, actionResultText } : m)));
     setStatus("placing", "Placing the paper order…");
-    const v = validatePaperOrder(raw);
-    if (!v.ok) {
-      setStatus("error", v.error);
-      return;
-    }
+    const v = { ok: true as const, order: validated };
     try {
       const res = await fetch("/api/paper-trading/order", {
         method: "POST",
@@ -360,7 +356,7 @@ export function FayeChatWidget() {
     }
   }
 
-  function confirmAction(messageId: string, action: ProposedAction) {
+  function confirmAction(messageId: string, action: ValidatedAction) {
     if (action.type === "paper_order") {
       void placePaperOrder(messageId, action.params);
       return;
@@ -499,6 +495,9 @@ export function FayeChatWidget() {
                 )}
                 {m.action && m.actionStatus === "pending" && (
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.15)" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", marginBottom: 6 }} data-testid="faye-validated-summary">
+                      {m.action.summary}
+                    </div>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
                         type="button"
