@@ -2,7 +2,7 @@ import { getDailyBars } from "./daily-bars";
 import { isCryptoSymbol } from "@/lib/data/coinbase";
 import { computeMomentum, computeVolumeDisplacement } from "./scan-signals";
 import { computeMeanReversion } from "./mean-reversion";
-import { benjaminiHochberg, bootstrapCi, zTestPValue } from "./stats-tests";
+import { benjaminiHochberg, bootstrapCi, overlapBlockLength, selectNonOverlapping, tTestPValue } from "./stats-tests";
 import { buildReversionStats, computeWinLossMetrics, mean, median, stdDev } from "../stats";
 import { computeVolumeProfile, findNearestLiquidityZone } from "./volume-profile";
 import type {
@@ -307,6 +307,90 @@ function computeLiquidityZoneStopOverlay(
   });
 }
 
+const SIGNAL_TYPES: EquityBacktestSignalType[] = ["volumeDisplacement", "momentum", "meanReversionOversold", "meanReversionOverbought"];
+/** All signals x all horizons the Historical Backtest tab can show together: the multiple-testing family BH is applied over. */
+export const BACKTEST_FDR_FAMILY_SIZE = SIGNAL_TYPES.length * HORIZONS_TRADING_DAYS.length;
+const TRAIN_FRACTION = 0.75;
+/** Fewest out-of-sample occurrences for the same-sign check to mean anything. */
+const MIN_TEST_OCCURRENCES = 3;
+const MAX_HORIZON = Math.max(...HORIZONS_TRADING_DAYS);
+
+interface LiteOccurrence {
+  entryIndex: number;
+  forwardReturns: (number | null)[];
+}
+
+/** Signal dates and raw forward returns only (no reversion tracking or day context): enough for the significance family. */
+function liteOccurrences(bars: DailyBar[], signalType: EquityBacktestSignalType): LiteOccurrence[] {
+  const out: LiteOccurrence[] = [];
+  for (let i = MIN_LOOKBACK_BARS; i < bars.length - 1; i++) {
+    if (!signalFired(bars.slice(0, i + 1), signalType)) continue;
+    const entryClose = bars[i].close;
+    out.push({
+      entryIndex: i,
+      forwardReturns: HORIZONS_TRADING_DAYS.map((h) => (i + h >= bars.length ? null : ((bars[i + h].close - entryClose) / entryClose) * 100)),
+    });
+  }
+  return out;
+}
+
+interface HorizonSplit {
+  /** Strategy-signed returns of every training occurrence (descriptive; windows overlap). */
+  trainAll: number[];
+  trainEntries: number[];
+  /** Training returns thinned so forward windows do not overlap: the sample the significance test uses. */
+  trainIndependent: number[];
+  /** Strategy-signed returns after the purge gap, used ONLY for the same-sign check. */
+  test: number[];
+  pValue: number | null;
+}
+
+/**
+ * Splits one signal's occurrences at one horizon into train and test with a purge gap, and runs the headline t-test on the
+ * non-overlapping training returns only. The test period starts at least MAX_HORIZON bars after the last training entry, so
+ * no training forward window reaches into it.
+ */
+function splitAndTest(occ: LiteOccurrence[], hIdx: number, horizon: number, direction: "long" | "short"): HorizonSplit {
+  const valid = occ.filter((o) => o.forwardReturns[hIdx] !== null);
+  const k = Math.floor(valid.length * TRAIN_FRACTION);
+  const train = valid.slice(0, k);
+  const lastTrainEntry = train.length > 0 ? train[train.length - 1].entryIndex : -1;
+  const test = valid.slice(k).filter((o) => o.entryIndex >= lastTrainEntry + MAX_HORIZON);
+  const signed = (o: LiteOccurrence) => toStrategyReturnPct(o.forwardReturns[hIdx] as number, direction);
+  const keep = selectNonOverlapping(train.map((o) => o.entryIndex), horizon);
+  const trainIndependent = keep.map((pos) => signed(train[pos]));
+  const m = mean(trainIndependent);
+  const sd = stdDev(trainIndependent);
+  return {
+    trainAll: train.map(signed),
+    trainEntries: train.map((o) => o.entryIndex),
+    trainIndependent,
+    test: test.map(signed),
+    pValue: m !== null && sd !== null ? tTestPValue(m, sd, trainIndependent.length) : null,
+  };
+}
+
+/**
+ * Benjamini-Hochberg over the WHOLE family (every signal x every horizon, BACKTEST_FDR_FAMILY_SIZE tests), not just the five
+ * horizons of the signal on screen. Returns adjusted p-values for the requested signal by horizon index.
+ */
+function familyAdjustedP(bars: DailyBar[], signalType: EquityBacktestSignalType, own: LiteOccurrence[]): (number | null)[] {
+  const entries: { sig: EquityBacktestSignalType; h: number; p: number }[] = [];
+  for (const sig of SIGNAL_TYPES) {
+    const occ = sig === signalType ? own : liteOccurrences(bars, sig);
+    HORIZONS_TRADING_DAYS.forEach((horizon, h) => {
+      const p = splitAndTest(occ, h, horizon, STRATEGY_DIRECTION[sig]).pValue;
+      if (p !== null) entries.push({ sig, h, p });
+    });
+  }
+  const adj = benjaminiHochberg(entries.map((e) => e.p), BACKTEST_FDR_FAMILY_SIZE);
+  const out: (number | null)[] = HORIZONS_TRADING_DAYS.map(() => null);
+  entries.forEach((e, i) => {
+    if (e.sig === signalType) out[e.h] = adj[i];
+  });
+  return out;
+}
+
 export async function runBacktest(
   ticker: string,
   signalType: EquityBacktestSignalType,
@@ -315,7 +399,16 @@ export async function runBacktest(
   const symbol = ticker.trim().toUpperCase();
   const lookbackDays = Math.round(lookbackYears * 365.25) + 30; // buffer for weekends/holidays
   const bars = await getDailyBars(symbol, lookbackDays);
+  return analyzeBars(symbol, bars, signalType, lookbackYears);
+}
 
+/** The whole analysis on bars already in hand (pure: no network). runBacktest = getDailyBars + this. Exported for tests. */
+export function analyzeBars(
+  symbol: string,
+  bars: DailyBar[],
+  signalType: EquityBacktestSignalType,
+  lookbackYears: number
+): EquityBacktestResult {
   const isMeanReversionSignal = signalType === "meanReversionOversold" || signalType === "meanReversionOverbought";
 
   const occurrences: Occurrence[] = [];
@@ -348,8 +441,9 @@ export async function runBacktest(
   }
 
   const dataLimitations: string[] = [
-    "Overlapping forward-return windows: if this signal fires on consecutive days, their forward-return periods overlap, introducing autocorrelation the significance tests below don't account for — same category of caveat options-signals-project/backtest_engine.py's README documents for its own data.",
-    "Significance uses a z-test approximation, not an exact Student's t-test (see stats-tests.ts) — the difference is small at the larger sample sizes a multi-year daily backtest typically produces, and grows for small samples.",
+    "Overlapping forward-return windows: if this signal fires on consecutive days, their forward-return periods overlap. The headline significance test therefore uses only NON-OVERLAPPING occurrences from the training period (the independent n), the bootstrap interval is a block bootstrap whose block length follows how many occurrences share one forward window, and the mean, median and win rate are descriptive over all occurrences.",
+    `Significance is an exact Student t-test (n-1 degrees of freedom) on the training part of the history only (first ${TRAIN_FRACTION * 100}% of occurrences). The last part is held out and used only to check the sign of the effect, after a purge gap of ${MAX_HORIZON} bars so no training window reaches into it. P-values are corrected for ${BACKTEST_FDR_FAMILY_SIZE} tests at once (${SIGNAL_TYPES.length} signals x ${HORIZONS_TRADING_DAYS.length} horizons, Benjamini-Hochberg), because some of that many tests look significant by chance alone.`,
+    "Entries are assumed to happen at the SAME bar close that produced the signal (a market-on-close assumption). A real order placed after seeing that close would fill at the next open or later, usually at a worse price, so real results would be lower. Prices are unadjusted for splits and dividends.",
     "This backtest walks daily bars only, which carry no intraday timestamp — the trade log's day high/low and overnight gap % are real, but the time each high/low occurred isn't available here (dayHighTimeClock/dayLowTimeClock are always null). Getting that would require a separate minute-bar fetch per occurrence; see the ORB and Calendar Effects Time-of-Day backtests, which already pull minute bars and report it.",
   ];
 
@@ -359,61 +453,34 @@ export async function runBacktest(
     );
   }
 
-  // Time-based split on occurrences (not raw calendar days) — matches
-  // backtest_engine.py's reasoning: nearby occurrences are correlated, so a
-  // random split would leak information a real out-of-sample test shouldn't have.
-  const splitIndex = Math.floor(occurrences.length * 0.75);
-  const trainOccurrences = occurrences.slice(0, splitIndex);
-  const testOccurrences = occurrences.slice(splitIndex);
-
-  const rawPValues: (number | null)[] = HORIZONS_TRADING_DAYS.map((_, h) => {
-    const values = occurrences.map((o) => o.forwardReturns[h]).filter((v): v is number => v !== null);
-    const m = mean(values);
-    const sd = stdDev(values);
-    return m !== null && sd !== null ? zTestPValue(m, sd, values.length) : null;
-  });
-
-  // BH-FDR correction across the horizons that actually produced a p-value —
-  // same multiple-comparisons reasoning backtest_engine.py applies across
-  // its 4 labels x 5 days, here across this signal's 5 horizons.
-  const validHorizonIndices = rawPValues
-    .map((p, h) => (p !== null ? h : -1))
-    .filter((h): h is number => h >= 0);
-  const adjustedValid = benjaminiHochberg(validHorizonIndices.map((h) => rawPValues[h] as number));
-  const fdrByHorizonIndex = new Map<number, number>();
-  validHorizonIndices.forEach((h, k) => fdrByHorizonIndex.set(h, adjustedValid[k]));
-
   const strategyDirection = STRATEGY_DIRECTION[signalType];
+  const adjustedByHorizon = familyAdjustedP(bars, signalType, occurrences);
 
   const horizons: BacktestHorizonResult[] = HORIZONS_TRADING_DAYS.map((horizonDays, h) => {
+    // Descriptive statistics use every occurrence (windows overlap; see the limitation above).
     const values = occurrences
       .map((o) => o.forwardReturns[h])
       .filter((v): v is number => v !== null)
       .map((v) => toStrategyReturnPct(v, strategyDirection));
-    const trainValues = trainOccurrences
-      .map((o) => o.forwardReturns[h])
-      .filter((v): v is number => v !== null)
-      .map((v) => toStrategyReturnPct(v, strategyDirection));
-    const testValues = testOccurrences
-      .map((o) => o.forwardReturns[h])
-      .filter((v): v is number => v !== null)
-      .map((v) => toStrategyReturnPct(v, strategyDirection));
 
-    const pValue = rawPValues[h];
-    const pValueFdrAdjusted = fdrByHorizonIndex.get(h) ?? null;
+    const split = splitAndTest(occurrences, h, horizonDays, strategyDirection);
+    const pValue = split.pValue;
+    const pValueFdrAdjusted = adjustedByHorizon[h];
     const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
 
-    const boot = bootstrapCi(values);
+    // Bar 2: seeded block bootstrap of the training returns, block length = how many occurrences share one forward window.
+    const blockLength = overlapBlockLength(split.trainEntries, horizonDays);
+    const boot = bootstrapCi(split.trainAll, 5000, 0.95, { blockLength });
 
-    const trainMean = mean(trainValues);
-    const testMean = mean(testValues);
+    // Bar 3: the held-out, purged test period is used ONLY for the sign of the effect.
+    const trainMean = mean(split.trainAll);
+    const testMean = split.test.length >= MIN_TEST_OCCURRENCES ? mean(split.test) : null;
     const sameSignOutOfSample =
-      trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
+      trainMean !== null && testMean !== null && trainMean !== 0 ? Math.sign(trainMean) === Math.sign(testMean) : null;
 
-    // Minimum bar before treating this as a real edge, per
-    // options-signals-project/README.md: "passes FDR correction in-sample
-    // AND holds same sign out-of-sample AND bootstrap CI excludes zero —
-    // all three, not one."
+    // Minimum bar before treating this as a real edge, per options-signals-project/README.md: "passes FDR correction
+    // AND holds same sign out-of-sample AND bootstrap CI excludes zero - all three, not one." Bars 1 and 2 now use the
+    // training period only, so the out-of-sample data is not used twice.
     const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;
     const winLoss = computeWinLossMetrics(values);
 
@@ -432,6 +499,11 @@ export async function runBacktest(
       testMeanReturnPct: testMean,
       sameSignOutOfSample,
       passesAllThreeBars,
+      independentSampleSize: split.trainIndependent.length,
+      trainSampleSize: split.trainAll.length,
+      testSampleSize: split.test.length,
+      fdrFamilySize: BACKTEST_FDR_FAMILY_SIZE,
+      bootstrapBlockLength: blockLength,
       ...winLoss,
     };
   });

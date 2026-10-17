@@ -4,6 +4,7 @@ import { runDayOfWeekBacktest, runTimeOfDayBacktest } from "./calendar-effects";
 import { getDailyBars } from "./daily-bars";
 import { computeShannonEntropy, dailyReturnsFromBars } from "./entropy-analyzer";
 import { insertHypothesis } from "@/lib/data/hypothesis-ledger-db";
+import { benjaminiHochberg } from "./stats-tests";
 import type {
   AssetClass,
   BacktestHorizonResult,
@@ -72,27 +73,20 @@ function entryRuleFor(signalType: EquityBacktestSignalType): string {
   }
 }
 
-// A result can pass all three statistical bars (FDR significance, bootstrap
-// CI excludes zero, out-of-sample sign agreement) and still not be worth
-// acting on if it wins less than half the time with a thin edge. Requiring
-// a real win-rate floor on top of the three bars is a disclosed tightening
-// of what counts as "validated" — logged explicitly in rejectionReason when
-// this is the specific reason a statistically-significant result is still
-// marked rejected.
-const MIN_WIN_RATE_PCT = 60;
+// Win rate is a DISPLAYED descriptive statistic only. It used to be a fourth condition for "validated" (>= 60%), which
+// selected on the outcome after the three statistical bars had already been applied (post-hoc selection that inflates the
+// apparent edge of whatever survives). The decision now rests on the statistical bars alone, with the false-discovery-rate
+// correction applied once over EVERY hypothesis of the run (see runHypothesisSweep).
+const FDR_ALPHA = 0.05;
 
 function rejectionReasonFor(h: {
   significantAfterFdr: boolean;
   ciExcludesZero: boolean;
   sameSignOutOfSample: boolean | null;
-  winRate: number | null;
-}): string {
-  if (!h.significantAfterFdr) return "Failed FDR-adjusted significance test.";
+}, familySize: number): string {
+  if (!h.significantAfterFdr) return `Failed significance after correcting for ${familySize} hypotheses tested together in this run.`;
   if (!h.ciExcludesZero) return "Bootstrap confidence interval includes zero.";
-  if (h.sameSignOutOfSample !== true) return "Return sign disagreed between train and out-of-sample periods.";
-  if (h.winRate === null || h.winRate < MIN_WIN_RATE_PCT) {
-    return `Passed all three statistical bars but win rate (${h.winRate === null ? "unknown" : `${h.winRate.toFixed(1)}%`}) is below the ${MIN_WIN_RATE_PCT}% floor.`;
-  }
+  if (h.sameSignOutOfSample !== true) return "Return sign disagreed between train and out-of-sample periods (or too few out-of-sample observations).";
   return "Did not pass all three statistical bars.";
 }
 
@@ -126,46 +120,90 @@ function deriveStopLossVerdict(baseline: BacktestHorizonResult, stopRows: StopLo
   return drawdownImproved ? "stops_help" : "inconclusive";
 }
 
-async function logHorizonResult(params: {
-  ticker: string;
-  assetClass: AssetClass;
-  strategyType: string;
-  horizonLabel: string;
-  entryRule: string;
-  exitType: HypothesisExitType;
-  exitRule: string;
-  sourceEngine: string;
-  entropyScore: number | null;
-  stopLossVerdict?: StopLossVerdict | null;
-  horizon: BacktestHorizonResult | OrbHorizonResult | DayOfWeekEffectResult | TimeOfDayEffectResult;
-}): Promise<void> {
+/** One hypothesis waiting for the run-wide false-discovery-rate correction before it is written to the ledger. */
+interface Candidate {
+  base: Omit<StrategyHypothesis, "id" | "createdAt" | "status" | "rejectionReason" | "passesThreeBars" | "pValueFdr">;
+  rawP: number | null;
+  ciExcludesZero: boolean;
+  sameSignOutOfSample: boolean | null;
+}
+
+function collectCandidate(
+  sink: Candidate[],
+  params: {
+    ticker: string;
+    assetClass: AssetClass;
+    strategyType: string;
+    horizonLabel: string;
+    entryRule: string;
+    exitType: HypothesisExitType;
+    exitRule: string;
+    sourceEngine: string;
+    entropyScore: number | null;
+    stopLossVerdict?: StopLossVerdict | null;
+    horizon: BacktestHorizonResult | OrbHorizonResult | DayOfWeekEffectResult | TimeOfDayEffectResult;
+  }
+): void {
   const { horizon } = params;
-  const meetsWinRateFloor = horizon.winRate !== null && horizon.winRate >= MIN_WIN_RATE_PCT;
-  const validated = horizon.passesAllThreeBars && meetsWinRateFloor;
-  const hypothesis: Omit<StrategyHypothesis, "id" | "createdAt"> = {
-    ticker: params.ticker,
-    assetClass: params.assetClass,
-    strategyType: params.strategyType,
-    horizonLabel: params.horizonLabel,
-    entryRule: params.entryRule,
-    exitType: params.exitType,
-    exitRule: params.exitRule,
-    sampleSize: horizon.sampleSize,
-    winRatePct: horizon.winRate,
-    profitFactor: horizon.profitFactor,
-    passesThreeBars: horizon.passesAllThreeBars,
-    pValueFdr: horizon.pValueFdrAdjusted,
-    bootstrapCiLower: horizon.bootstrapCiLower,
-    bootstrapCiUpper: horizon.bootstrapCiUpper,
-    status: validated ? "validated" : "rejected",
-    rejectionReason: validated ? null : rejectionReasonFor(horizon),
-    sourceEngine: params.sourceEngine,
-    entropyScore: params.entropyScore,
-    largestLossPct: horizon.largestLossPct,
-    maxDrawdownPct: horizon.maxDrawdownPct,
-    stopLossVerdict: params.stopLossVerdict ?? null,
-  };
-  await insertHypothesis(hypothesis);
+  sink.push({
+    rawP: horizon.pValue,
+    ciExcludesZero: horizon.ciExcludesZero,
+    sameSignOutOfSample: horizon.sameSignOutOfSample,
+    base: {
+      ticker: params.ticker,
+      assetClass: params.assetClass,
+      strategyType: params.strategyType,
+      horizonLabel: params.horizonLabel,
+      entryRule: params.entryRule,
+      exitType: params.exitType,
+      exitRule: params.exitRule,
+      sampleSize: horizon.sampleSize,
+      winRatePct: horizon.winRate,
+      profitFactor: horizon.profitFactor,
+      bootstrapCiLower: horizon.bootstrapCiLower,
+      bootstrapCiUpper: horizon.bootstrapCiUpper,
+      sourceEngine: params.sourceEngine,
+      entropyScore: params.entropyScore,
+      largestLossPct: horizon.largestLossPct,
+      maxDrawdownPct: horizon.maxDrawdownPct,
+      stopLossVerdict: params.stopLossVerdict ?? null,
+    },
+  });
+}
+
+/**
+ * Applies ONE Benjamini-Hochberg correction over every hypothesis of the run (family size = the number of hypotheses
+ * collected, 368 in a full sweep; hypotheses without a p-value count as p = 1) and turns the candidates into ledger rows.
+ * "Validated" = significant after that run-wide correction AND bootstrap interval excludes zero AND the held-out sign
+ * agrees. The family size is written into each row's exit rule text, because the ledger table has no column for it yet.
+ */
+export function finalizeCandidates(candidates: Candidate[]): Omit<StrategyHypothesis, "id" | "createdAt">[] {
+  const familySize = candidates.length;
+  const withP: number[] = [];
+  const idx: number[] = [];
+  candidates.forEach((c, i) => {
+    if (c.rawP !== null) {
+      withP.push(c.rawP);
+      idx.push(i);
+    }
+  });
+  const adjusted = benjaminiHochberg(withP, familySize);
+  const adjByCandidate = new Map<number, number>();
+  idx.forEach((ci, k) => adjByCandidate.set(ci, adjusted[k]));
+
+  return candidates.map((c, i) => {
+    const pAdj = adjByCandidate.get(i) ?? null;
+    const significant = pAdj !== null && Number.isFinite(pAdj) && pAdj < FDR_ALPHA;
+    const passes = significant && c.ciExcludesZero && c.sameSignOutOfSample === true;
+    return {
+      ...c.base,
+      exitRule: `${c.base.exitRule} [Corrected for ${familySize} hypotheses tested together in this run.]`,
+      passesThreeBars: passes,
+      pValueFdr: pAdj,
+      status: passes ? "validated" : "rejected",
+      rejectionReason: passes ? null : rejectionReasonFor({ significantAfterFdr: significant, ciExcludesZero: c.ciExcludesZero, sameSignOutOfSample: c.sameSignOutOfSample }, familySize),
+    };
+  });
 }
 
 export interface HypothesisSweepResult {
@@ -192,7 +230,7 @@ interface TickerSweepResult {
  * firing at once, so concurrency is the correct fix rather than just
  * shrinking the universe further.
  */
-async function sweepOneTicker(target: SweepTarget): Promise<TickerSweepResult> {
+async function sweepOneTicker(target: SweepTarget, sink: Candidate[]): Promise<TickerSweepResult> {
   let hypothesesLogged = 0;
   const errors: { ticker: string; engine: string; error: string }[] = [];
 
@@ -215,7 +253,7 @@ async function sweepOneTicker(target: SweepTarget): Promise<TickerSweepResult> {
       const result = await runBacktest(target.ticker, signalType, 3);
       for (const h of result.horizons) {
         const stopLossVerdict = deriveStopLossVerdict(h, result.stopLossOverlay.filter((s) => s.horizonDays === h.horizonDays));
-        await logHorizonResult({
+        collectCandidate(sink, {
           ticker: target.ticker,
           assetClass: target.assetClass,
           strategyType: signalType,
@@ -243,7 +281,7 @@ async function sweepOneTicker(target: SweepTarget): Promise<TickerSweepResult> {
   try {
     const dow = await runDayOfWeekBacktest(target.ticker, 3);
     for (const d of dow.days) {
-      await logHorizonResult({
+      collectCandidate(sink, {
         ticker: target.ticker,
         assetClass: target.assetClass,
         strategyType: "dayOfWeekEffect",
@@ -266,7 +304,7 @@ async function sweepOneTicker(target: SweepTarget): Promise<TickerSweepResult> {
   try {
     const tod = await runTimeOfDayBacktest(target.ticker, 90);
     for (const c of tod.checkpoints) {
-      await logHorizonResult({
+      collectCandidate(sink, {
         ticker: target.ticker,
         assetClass: target.assetClass,
         strategyType: "timeOfDayEffect",
@@ -293,7 +331,7 @@ async function sweepOneTicker(target: SweepTarget): Promise<TickerSweepResult> {
     try {
       const orb = await runOrbBacktest(target.ticker, 15, 3);
       for (const h of orb.horizons) {
-        await logHorizonResult({
+        collectCandidate(sink, {
           ticker: target.ticker,
           assetClass: target.assetClass,
           strategyType: `orbBreakout_${h.direction}`,
@@ -323,9 +361,15 @@ async function sweepOneTicker(target: SweepTarget): Promise<TickerSweepResult> {
  * Every ticker runs concurrently (see sweepOneTicker) to stay well inside
  * the shared cron route's maxDuration=60 budget.
  */
-export async function runHypothesisSweep(): Promise<HypothesisSweepResult> {
-  const perTicker = await Promise.all(SWEEP_UNIVERSE.map(sweepOneTicker));
-  const hypothesesLogged = perTicker.reduce((sum, r) => sum + r.hypothesesLogged, 0);
+export async function runHypothesisSweep(
+  insert: (h: Omit<StrategyHypothesis, "id" | "createdAt">) => Promise<void> = insertHypothesis
+): Promise<HypothesisSweepResult> {
+  const sink: Candidate[] = [];
+  const perTicker = await Promise.all(SWEEP_UNIVERSE.map((t) => sweepOneTicker(t, sink)));
   const errors = perTicker.flatMap((r) => r.errors);
-  return { symbolsSwept: SWEEP_UNIVERSE.length, hypothesesLogged, errors };
+  // One false-discovery-rate correction for the whole run, then write every row (validated or rejected).
+  const rows = finalizeCandidates(sink);
+  // Written in parallel batches: 368 sequential inserts would eat the cron route's 60 s budget.
+  for (let i = 0; i < rows.length; i += 25) await Promise.all(rows.slice(i, i + 25).map(insert));
+  return { symbolsSwept: SWEEP_UNIVERSE.length, hypothesesLogged: rows.length, errors };
 }

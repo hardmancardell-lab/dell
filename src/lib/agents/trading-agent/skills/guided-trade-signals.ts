@@ -61,7 +61,8 @@ function isLiveTriggering(strategyType: string, bars: DailyBar[]): boolean {
  * general public, just with ownedByUser/relatedHoldingSymbol always false/null.
  */
 export async function getGuidedTradeSignals(ownedSymbols: string[] = []): Promise<GuidedTradeSignal[]> {
-  const hypotheses = await getRecentHypotheses(200);
+  // 1200 rows = about three full sweeps of 368 hypotheses. The old limit of 200 cut a single sweep in half BEFORE the validated filter.
+  const hypotheses = await getRecentHypotheses(1200);
   const validated = hypotheses.filter(
     (h) => h.status === "validated" && LIVE_CHECKABLE_STRATEGY_TYPES.has(h.strategyType)
   );

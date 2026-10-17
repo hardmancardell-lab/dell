@@ -91,11 +91,15 @@ export function mean(values: number[]): number | null {
   return clean.reduce((s, v) => s + v, 0) / clean.length;
 }
 
+/**
+ * SAMPLE standard deviation (divisor n - 1). It was the population form (divisor n), which understates spread and
+ * overstates every z-score and Sharpe ratio built on it by a factor sqrt(n / (n - 1)): 2.6% at n = 20, 0.2% at n = 250.
+ */
 export function stdDev(values: number[]): number | null {
   const clean = values.filter((v) => Number.isFinite(v));
   if (clean.length < 2) return null;
   const m = clean.reduce((s, v) => s + v, 0) / clean.length;
-  const variance = clean.reduce((s, v) => s + (v - m) ** 2, 0) / clean.length;
+  const variance = clean.reduce((s, v) => s + (v - m) ** 2, 0) / (clean.length - 1);
   return Math.sqrt(variance);
 }
 
@@ -120,7 +124,7 @@ export function covariance(x: number[], y: number[]): number | null {
   const my = cy.reduce((s, v) => s + v, 0) / cy.length;
   let sum = 0;
   for (let i = 0; i < cx.length; i++) sum += (cx[i] - mx) * (cy[i] - my);
-  return sum / cx.length;
+  return sum / (cx.length - 1); // sample covariance, consistent with the n - 1 stdDev above (correlation is unchanged)
 }
 
 export function correlation(x: number[], y: number[]): number | null {
@@ -178,11 +182,13 @@ export interface WinLossMetrics {
 
 /** Simulates a compounding equity curve over the array IN ORDER — inherits the same overlapping-window autocorrelation caveat historical-backtest.ts already documents for its forward-return windows. Exported for reuse by portfolio-analytics.ts's portfolio-level drawdown. */
 export function maxDrawdownFromReturns(returnsPct: number[]): number | null {
-  if (returnsPct.length === 0) return null;
+  // Non-finite returns are skipped: one NaN used to turn the running peak into NaN and freeze the drawdown at its pre-NaN value.
+  const clean = returnsPct.filter((r) => Number.isFinite(r));
+  if (clean.length === 0) return null;
   let equity = 1;
   let peak = 1;
   let maxDD = 0;
-  for (const r of returnsPct) {
+  for (const r of clean) {
     equity *= 1 + r / 100;
     peak = Math.max(peak, equity);
     if (peak > 0) maxDD = Math.max(maxDD, (peak - equity) / peak);

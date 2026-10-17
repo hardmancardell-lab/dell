@@ -560,6 +560,15 @@ export interface BacktestHorizonResult {
   testMeanReturnPct: number | null;
   sameSignOutOfSample: boolean | null;
   passesAllThreeBars: boolean;
+  /** Non-overlapping training occurrences the headline t-test rests on (pValue is computed on these, not on sampleSize). */
+  independentSampleSize?: number;
+  trainSampleSize?: number;
+  /** Held-out occurrences after the purge gap; used only for the same-sign check. */
+  testSampleSize?: number;
+  /** Number of tests the false-discovery-rate correction was applied over (signals x horizons shown together). */
+  fdrFamilySize?: number;
+  /** Block length of the block bootstrap behind the confidence interval (1 = no overlap between windows). */
+  bootstrapBlockLength?: number;
   winRate: number | null;
   avgWinPct: number | null;
   avgLossPct: number | null;

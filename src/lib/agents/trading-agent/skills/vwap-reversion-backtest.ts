@@ -4,7 +4,7 @@ import { groupCandlesByEasternDay } from "./bar-aggregation";
 import { WINDOWS, isWithin, toEasternParts, formatMinutesAsClock } from "./time-windows";
 import { vwapWithBands } from "./technical-indicators";
 import { VWAP_REVERSION_STD_DEV_MULT } from "./vwap-mean-reversion";
-import { benjaminiHochberg, bootstrapCi, zTestPValue } from "./stats-tests";
+import { benjaminiHochberg, bootstrapCi, MIN_TEST_VALUES, trainTTestPValue } from "./stats-tests";
 import { computeWinLossMetrics, mean, median, stdDev } from "../stats";
 import type {
   VwapBacktestHorizonResult,
@@ -189,7 +189,7 @@ export async function runVwapReversionBacktest(
     "5-min bars only, regular session (9:30am-4:00pm ET) — extended-hours bars are excluded so thin premarket/afterhours volume can't distort the VWAP bands.",
     `The first ${SIGNAL_WARMUP_BARS} bars of every session are skipped before evaluating a signal — with almost no volume behind the running VWAP variance that early, the bands sit unrealistically tight and would fire spurious signals right at the open.`,
     "Overlapping forward-return windows: if this signal re-fires later the same session (price reverts, then re-extends), those windows can overlap, introducing autocorrelation the significance tests below don't account for — same caveat historical-backtest.ts documents for its own daily occurrences.",
-    "Significance uses a z-test approximation, not an exact Student's t-test — the difference is small at larger sample sizes and grows for small samples.",
+    "Significance is an exact Student t-test (n-1 degrees of freedom) on the training part of the history only (first 75% of occurrences); the last 25% is held out and used only to check the sign of the effect. Entries are assumed at the stated price (same bar close or checkpoint).",
   ];
 
   const splitIndex = Math.floor(occurrences.length * 0.75);
@@ -198,9 +198,7 @@ export async function runVwapReversionBacktest(
 
   const rawPValues: (number | null)[] = HORIZON_BARS.map((_, h) => {
     const values = occurrences.map((o) => o.forwardReturns[h]).filter((v): v is number => v !== null);
-    const m = mean(values);
-    const sd = stdDev(values);
-    return m !== null && sd !== null ? zTestPValue(m, sd, values.length) : null;
+    return trainTTestPValue(values);
   });
 
   const validHorizonIndices = rawPValues.map((p, h) => (p !== null ? h : -1)).filter((h): h is number => h >= 0);
@@ -226,9 +224,9 @@ export async function runVwapReversionBacktest(
     const pValueFdrAdjusted = fdrByHorizonIndex.get(h) ?? null;
     const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
 
-    const boot = bootstrapCi(values);
+    const boot = bootstrapCi(trainValues);
     const trainMean = mean(trainValues);
-    const testMean = mean(testValues);
+    const testMean = testValues.length >= MIN_TEST_VALUES ? mean(testValues) : null;
     const sameSignOutOfSample = trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
     const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;
     const winLoss = computeWinLossMetrics(values);

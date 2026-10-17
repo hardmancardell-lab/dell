@@ -9,7 +9,7 @@ import {
   type WindowHighLow,
 } from "./bar-aggregation";
 import { WINDOWS, formatMinutesAsClock, openingRangeWindow, toEasternParts } from "./time-windows";
-import { benjaminiHochberg, bootstrapCi, zTestPValue } from "./stats-tests";
+import { benjaminiHochberg, bootstrapCi, MIN_TEST_VALUES, trainTTestPValue } from "./stats-tests";
 import { computeWinLossMetrics, mean, median, stdDev } from "../stats";
 import type {
   AtrOrbTickerResult,
@@ -92,7 +92,7 @@ export async function runOrbBacktest(
     "Reported returns are strategy returns for that direction (positive = profitable), not raw price change — a short occurrence's return is the inverse of the raw price move.",
     "Entry is modeled at the breakout bar's close with no slippage or intrabar-fill assumption — a real fill would typically be worse.",
     "Days where the opening range window has no available bars (early close, holiday, feed gap) are skipped and counted separately rather than fabricated — no US market holiday calendar is integrated in this app.",
-    "Significance uses a z-test approximation, not an exact Student's t-test (see stats-tests.ts).",
+    "Significance is an exact Student t-test (n-1 degrees of freedom) on the training part of the history only (first 75% of occurrences); the last 25% is held out and used only to check the sign of the effect. Entries are assumed at the stated price (same bar close or checkpoint).",
     "Minute-bar depth on this provider's free tier is unverified beyond what's been live-tested — see ALPACA_INTEGRATION_NOTES.md.",
   ];
 
@@ -164,9 +164,7 @@ export async function runOrbBacktest(
   }
 
   const rawPValues: (number | null)[] = buckets.map((values) => {
-    const m = mean(values);
-    const sd = stdDev(values);
-    return m !== null && sd !== null ? zTestPValue(m, sd, values.length) : null;
+    return trainTTestPValue(values);
   });
   const validIndices = rawPValues.map((p, i) => (p !== null ? i : -1)).filter((i): i is number => i >= 0);
   const adjustedValid = benjaminiHochberg(validIndices.map((i) => rawPValues[i] as number));
@@ -181,9 +179,9 @@ export async function runOrbBacktest(
     const pValue = rawPValues[i];
     const pValueFdrAdjusted = fdrByIndex.get(i) ?? null;
     const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
-    const boot = bootstrapCi(values);
+    const boot = bootstrapCi(trainValues);
     const trainMean = mean(trainValues);
-    const testMean = mean(testValues);
+    const testMean = testValues.length >= MIN_TEST_VALUES ? mean(testValues) : null;
     const sameSignOutOfSample =
       trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
     const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;
@@ -303,7 +301,7 @@ export async function runAtrOrbBacktest(
     "Reported returns are strategy returns for that direction (positive = profitable), not raw price change — a short occurrence's return is the inverse of the raw price move.",
     "Entry is modeled at the breakout bar's close with no slippage or intrabar-fill assumption — a real fill would typically be worse.",
     `ATR is computed from daily bars only (True Range averaged over the trailing ${atrPeriodDays} days, always excluding the day being evaluated) — it does not reset intraday or account for scheduled news events that can spike real-time volatility above its trailing average.`,
-    "Significance uses a z-test approximation, not an exact Student's t-test (see stats-tests.ts).",
+    "Significance is an exact Student t-test (n-1 degrees of freedom) on the training part of the history only (first 75% of occurrences); the last 25% is held out and used only to check the sign of the effect. Entries are assumed at the stated price (same bar close or checkpoint).",
     "Minute-bar depth on this provider's free tier is unverified beyond what's been live-tested — see ALPACA_INTEGRATION_NOTES.md.",
   ];
 
@@ -364,9 +362,7 @@ export async function runAtrOrbBacktest(
   }
 
   const rawPValues: (number | null)[] = buckets.map((values) => {
-    const m = mean(values);
-    const sd = stdDev(values);
-    return m !== null && sd !== null ? zTestPValue(m, sd, values.length) : null;
+    return trainTTestPValue(values);
   });
   const validIndices = rawPValues.map((p, i) => (p !== null ? i : -1)).filter((i): i is number => i >= 0);
   const adjustedValid = benjaminiHochberg(validIndices.map((i) => rawPValues[i] as number));
@@ -380,9 +376,9 @@ export async function runAtrOrbBacktest(
     const pValue = rawPValues[i];
     const pValueFdrAdjusted = fdrByIndex.get(i) ?? null;
     const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
-    const boot = bootstrapCi(values);
+    const boot = bootstrapCi(trainValues);
     const trainMean = mean(trainValues);
-    const testMean = mean(testValues);
+    const testMean = testValues.length >= MIN_TEST_VALUES ? mean(testValues) : null;
     const sameSignOutOfSample = trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
     const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;
     const winLoss = computeWinLossMetrics(values);

@@ -1,6 +1,6 @@
 import { fetchMinuteBars } from "@/lib/data/market-data";
-import { toUtcParts, SESSIONS } from "./time-windows";
-import { benjaminiHochberg, bootstrapCi, zTestPValue } from "./stats-tests";
+import { toUtcParts } from "./time-windows";
+import { benjaminiHochberg, bootstrapCi, MIN_TEST_VALUES, trainTTestPValue } from "./stats-tests";
 import { computeWinLossMetrics, mean, median, stdDev } from "../stats";
 import type { MarketCandle } from "@/lib/data/market-data-types";
 import type {
@@ -26,10 +26,22 @@ import type {
 
 const FDR_ALPHA = 0.05;
 
+/**
+ * NON-OVERLAPPING UTC windows for the sequence study. The conventional session hours overlap (London 08-17 and New York
+ * 13-22 share four hours, Asian 00-09 and London share one), which made "London predicts New York" partly measure the same
+ * bars twice: a mechanical correlation that passed the significance bars in 43-48% of pure-noise runs. Here each hour belongs
+ * to exactly one session, so the prior session is finished before the follow-on session starts.
+ */
+export const SEQUENCE_SESSION_WINDOWS = {
+  asian: { start: 0, end: 8 * 60 },
+  london: { start: 8 * 60, end: 13 * 60 },
+  newYork: { start: 13 * 60, end: 22 * 60 },
+} as const;
+
 const SESSION_DEFS: { id: SessionId; label: string; window: { start: number; end: number } }[] = [
-  { id: "asian", label: "Asian", window: SESSIONS.ASIAN },
-  { id: "london", label: "London", window: SESSIONS.LONDON },
-  { id: "newYork", label: "New York", window: SESSIONS.NEW_YORK },
+  { id: "asian", label: "Asian", window: SEQUENCE_SESSION_WINDOWS.asian },
+  { id: "london", label: "London", window: SEQUENCE_SESSION_WINDOWS.london },
+  { id: "newYork", label: "New York", window: SEQUENCE_SESSION_WINDOWS.newYork },
 ];
 
 const EDGE_DEFS: { id: SessionSequenceEdgeId; label: string; priorSession: SessionId; followOnSession: SessionId; sameUtcDate: boolean }[] = [
@@ -106,9 +118,9 @@ export async function runSessionSequenceAnalysis(ticker: string, lookbackDays: n
 
   const byDate = buildSessionOccurrences(candles);
   const dataLimitations: string[] = [
-    "Sessions are defined in UTC (00:00-09:00 Asian, 08:00-17:00 London, 13:00-22:00 New York) — the standard industry convention, not this app's Eastern-Time equity-session windows.",
+    "Sessions are defined in UTC as non-overlapping windows (00:00-08:00 Asian, 08:00-13:00 London, 13:00-22:00 New York) so that a prior session is complete before the follow-on session starts. The usual industry hours overlap by up to four hours, which would make the study partly measure the same bars twice; these windows are shorter than the conventional ones.",
     "A day/session is only counted if real bars fell inside that session's window — no session is fabricated or interpolated for a symbol/period without coverage.",
-    "Significance uses a z-test approximation, not an exact Student's t-test (see stats-tests.ts), same documented approximation used throughout this app's other calendar-effect engines.",
+    "Significance is an exact Student t-test (n-1 degrees of freedom) on the training part of the history only (first 75% of occurrences); the last 25% is held out and used only to check the sign of the effect. Entries are assumed at the stated price (same bar close or checkpoint).",
   ];
 
   // Per-session descriptive stats (real, unconditional).
@@ -161,9 +173,7 @@ export async function runSessionSequenceAnalysis(ticker: string, lookbackDays: n
 
   const rawPValues: (number | null)[] = rawBuckets.map((b) => {
     const values = b.rows.map((r) => r.followOnReturnPct);
-    const m = mean(values);
-    const sd = stdDev(values);
-    return m !== null && sd !== null ? zTestPValue(m, sd, values.length) : null;
+    return trainTTestPValue(values);
   });
   const validIndices = rawPValues.map((p, i) => (p !== null ? i : -1)).filter((i): i is number => i >= 0);
   const adjustedValid = benjaminiHochberg(validIndices.map((i) => rawPValues[i] as number));
@@ -179,9 +189,9 @@ export async function runSessionSequenceAnalysis(ticker: string, lookbackDays: n
     const pValue = rawPValues[i];
     const pValueFdrAdjusted = fdrByIndex.get(i) ?? null;
     const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
-    const boot = bootstrapCi(values);
+    const boot = bootstrapCi(trainValues);
     const trainMean = mean(trainValues);
-    const testMean = mean(testValues);
+    const testMean = testValues.length >= MIN_TEST_VALUES ? mean(testValues) : null;
     const sameSignOutOfSample =
       trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
     const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;

@@ -1,7 +1,7 @@
 import { getDailyBars } from "./daily-bars";
 import { fetchQuote } from "@/lib/data/market-data";
 import { getCurrencyPeg } from "./currency-pegs";
-import { benjaminiHochberg, bootstrapCi, zTestPValue } from "./stats-tests";
+import { benjaminiHochberg, bootstrapCi, MIN_TEST_VALUES, overlapBlockLength, selectNonOverlapping, tTestPValue } from "./stats-tests";
 import { buildReversionStats, computeWinLossMetrics, mean, median, stdDev } from "../stats";
 import type {
   BacktestHorizonResult,
@@ -101,6 +101,7 @@ function trackPegReversion(
 }
 
 interface PegOccurrence {
+  entryIndex: number;
   dateKey: string;
   entryClose: number;
   deviationPctAtEntry: number;
@@ -130,6 +131,7 @@ function runOneDirection(
     });
     const reversion = trackPegReversion(bars, i, target, direction);
     occurrences.push({
+      entryIndex: i,
       dateKey: bars[i].dateKey,
       entryClose,
       deviationPctAtEntry: ((rate - target) / target) * 100,
@@ -139,15 +141,21 @@ function runOneDirection(
     });
   }
 
+  // Pegs sit outside the band for weeks, so signals fire on consecutive days and their forward windows overlap. The headline
+  // test therefore uses only NON-OVERLAPPING training occurrences; the test period starts one largest-horizon after the last
+  // training entry (purge) and is used only for the sign check.
+  const maxHorizon = Math.max(...HORIZONS_TRADING_DAYS);
   const splitIndex = Math.floor(occurrences.length * 0.75);
   const trainOccurrences = occurrences.slice(0, splitIndex);
-  const testOccurrences = occurrences.slice(splitIndex);
+  const lastTrainEntry = trainOccurrences.length > 0 ? trainOccurrences[trainOccurrences.length - 1].entryIndex : -1;
+  const testOccurrences = occurrences.slice(splitIndex).filter((o) => o.entryIndex >= lastTrainEntry + maxHorizon);
 
-  const rawPValues: (number | null)[] = HORIZONS_TRADING_DAYS.map((_, h) => {
-    const values = occurrences.map((o) => o.forwardReturns[h]).filter((v): v is number => v !== null);
-    const m = mean(values);
-    const sd = stdDev(values);
-    return m !== null && sd !== null ? zTestPValue(m, sd, values.length) : null;
+  const rawPValues: (number | null)[] = HORIZONS_TRADING_DAYS.map((horizon, h) => {
+    const train = trainOccurrences.filter((o) => o.forwardReturns[h] !== null);
+    const kept = selectNonOverlapping(train.map((o) => o.entryIndex), horizon).map((pos) => train[pos].forwardReturns[h] as number);
+    const m = mean(kept);
+    const sd = stdDev(kept);
+    return m !== null && sd !== null ? tTestPValue(m, sd, kept.length) : null;
   });
 
   const validHorizonIndices = rawPValues.map((p, h) => (p !== null ? h : -1)).filter((h): h is number => h >= 0);
@@ -163,9 +171,11 @@ function runOneDirection(
     const pValue = rawPValues[h];
     const pValueFdrAdjusted = fdrByHorizonIndex.get(h) ?? null;
     const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
-    const boot = bootstrapCi(values);
+    const boot = bootstrapCi(trainValues, 5000, 0.95, {
+      blockLength: overlapBlockLength(trainOccurrences.filter((o) => o.forwardReturns[h] !== null).map((o) => o.entryIndex), horizonDays),
+    });
     const trainMean = mean(trainValues);
-    const testMean = mean(testValues);
+    const testMean = testValues.length >= MIN_TEST_VALUES ? mean(testValues) : null;
     const sameSignOutOfSample =
       trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
     const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;
@@ -250,7 +260,7 @@ export async function runPegReversionBacktest(
 
   const dataLimitations: string[] = [
     "Overlapping forward-return windows: if the deviation signal fires on consecutive days, their forward-return periods overlap, introducing autocorrelation the significance tests don't account for — same caveat as every other backtest engine in this app.",
-    "Significance uses a z-test approximation, not an exact Student's t-test — small difference at larger sample sizes, grows for small samples.",
+    "Significance is an exact Student t-test (n-1 degrees of freedom) on the training part of the history only (first 75% of occurrences); the last 25% is held out and used only to check the sign of the effect. Entries are assumed at the stated price (same bar close or checkpoint).",
     peg.pegType === "band"
       ? `Signal triggers when price moves outside the official ${peg.bandLowerBound}-${peg.bandUpperBound} band — a real, officially-defended trigger, not a chosen parameter.`
       : `This peg has no official trading band — the signal triggers at a ${deviationThresholdPct}% deviation from the fixed target, a chosen parameter, not an official rule.`,

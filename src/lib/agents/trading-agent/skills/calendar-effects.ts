@@ -8,7 +8,7 @@ import {
   priceAtOrNearWindowStart,
 } from "./bar-aggregation";
 import { buildTimeOfDayFrequency, WINDOWS } from "./time-windows";
-import { benjaminiHochberg, bootstrapCi, zTestPValue } from "./stats-tests";
+import { benjaminiHochberg, bootstrapCi, MIN_TEST_VALUES, trainTTestPValue } from "./stats-tests";
 import { computeWinLossMetrics, mean, median, stdDev } from "../stats";
 import type {
   CalendarDayOfWeekResult,
@@ -86,16 +86,14 @@ export async function runDayOfWeekBacktest(ticker: string, lookbackYears: number
 
   const dataLimitations: string[] = [
     "Return metric is open-to-close (same-session), not prior-close-to-close — this deliberately excludes weekend/overnight gap moves from \"what happened during that weekday's session.\" A prior-close-to-close metric would answer a related but different question and isn't computed here. The trade log's overnightGapPct is reported separately as context, not folded into returnPct.",
-    "Significance uses a z-test approximation, not an exact Student's t-test (see stats-tests.ts) — the same documented approximation historical-backtest.ts uses.",
+    "Significance is an exact Student t-test (n-1 degrees of freedom) on the training part of the history only (first 75% of occurrences); the last 25% is held out and used only to check the sign of the effect. Entries are assumed at the stated session open or checkpoint price.",
     "This backtest walks daily bars only, which carry no intraday timestamp — the trade log's day high/low and overnight gap % are real, but the time each high/low occurred isn't available here (dayHighTimeClock/dayLowTimeClock are always null).",
   ];
 
   const buckets = DAYS_OF_WEEK.map((day) => byDay.get(day)!.map((o) => o.returnPct));
 
   const rawPValues: (number | null)[] = buckets.map((values) => {
-    const m = mean(values);
-    const sd = stdDev(values);
-    return m !== null && sd !== null ? zTestPValue(m, sd, values.length) : null;
+    return trainTTestPValue(values);
   });
   const validIndices = rawPValues.map((p, i) => (p !== null ? i : -1)).filter((i): i is number => i >= 0);
   const adjustedValid = benjaminiHochberg(validIndices.map((i) => rawPValues[i] as number));
@@ -111,9 +109,9 @@ export async function runDayOfWeekBacktest(ticker: string, lookbackYears: number
     const pValue = rawPValues[i];
     const pValueFdrAdjusted = fdrByIndex.get(i) ?? null;
     const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
-    const boot = bootstrapCi(values);
+    const boot = bootstrapCi(trainValues);
     const trainMean = mean(trainValues);
-    const testMean = mean(testValues);
+    const testMean = testValues.length >= MIN_TEST_VALUES ? mean(testValues) : null;
     const sameSignOutOfSample =
       trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
     const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;
@@ -195,7 +193,7 @@ export async function runTimeOfDayBacktest(ticker: string, lookbackDays: number)
 
   const dataLimitations: string[] = [
     "Days where a checkpoint window has no available bars (e.g. an early-close/holiday-shortened session, or a feed gap) are excluded from that checkpoint's sample rather than fabricated — no US market holiday calendar is integrated in this app, so this is a defensive fallback, not explicit holiday detection.",
-    "Significance uses a z-test approximation, not an exact Student's t-test (see stats-tests.ts).",
+    "Significance is an exact Student t-test (n-1 degrees of freedom) on the training part of the history only (first 75% of occurrences); the last 25% is held out and used only to check the sign of the effect. Entries are assumed at the stated price (same bar close or checkpoint).",
     "Minute-bar depth on this provider's free tier is unverified beyond what's been live-tested — see ALPACA_INTEGRATION_NOTES.md.",
   ];
 
@@ -225,9 +223,7 @@ export async function runTimeOfDayBacktest(ticker: string, lookbackDays: number)
 
   const rawPValues: (number | null)[] = buckets.map((occs) => {
     const values = occs.map((o) => o.returnPct);
-    const m = mean(values);
-    const sd = stdDev(values);
-    return m !== null && sd !== null ? zTestPValue(m, sd, values.length) : null;
+    return trainTTestPValue(values);
   });
   const validIndices = rawPValues.map((p, i) => (p !== null ? i : -1)).filter((i): i is number => i >= 0);
   const adjustedValid = benjaminiHochberg(validIndices.map((i) => rawPValues[i] as number));
@@ -243,9 +239,9 @@ export async function runTimeOfDayBacktest(ticker: string, lookbackDays: number)
     const pValue = rawPValues[i];
     const pValueFdrAdjusted = fdrByIndex.get(i) ?? null;
     const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
-    const boot = bootstrapCi(values);
+    const boot = bootstrapCi(trainValues);
     const trainMean = mean(trainValues);
-    const testMean = mean(testValues);
+    const testMean = testValues.length >= MIN_TEST_VALUES ? mean(testValues) : null;
     const sameSignOutOfSample =
       trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
     const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;
@@ -351,16 +347,14 @@ export async function runSingleWeekdayBacktest(
   const trainValues = values.slice(0, splitIndex);
   const testValues = values.slice(splitIndex);
 
-  const m = mean(values);
-  const sd = stdDev(values);
-  const pValue = m !== null && sd !== null ? zTestPValue(m, sd, values.length) : null;
-  // Single bucket, single comparison — BH-FDR correction across one
-  // p-value is the identity transform, unlike runDayOfWeekBacktest's 5-way case.
-  const pValueFdrAdjusted = pValue;
+  const pValue = trainTTestPValue(values);
+  // The weekday is chosen after seeing the five-weekday table, so this one p-value is one of five comparisons:
+  // Bonferroni over the 5 weekdays (BH over a single p-value would be the identity and hide that choice).
+  const pValueFdrAdjusted = pValue === null ? null : Math.min(1, pValue * 5);
   const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
-  const boot = bootstrapCi(values);
+  const boot = bootstrapCi(trainValues);
   const trainMean = mean(trainValues);
-  const testMean = mean(testValues);
+  const testMean = testValues.length >= MIN_TEST_VALUES ? mean(testValues) : null;
   const sameSignOutOfSample =
     trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
   const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;
@@ -369,7 +363,7 @@ export async function runSingleWeekdayBacktest(
   const effect: DayOfWeekEffectResult = {
     dayOfWeek,
     sampleSize: values.length,
-    meanReturnPct: m,
+    meanReturnPct: mean(values),
     medianReturnPct: median(values),
     pValue,
     pValueFdrAdjusted,

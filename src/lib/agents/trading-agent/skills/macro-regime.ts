@@ -11,6 +11,19 @@ const REGIME_THRESHOLD_PCT = 0.2;
 const LOOKBACK_MONTHS = 6;
 const HISTORY_MONTHS = 240; // 20 years — enough for any realistic backtest lookback plus the comparison window
 
+// FEDFUNDS is a MONTHLY AVERAGE that FRED dates on the 1st of the month, but the average is only known once the month is over
+// and published. Using it from the 1st leaked the future: the first cut of the 2024 cycle (2024-09-18) was tagged "cutting"
+// on 2024-09-03, two weeks before it happened. An observation is therefore treated as known only from the end of its month
+// plus this publication delay.
+const PUBLICATION_DELAY_DAYS = 7;
+
+/** First calendar date (YYYY-MM-DD) on which the monthly-average observation dated `obsDate` could have been known. */
+export function observationKnownDate(obsDate: string): string {
+  const [y, m] = obsDate.split("-").map(Number);
+  const monthEnd = Date.UTC(y, m, 0); // day 0 of the next month = last day of this month
+  return new Date(monthEnd + PUBLICATION_DELAY_DAYS * 86_400_000).toISOString().slice(0, 10);
+}
+
 export interface RegimeTimeline {
   observations: FredObservation[]; // FEDFUNDS, ascending by date, nulls filtered
 }
@@ -24,12 +37,13 @@ export async function getFedRateRegimeTimeline(): Promise<RegimeTimeline> {
  * The regime active on a given calendar date, from the FEDFUNDS trend over
  * the trailing ~6 months as of that date — not simply the latest observation
  * available today, so a day from two years ago is classified using what the
- * regime actually was back then. Returns null when there isn't enough
+ * regime actually was back then. Only observations already knowable on that date are used (see PUBLICATION_DELAY_DAYS).
+ * Returns null when there isn't enough
  * history before the date to compare against (too close to the start of
  * the fetched series).
  */
 export function classifyRegimeForDate(dateKey: string, timeline: RegimeTimeline): FedRateRegime | null {
-  const upToDate = timeline.observations.filter((o) => o.date <= dateKey);
+  const upToDate = timeline.observations.filter((o) => observationKnownDate(o.date) <= dateKey);
   if (upToDate.length <= LOOKBACK_MONTHS) return null;
 
   const current = upToDate[upToDate.length - 1].value as number;

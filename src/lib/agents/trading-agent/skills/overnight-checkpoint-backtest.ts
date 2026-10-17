@@ -3,7 +3,7 @@ import { fetchMinuteBars } from "@/lib/data/market-data";
 import { computeMomentum, computeVolumeDisplacement } from "./scan-signals";
 import { computeMeanReversion } from "./mean-reversion";
 import { groupCandlesByEasternDay, priceAtOrAfterMinute, priceAtOrNearWindowEnd } from "./bar-aggregation";
-import { benjaminiHochberg, bootstrapCi, zTestPValue } from "./stats-tests";
+import { benjaminiHochberg, bootstrapCi, MIN_TEST_VALUES, trainTTestPValue } from "./stats-tests";
 import { computeWinLossMetrics, mean, median, stdDev } from "../stats";
 import type { WinLossMetrics } from "../stats";
 import type { DailyBar, EquityBacktestSignalType } from "../types";
@@ -133,7 +133,7 @@ export async function runOvernightCheckpointBacktest(
     "Entry is modeled at the last available minute bar's close within the 3:57pm-4:00pm ET window (the real last 3 minutes of the regular session) — not necessarily exactly 4:00:00pm if the feed's last print that day came slightly earlier.",
     "Each checkpoint exits at the first available minute bar at or after that clock time the next trading day — a real fill would typically be modestly worse (spread/slippage), especially in the thinner premarket checkpoints.",
     "Premarket minute-bar depth comes from Alpaca's free-tier IEX feed (single-exchange, not the consolidated tape) — the thinnest and least representative part of the session on this provider; isolated premarket prints can look disconnected from the instrument's real full-tape price.",
-    "Significance uses a z-test approximation, not an exact Student's t-test (see stats-tests.ts).",
+    "Significance is an exact Student t-test (n-1 degrees of freedom) on the training part of the history only (first 75% of occurrences); the last 25% is held out and used only to check the sign of the effect. Entries are assumed at the stated price (same bar close or checkpoint).",
     `Minute bars are only fetched for the trailing ${MINUTE_BAR_LOOKBACK_MONTHS} months regardless of lookbackYears — requesting years of minute bars in one call times out on the data provider's own backend (confirmed live). Signal detection still runs across the full ${lookbackYears}-year window using daily bars; only signal days within the last ${MINUTE_BAR_LOOKBACK_MONTHS} months can produce a real occurrence here — older ones are counted in daysSkippedNoUsableBars.`,
   ];
 
@@ -191,9 +191,7 @@ export async function runOvernightCheckpointBacktest(
 
   const rawPValues: (number | null)[] = returnsByCheckpoint.map((values) => {
     const clean = values.filter((v): v is number => v !== null);
-    const m = mean(clean);
-    const sd = stdDev(clean);
-    return m !== null && sd !== null ? zTestPValue(m, sd, clean.length) : null;
+    return trainTTestPValue(clean);
   });
   const validIndices = rawPValues.map((p, i) => (p !== null ? i : -1)).filter((i): i is number => i >= 0);
   const adjustedValid = benjaminiHochberg(validIndices.map((i) => rawPValues[i] as number));
@@ -209,9 +207,9 @@ export async function runOvernightCheckpointBacktest(
     const pValue = rawPValues[i];
     const pValueFdrAdjusted = fdrByIndex.get(i) ?? null;
     const significantAfterFdr = pValueFdrAdjusted !== null && pValueFdrAdjusted < FDR_ALPHA;
-    const boot = bootstrapCi(values);
+    const boot = bootstrapCi(trainValues);
     const trainMean = mean(trainValues);
-    const testMean = mean(testValues);
+    const testMean = testValues.length >= MIN_TEST_VALUES ? mean(testValues) : null;
     const sameSignOutOfSample = trainMean !== null && testMean !== null ? Math.sign(trainMean) === Math.sign(testMean) : null;
     const passesAllThreeBars = significantAfterFdr && boot.ciExcludesZero && sameSignOutOfSample === true;
     const winLoss = computeWinLossMetrics(values);
