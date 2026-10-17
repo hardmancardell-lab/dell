@@ -1953,7 +1953,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "expert",
     order: 5,
     title: "Market microstructure",
-    body: "Liquidity isn't constant throughout the day or across stocks — it's thin in the pre-market, thin in thinly-traded names, and thick at the open and close of a liquid large-cap. A large order hitting a thin order book moves the price more than the same order hitting a deep one, simply because there are fewer resting orders to absorb it.\n\nThis app is explicit about where it can't verify microstructure claims — no tick-level or order-book data is available at this budget tier, so anything beyond descriptive, snapshot-level signals (like same-day options volume/OI) stays out of scope rather than being faked.",
+    body: "Liquidity is how easily you can trade without moving the price. It is not constant. It is thin in the pre-market and in stocks that trade rarely. It is thick at the open and close of a liquid large-cap. A big order moves the price more in a thin order book than in a deep one, because fewer resting orders can absorb it.\n\nThis app says plainly what it cannot verify. It has no tick-level or order-book data at this budget tier. Anything beyond simple snapshot signals, like same-day options volume and open interest (the number of contracts still open), is left out instead of faked.",
     tryIt: null,
     checks: [
       {
@@ -1996,7 +1996,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "expert",
     order: 6,
     title: "Deep-value methodology",
-    body: "The Net Current Asset Value (NCAV) approach values a company against current assets minus all liabilities — deliberately ignoring long-term/fixed assets and goodwill entirely. It's a conservative, liquidation-style floor: what would be left for shareholders if the company were wound down today, using only the most liquid assets.\n\nThis app's Value Checklist implements the full 7-criteria version of this methodology, and deliberately excludes analyst price targets — not as an oversight, but because forecasting isn't part of this classic value approach.",
+    body: "The Net Current Asset Value (NCAV) method compares a stock's price with current assets minus all liabilities. It ignores long-term assets and goodwill (the extra amount paid for a company above the value of its assets). The result is a cautious, liquidation-style floor. It shows what might be left for shareholders if the company were wound down today, counting only the most liquid assets.\n\nThis app's Value Checklist uses the full 7-criteria version of this method. It leaves out analyst price targets on purpose. Forecasting is not part of this classic value approach.",
     tryIt: { label: "Security Analysis · full Checklist" },
     checks: [
       {
@@ -2039,7 +2039,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "expert",
     order: 7,
     title: "Portfolio-level risk management",
-    body: "Hedging a concentrated position doesn't require selling it — a protective put, for instance, caps downside on a held position while leaving upside intact (minus the cost of the hedge). Real risk management is a sizing discipline: how much protection, at what cost, against how much of the position.\n\nDrawdown management — actively limiting how far a portfolio falls from its peak — matters because recovering from a large drawdown requires a disproportionately larger gain (a 50% loss needs a 100% gain just to break even).",
+    body: "You can hedge a concentrated position (a large share of your money in one holding) without selling it. A protective put sets a floor under your losses while keeping the upside, minus the cost of the put. Real risk management is about sizing: how much protection to buy, at what cost, against how much of the position.\n\nDrawdown is the fall from a portfolio's peak. Limiting it matters because recovering takes a bigger gain than the loss. A 50% loss needs a 100% gain just to break even.",
     tryIt: { label: "Portfolio Tracker · Risk & Rebalancing" },
     checks: [
       {
@@ -2082,7 +2082,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "expert",
     order: 8,
     title: "Building a full top-down thesis",
-    body: "The capstone module: a real investment thesis connects macro/fiscal backdrop, sector positioning, and company-level fundamentals and technicals into one coherent, falsifiable argument — not any single layer in isolation. A cheap P/E means nothing if the sector is structurally declining; a great macro backdrop means nothing for a company with deteriorating fundamentals.\n\nThis is the exact chain this app's planned assistant is meant to walk when asked \"should I buy this\" — presenting what each real layer of data shows, not issuing a directive.",
+    body: "This is the capstone lesson. A real investment thesis links three layers into one clear argument that could be proven wrong: the macro and fiscal backdrop, the sector, and the company's fundamentals and chart. No single layer is enough. A cheap P/E means little if the sector is shrinking for good. A great macro backdrop means little for a company whose business is getting worse.\n\nThis is the chain this app's assistant walks when asked \"should I buy this?\" It shows what each layer of real data says. It does not give a buy or sell order.",
     tryIt: null,
     checks: [
       {
