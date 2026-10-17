@@ -1781,7 +1781,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "expert",
     order: 1,
     title: "Options Greeks and dealer positioning",
-    body: "Delta, gamma, theta, and vega describe how an option's value responds to the underlying price, the rate of that response, time decay, and volatility, respectively. Aggregated across an entire options chain, these describe how options dealers — who are usually on the other side of customer trades — are positioned.\n\nWhen dealers are net short gamma, their hedging tends to amplify price moves (sell into declines, buy into rallies, to stay hedged). When they're net long gamma, hedging tends to dampen moves. This mechanism is what this app's GEX signal is built to surface.",
+    body: "Delta, gamma, theta and vega describe how an option's value changes. Delta is the change when the stock price moves. Gamma is how fast delta changes. Theta is the value lost as time passes. Vega is the effect of a change in volatility. Added up across a whole options chain, these numbers show how options dealers are positioned. Dealers are the firms that usually take the other side of customer trades.\n\nWhen dealers are net short gamma, their hedging adds to price moves. They sell into declines and buy into rallies to stay hedged. When they are net long gamma, their hedging calms price moves. This is what this app's GEX signal is built to show. It rests on assumptions about how dealers are positioned, so treat it as a model, not a fact.",
     tryIt: { label: "Options · GEX & Dealer Positioning" },
     checks: [
       {
@@ -1824,7 +1824,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "expert",
     order: 2,
     title: "Portfolio theory in depth",
-    body: "The Sharpe ratio measures return earned per unit of risk taken — expected return minus the risk-free rate, divided by volatility. A higher Sharpe ratio means a portfolio delivered more return for the risk it carried, not just more return in absolute terms.\n\nThe efficient frontier is the set of portfolios offering the best possible expected return for each level of risk — everything below it is leaving return on the table for the risk being taken.",
+    body: "The Sharpe ratio measures return per unit of risk. Take the expected return, subtract the risk-free rate (the return on a very safe asset, such as short-term Treasury bills), and divide by volatility. A higher Sharpe ratio means the portfolio earned more for the risk it took, not just more in total.\n\nThe efficient frontier is the set of portfolios with the best expected return for each level of risk. A portfolio below the frontier is leaving return on the table for the risk it takes.",
     tryIt: { label: "Portfolio Tracker · Modern Portfolio Theory" },
     checks: [
       {
@@ -1867,7 +1867,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "expert",
     order: 3,
     title: "Evaluating a strategy like a statistician",
-    body: "Testing many trading signals at once and reporting only the one that looks significant is a classic multiple-comparisons trap — with enough tests, some will look significant purely by chance. Correction methods like Benjamini-Hochberg FDR adjust the bar for significance based on how many things you tested.\n\nOut-of-sample testing (checking whether a pattern holds on data it wasn't built on) and overfitting (a strategy tuned so precisely to historical data that it fails on new data) are the other two pillars of taking a backtest seriously.",
+    body: "Suppose you test many trading signals and report only the one that looks significant. This is the multiple-comparisons trap. With enough tests, some will look significant by pure chance. Methods such as Benjamini-Hochberg FDR (false discovery rate) raise the bar for significance based on how many tests you ran.\n\nTwo more ideas matter. Out-of-sample testing checks whether a pattern holds on data it was not built on. Overfitting is a strategy tuned so tightly to past data that it fails on new data. Together, these decide whether you can take a backtest seriously.",
     tryIt: { label: "Glossary · Statistics terms" },
     checks: [
       {
@@ -1910,7 +1910,7 @@ export const LITERACY_MODULES: LiteracyModule[] = [
     tier: "expert",
     order: 4,
     title: "Macro-to-position synthesis, cross-asset",
-    body: "Fiscal and monetary policy don't just move stocks — they thread through currencies, commodities, and rates with different mechanics in each. A stronger dollar (often driven by relatively higher U.S. rates) tends to pressure globally-priced, dollar-denominated commodities lower, since it takes fewer dollars to buy the same physical amount.\n\nUnderstanding these cross-asset transmission mechanisms — not just \"rates went up, stocks went down\" — is what separates genuine macro analysis from headline reaction.",
+    body: "Fiscal policy (government spending and taxes) and monetary policy (central bank rates) do not only move stocks. They also move currencies, commodities and interest rates, and the mechanics differ in each. A stronger dollar, often caused by higher US rates, tends to push down commodities priced in dollars. It takes fewer dollars to buy the same amount of oil or gold.\n\nThe goal is to understand these links between markets. Knowing that \"rates went up and stocks went down\" is only headline reaction. Knowing why each market moves is real macro analysis.",
     tryIt: { label: "Currency / Futures / Commodities tabs" },
     checks: [
       {
