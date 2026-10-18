@@ -111,6 +111,8 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const wizardSrc = readFileSync(ROOT + "src/components/OnboardingWizard.tsx", "utf8");
 const wizardPrimaries = [...wizardSrc.matchAll(/primaryId: "([a-z-]+)"/g)].map((m) => m[1]);
 t("onboarding wizard goals point at real primary tabs", wizardPrimaries.length >= 4 && wizardPrimaries.every((id) => PRIMARY_TABS.some((p) => p.id === id)), wizardPrimaries.join());
+const wizardPairs = [...wizardSrc.matchAll(/primaryId: "([a-z-]+)",\s+secondaryId: "([a-z-]+)"/g)].map((m) => [m[1], m[2]]);
+t("every wizard goal opens a real section (secondary tab id exists)", wizardPairs.length >= 3 && wizardPairs.every(([a, b2]) => (SECONDARY_TABS[a] ?? []).some((x) => x.id === b2)), JSON.stringify(wizardPairs));
 t("every wizard target survives a URL round trip", wizardPrimaries.every((id) => buildNavQuery(parseNavQuery(buildNavQuery({ primaryId: id }))) === "agent=" + id), "");
 t("every Help menu agent id is a primary tab", HELP_VIDEOS.every((v) => PRIMARY_TABS.some((p) => p.id === v.agentId)), HELP_VIDEOS.map((v) => v.agentId).join());
 const toolsSrc = readFileSync(ROOT + "src/lib/agents/assistant/tools.ts", "utf8");

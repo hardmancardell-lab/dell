@@ -148,6 +148,10 @@ export function HelpMenu({ agentId }: { agentId: HelpVideo["agentId"] }) {
                 <p className="text-sm" style={{ color: "var(--text-1)" }}>No walkthrough video for this section yet — browse the others below.</p>
               )}
 
+              <p className="text-xs" style={{ color: "var(--text-2)", margin: 0 }}>
+                Looking for a specific study? Press <kbd>Ctrl</kbd> + <kbd>K</kbd> (<kbd>Cmd</kbd> + <kbd>K</kbd> on a Mac) or use Search in the top bar. Trading Agent &rarr; Studies lists every study by the question it answers.
+              </p>
+
               <div>
                 <div className="jv-label">All Walkthroughs</div>
                 <div className="flex flex-col gap-1.5">

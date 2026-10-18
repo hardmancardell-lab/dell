@@ -17,21 +17,21 @@ interface Goal {
   label: string;
   description: string;
   primaryId: string;
+  /** Optional: open this section of the agent (a real secondary tab id from src/lib/navigation/trading-structure.ts). */
+  secondaryId?: string;
   tip: string;
 }
 
-// primaryId values match the real top-level Tabs ids in page.tsx exactly
-// (top-down/trading/portfolio/literacy) — this only ever routes to a
-// PRIMARY tab, not a secondary/tertiary one, since navLevel="secondary" is
-// only wired for Trading Agent's own secondary Tabs today; naming the
-// specific sub-tab in the tip text instead of trying to deep-link into every
-// destination keeps this reliable without extending that wiring further.
+// primaryId and secondaryId match the real Tabs ids in page.tsx exactly. The navigation state lives in the URL now (see
+// src/lib/navigation), so every goal can open the exact section its tip names. scripts/quality/navigation-state.test.mts
+// checks that these ids are real tabs.
 const GOALS: Goal[] = [
   {
     id: "longterm",
     label: "Research stocks for a long-term hold",
     description: "A real value-investing checklist, sector reads, and macro context — not day-trade signals.",
     primaryId: "top-down",
+    secondaryId: "macro",
     tip: "Start on Macro for the overall backdrop, then Sector, then run a specific company through Security Analysis's value checklist.",
   },
   {
@@ -39,13 +39,15 @@ const GOALS: Goal[] = [
     label: "Find active trading setups",
     description: "Backtested signals, options tools, and calendar-effect studies — real data, real stats, no invented numbers.",
     primaryId: "trading",
-    tip: "Guided Signals shows what's live right now, already backtested with real significance testing — that's the fastest starting point.",
+    secondaryId: "guided-signals",
+    tip: "Guided Signals shows what's live right now, already backtested with real significance testing — that's the fastest starting point. To test your own idea, open Studies (or press Ctrl+K) and pick the question you want answered.",
   },
   {
     id: "track",
     label: "Track and rebalance a portfolio",
     description: "Manual holdings tracker with real live valuations, allocation targets (per-symbol and per-asset-class), and rebalancing math.",
     primaryId: "portfolio",
+    secondaryId: "dashboard",
     tip: "Add your holdings on Dashboard first, then use Risk & Rebalancing to set targets — including a whole-portfolio target like \"60% bonds,\" not just per-symbol.",
   },
   {
@@ -103,7 +105,7 @@ export function OnboardingWizard() {
 
   function goToChosenTab() {
     const goal = GOALS.find((g) => g.id === chosenId);
-    if (goal) nav.navigateTo(goal.primaryId);
+    if (goal) nav.navigateTo(goal.primaryId, goal.secondaryId);
     finish("completed");
   }
 
@@ -161,10 +163,10 @@ export function OnboardingWizard() {
               <h2 id={titleId} className="jv-title" style={{ fontSize: 20, marginBottom: 8 }}>Welcome to Dellegate</h2>
               <p className="jv-lede" style={{ marginBottom: 20 }}>
                 Real market data, real backtests, no fabricated numbers. Five sections: <strong>Research Agent</strong>{" "}
-                (macro → sector → company analysis), <strong>Trading Agent</strong> (signals, backtests, options),{" "}
+                (macro → sector → company analysis), <strong>Trading Agent</strong> (signals, a library of studies, options),{" "}
                 <strong>Portfolio Tracker</strong> (holdings, allocation targets, rebalancing),{" "}
                 <strong>Financial Literacy</strong> (gamified learning), and an <strong>Assistant</strong> that answers
-                questions using this app&apos;s own live tools.
+                questions using this app&apos;s own live tools. Press <kbd>Ctrl</kbd> + <kbd>K</kbd>, or use Search in the top bar, to jump to any study, tab or ticker.
               </p>
               <div className="flex items-center justify-between">
                 <button onClick={() => finish("skipped")} className="jv-btn-outline">Skip tour</button>
