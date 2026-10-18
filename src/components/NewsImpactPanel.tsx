@@ -13,16 +13,23 @@ import { ResearchNotice } from "./ResearchNotice";
  * Mount it anywhere that knows a ticker and an asset class, for example under the price chart or in the News hub:
  *
  *   import { NewsImpactPanel } from "@/components/NewsImpactPanel";
- *   <NewsImpactPanel ticker={ticker} assetClass={assetClass} />
+ *   <NewsImpactPanel symbol={symbol} assetClass={assetClass} />
+ *
+ * Under the chart, pass it through TickerNewsBelowChart's impactSlot prop (src/components/navigation/ChartNews.tsx):
+ *   <TickerNewsBelowChart ... impactSlot={<NewsImpactPanel symbol={symbol} assetClass={assetClass} />} />
+ * In the News hub's "One ticker" view, mount it under the headlines with autoLoad.
  *
  * It fetches /api/news-impact itself (signed-in session, rate limited, cached on the server). It needs no provider and no
- * context. It never says news causes a price move: it says what moves with what.
+ * context. By default it waits for a click, because one run makes several data calls (prices, filings, release dates).
+ * It never says news causes a price move: it says what moves with what.
  */
 
 export interface NewsImpactPanelProps {
-  ticker: string;
+  /** The symbol, for example AAPL, BTC-USD or EUR/USD. `ticker` is accepted too. */
+  symbol?: string;
+  ticker?: string;
   assetClass: AssetClass;
-  /** Load as soon as it shows. Set false to show a "Run the study" button first (the study makes several data calls). */
+  /** Run as soon as it shows. Default false: it shows a "Run the study" button first. */
   autoLoad?: boolean;
   className?: string;
 }
@@ -160,7 +167,8 @@ export function SplitBar({ segments, ariaLabel }: { segments: { key: string; lab
 
 const BAD = "var(--danger)";
 
-export function NewsImpactPanel({ ticker, assetClass, autoLoad = true, className }: NewsImpactPanelProps) {
+export function NewsImpactPanel({ symbol, ticker: tickerProp, assetClass, autoLoad = false, className }: NewsImpactPanelProps) {
+  const ticker = (symbol ?? tickerProp ?? "").trim();
   const [state, setState] = useState<Load>({ status: "idle" });
   const abortRef = useRef<AbortController | null>(null);
 
@@ -171,6 +179,10 @@ export function NewsImpactPanel({ ticker, assetClass, autoLoad = true, className
     setState({ status: "loading" });
     try {
       const res = await fetch(`/api/news-impact?ticker=${encodeURIComponent(ticker)}&assetClass=${encodeURIComponent(assetClass)}`, { signal: ctl.signal });
+      if (res.status === 401) {
+        setState({ status: "error", message: "Your session has ended. Sign in again to run the study." });
+        return;
+      }
       if (!res.ok) {
         let message = "The News Impact study could not run right now. Try again in a few minutes.";
         try {
@@ -190,12 +202,12 @@ export function NewsImpactPanel({ ticker, assetClass, autoLoad = true, className
   }, [ticker, assetClass]);
 
   useEffect(() => {
-    if (autoLoad) void run();
+    if (autoLoad && ticker) void run();
     else setState({ status: "idle" });
     return () => abortRef.current?.abort();
-  }, [autoLoad, run]);
+  }, [autoLoad, ticker, run]);
 
-  const sym = ticker.trim().toUpperCase();
+  const sym = ticker.toUpperCase();
   return (
     <section className={`jv-card ${className ?? ""}`.trim()} aria-label={`News impact for ${sym}`} data-testid="news-impact-panel">
       <div className="jv-br-b" />
