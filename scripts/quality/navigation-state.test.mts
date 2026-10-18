@@ -32,7 +32,7 @@ t("over-long ticker is rejected", q("?agent=trading&ticker=" + "A".repeat(40)) =
 
 // Every study round-trips through its own URL in every class it applies to.
 let roundTrip = 0; const rtBad: string[] = [];
-for (const s of STUDIES) for (const c of (s.assetClasses.length ? s.assetClasses : [undefined])) for (const ticker of [undefined, "AAPL"]) {
+for (const s of STUDIES.filter((x) => !x.location)) for (const c of (s.assetClasses.length ? s.assetClasses : [undefined])) for (const ticker of [undefined, "AAPL"]) {
   const route = resolveStudyRoute(s.id, c, ticker); if (!route) { rtBad.push(s.id); continue; }
   const url = buildNavQuery(route); const back = parseNavQuery(url);
   // A ticker on a study that has no ticker input is carried but harmless; the state must still be stable.
@@ -41,6 +41,8 @@ for (const s of STUDIES) for (const c of (s.assetClasses.length ? s.assetClasses
   if (buildNavQuery(parseNavQuery(shortUrl)) !== url) rtBad.push(`short ${shortUrl} -> ${buildNavQuery(parseNavQuery(shortUrl))} (want ${url})`);
 }
 t(`every study is addressable: canonical and short URLs agree and round-trip (${roundTrip} routes)`, rtBad.length === 0, rtBad.slice(0, 8).join("\n  "));
+
+t("planned hooks (news-hub, client-research) have no route yet and a study= link to them degrades to the Trading Agent", resolveStudyRoute("news-hub") === undefined && resolveStudyRoute("client-research") === undefined && q("?agent=trading&study=news-hub") === '{"primaryId":"trading"}', q("?agent=trading&study=news-hub"));
 
 // ---------------------------------------------------------------- reducer: clicks, programmatic navigation, history
 let s0 = {};

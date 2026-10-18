@@ -46,6 +46,12 @@ export function StudyWorkspace({ group }: { group?: AssetGroup }) {
   }, [study?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function open(studyId: string, cls: AssetClass | undefined) {
+    const entry = getStudy(studyId);
+    // An entry that lives elsewhere in the app (News hub, Client Research) navigates there instead of opening in place.
+    if (entry?.location) {
+      if (entry.status !== "planned") nav.navigate({ ...entry.location });
+      return;
+    }
     if (group) nav.patch({ tab: "studies", studyId, ticker: undefined });
     else nav.patch({ studyId, assetClass: cls, ticker: undefined });
   }

@@ -36,7 +36,9 @@ t("asset classes are valid", STUDIES.every((s) => s.assetClasses.every((c) => AS
 
 const missingVariants: string[] = [];
 const strayVariants: string[] = [];
-for (const s of STUDIES) {
+const inPlace = STUDIES.filter((s) => !s.location); // entries run inside the Trading Agent
+const external = STUDIES.filter((s) => s.location); // entries that live elsewhere (News hub, Client Research)
+for (const s of inPlace) {
   const want = s.assetClasses.length === 0 ? ["all"] : s.assetClasses;
   for (const c of want) if (!s.variants[c]) missingVariants.push(`${s.id}:${c}`);
   for (const k of Object.keys(s.variants)) if (!want.includes(k)) strayVariants.push(`${s.id}:${k}`);
@@ -45,7 +47,7 @@ t("every claimed asset class has a variant with its props", missingVariants.leng
 t("no variant for an asset class the entry does not claim", strayVariants.length === 0, strayVariants.join(", "));
 
 const missingLoaders: string[] = [];
-for (const s of STUDIES) {
+for (const s of inPlace) {
   for (const key of new Set([s.component, ...Object.values(s.variants).map((v) => v.component).filter(Boolean)])) {
     if (!new RegExp(`^\\s+${key},\\s*$`, "m").test(rendererSource.split("export const STUDY_COMPONENTS")[1] ?? "")) missingLoaders.push(`${s.id} -> ${key}`);
   }
@@ -55,7 +57,7 @@ t("every component an entry uses has a lazy loader in study-components.tsx", mis
 // ---------------------------------------------------------------- routes
 const routeProblems: string[] = [];
 const tradingSections = new Set(SECONDARY_TABS.trading.map((s) => s.id));
-for (const s of STUDIES) {
+for (const s of inPlace) {
   const classes = s.assetClasses.length === 0 ? [undefined] : s.assetClasses;
   for (const c of classes) {
     const r = resolveStudyRoute(s.id, c);
@@ -75,7 +77,24 @@ for (const s of STUDIES) {
     else if (buildNavQuery(parseNavQuery(buildNavQuery(g))) !== buildNavQuery(g)) routeProblems.push(`${s.id}/${c ?? "all"}: global route url round trip changed`);
   }
 }
-t(`every registry entry has a working route for every asset class it claims (${STUDIES.length} entries)`, routeProblems.length === 0, routeProblems.join("\n  "));
+t(`every registry entry has a working route for every asset class it claims (${inPlace.length} entries)`, routeProblems.length === 0, routeProblems.join("\n  "));
+
+// Hooks for sections other teams are building (NewsHubTab, ClientResearchView).
+const hookProblems: string[] = [];
+for (const s of external) {
+  if (s.component !== null) hookProblems.push(`${s.id}: an external entry must not name an in-place component`);
+  if (s.assetClasses.length !== 0) hookProblems.push(`${s.id}: an external entry applies to any market (assetClasses must be empty)`);
+  if (s.status === "planned") {
+    if (resolveStudyRoute(s.id) !== undefined) hookProblems.push(`${s.id}: a planned entry must not route anywhere yet`);
+  } else {
+    // Live: the destination must be a real tab in page.tsx (via trading-structure, which this file checks against page.tsx below).
+    const r = resolveStudyRoute(s.id);
+    const primaryOk = PRIMARY_TABS.some((p) => p.id === s.location.primaryId);
+    const secondaryOk = !s.location.secondaryId || (SECONDARY_TABS[s.location.primaryId] ?? []).some((x) => x.id === s.location.secondaryId);
+    if (!r || !primaryOk || !secondaryOk) hookProblems.push(`${s.id}: location ${JSON.stringify(s.location)} is not a tab in page.tsx / trading-structure.ts`);
+  }
+}
+t("News hub and Client Research hooks exist, are planned or point at a real tab", ["news-hub", "client-research"].every((id) => external.some((e) => e.id === id)) && hookProblems.length === 0, hookProblems.join("; ") || "missing news-hub / client-research entry");
 
 const groupProblems: string[] = [];
 for (const g of ASSET_GROUPS) {

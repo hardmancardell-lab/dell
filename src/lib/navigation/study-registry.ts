@@ -122,7 +122,19 @@ export interface StudyEntry {
   needs: StudyNeeds;
   /** Rough, human-readable run time. These are estimates, not measurements. */
   runTime: string;
-  component: StudyComponentKey;
+  /** The lazy component rendered in place. Null for an entry that lives elsewhere in the app and is reached through `location`. */
+  component: StudyComponentKey | null;
+  /**
+   * For an entry that is its own place in the app rather than a study run inside the Trading Agent (the News hub, Client
+   * Research): where "Open" goes. The target must be a real tab in page.tsx and in trading-structure.ts (the reachability
+   * test checks it once the entry is no longer "planned").
+   */
+  location?: { primaryId: string; secondaryId?: string };
+  /**
+   * "planned": the destination is being built by another team. The Study Library lists the card with a disabled
+   * "Coming soon" button. To go live: add the tab to page.tsx and trading-structure.ts, set `location`, delete `status`.
+   */
+  status?: "planned";
   /** Gated behind the Financial Literacy placement quiz (the old RequiresPlacementTier wrapper). */
   tier?: "intermediate";
   /** Per asset class. Trading-wide tools (assetClasses = []) use the single key "all". */
@@ -678,6 +690,38 @@ export const STUDIES: StudyEntry[] = [
     variants: { crypto: { props: {}, legacyTab: "trading/crypto/watchlist" } },
   },
 
+  // ---------------------------------------------------------------- Hooks for sections other teams are building.
+  // NewsHubTab and ClientResearchView do not exist yet, so these entries have no `component` and are "planned": the library
+  // shows them as "Coming soon". The primary tab ids below are placeholders; the owning team sets the real ones.
+  {
+    id: "news-hub",
+    title: "News Hub",
+    question: "What is the news saying about the markets and the tickers I follow?",
+    category: "Reference and tools",
+    assetClasses: [],
+    needs: NO_NEEDS,
+    runTime: "A few seconds",
+    component: null,
+    status: "planned",
+    location: { primaryId: "news" },
+    keywords: "news headlines feed articles hub NewsHubTab",
+    variants: {},
+  },
+  {
+    id: "client-research",
+    title: "Client Research",
+    question: "What research is ready to share with my clients, and what did each client ask about?",
+    category: "Reference and tools",
+    assetClasses: [],
+    needs: NO_NEEDS,
+    runTime: "Instant",
+    component: null,
+    status: "planned",
+    location: { primaryId: "clients" },
+    keywords: "clients advisor research reports share ClientResearchView",
+    variants: {},
+  },
+
   // ---------------------------------------------------------------- Trading-wide tools (their own Trading Agent tab each)
   {
     id: "guided-signals",
@@ -761,6 +805,7 @@ export function getStudy(id: string | null | undefined): StudyEntry | undefined 
 
 /** The variant of a study for an asset class (or the trading-wide "all" variant). */
 export function getVariant(study: StudyEntry, assetClass?: AssetClass | null): { key: AssetClass | "all"; variant: StudyVariant } | undefined {
+  if (!study.component) return undefined;
   if (study.assetClasses.length === 0) {
     const variant = study.variants.all;
     return variant ? { key: "all", variant } : undefined;
@@ -781,7 +826,9 @@ export function resolveStudyRender(
   const props: StudyProps = { ...picked.variant.props };
   const clean = ticker?.trim();
   if (clean && "defaultTicker" in props) props.defaultTicker = clean;
-  return { component: picked.variant.component ?? study.component, props, assetClass: picked.key, tier: study.tier };
+  const component = picked.variant.component ?? study.component;
+  if (!component) return undefined;
+  return { component, props, assetClass: picked.key, tier: study.tier };
 }
 
 export function studiesForAssetClass(assetClass: AssetClass): StudyEntry[] {

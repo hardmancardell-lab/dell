@@ -37,6 +37,7 @@ export function resolveStudyRoute(studyId: string, assetClass?: string | null, t
   const study = getStudy(studyId);
   if (!study) return undefined;
   const tickerPart = ticker?.trim() ? { ticker: ticker.trim().toUpperCase() } : {};
+  if (study.location) return study.status === "planned" ? undefined : { ...study.location };
   if (study.assetClasses.length === 0) return { primaryId: "trading", secondaryId: study.id };
   const cls: AssetClass = isAssetClass(assetClass) && study.assetClasses.includes(assetClass) ? assetClass : study.assetClasses[0];
   const group = groupForAssetClass(cls);
@@ -58,7 +59,7 @@ export function resolveTickerRoute(symbol: string, assetClass?: string | null): 
 /** The same study opened from the first-class Studies tab (no group). */
 export function resolveGlobalStudyRoute(studyId: string, assetClass?: string | null, ticker?: string | null): NavState | undefined {
   const study = getStudy(studyId);
-  if (!study) return undefined;
+  if (!study || study.location) return undefined;
   const cls = isAssetClass(assetClass) && study.assetClasses.includes(assetClass) ? assetClass : study.assetClasses[0];
   return {
     primaryId: "trading",

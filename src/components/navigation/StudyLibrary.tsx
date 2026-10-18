@@ -221,6 +221,7 @@ function StudyCard({
   onTogglePin: () => void;
   onOpen: () => void;
 }) {
+  const planned = study.status === "planned";
   const Heading = headingLevel === 3 ? "h3" : "h4";
   return (
     <li className="jv-card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -266,8 +267,15 @@ function StudyCard({
         </div>
       </dl>
       <div className="flex items-center gap-2" style={{ marginTop: "auto" }}>
-        <button type="button" className="jv-btn flex-1" style={TOUCH} onClick={onOpen} aria-label={`Open ${study.title}`}>
-          Open
+        <button
+          type="button"
+          className="jv-btn flex-1"
+          style={TOUCH}
+          onClick={onOpen}
+          disabled={planned}
+          aria-label={planned ? `${study.title} is coming soon` : `Open ${study.title}`}
+        >
+          {planned ? "Coming soon" : "Open"}
         </button>
         <button
           type="button"
