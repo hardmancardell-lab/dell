@@ -679,19 +679,9 @@ export default async function Home() {
                             Trading Agent &middot; Crypto
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Crypto</h1>
-                          <Tabs
-                            size="tertiary"
-                            tabs={[
-                              { id: "regime", label: "Regime", content: <CryptoRegimeTab /> },
-                              { id: "watchlist", label: "Watchlist", content: <CryptoWatchlistTab /> },
-                              { id: "charts", label: "Charts", content: <CryptoChartsTab /> },
-                              {
-                                id: "backtest",
-                                label: "Backtest",
-                                content: <HistoricalBacktestTab key="crypto-backtest" defaultTicker="BTC-USD" crypto />,
-                              },
-                            ]}
-                          />
+                          <NavScope>
+                            <AssetGroupWorkspace groupId="crypto" />
+                          </NavScope>
                         </div>
                       ),
                     },
