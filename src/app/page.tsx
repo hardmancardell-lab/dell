@@ -619,26 +619,9 @@ export default async function Home() {
                             Trading Agent &middot; Options
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Options</h1>
-                          <Tabs
-                            size="tertiary"
-                            tabs={[
-                              { id: "dashboard", label: "Dashboard", content: <OptionsDashboardTab /> },
-                              { id: "gamma-heat-map", label: "Gamma Heat Map", content: <GammaHeatMapTab /> },
-                              { id: "intraday-put-call", label: "Intraday Put/Call", content: <OptionFlowTab /> },
-                              {
-                                id: "strategy-guide",
-                                label: "Strategy Guide",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <OptionsStrategiesTab />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              { id: "calculator", label: "Calculator", content: <OptionsCalculatorTab /> },
-                              { id: "paper-backtest", label: "Paper Backtest Log", content: <PaperBacktestLogTab /> },
-                              { id: "trade-options", label: "Trade Options", content: <OptionsChainTradeTab /> },
-                            ]}
-                          />
+                          <NavScope>
+                            <AssetGroupWorkspace groupId="options" />
+                          </NavScope>
                         </div>
                       ),
                     },
