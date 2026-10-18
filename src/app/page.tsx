@@ -634,60 +634,9 @@ export default async function Home() {
                             Trading Agent &middot; Currency
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Currency</h1>
-                          <Tabs
-                            size="tertiary"
-                            tabs={[
-                              { id: "dashboard", label: "Dashboard", content: <CurrencyDashboardTab /> },
-                              { id: "reference", label: "Reference Guide", content: <FxResearchSourcesTab /> },
-                              { id: "macro-drivers", label: "Macro Drivers", content: <CurrencyDriversTab /> },
-                              { id: "central-banks", label: "Central Banks", content: <InternationalCentralBanksView /> },
-                              { id: "pegs", label: "Currency Pegs", content: <CurrencyPegsTab /> },
-                              {
-                                id: "charts",
-                                label: "Charts",
-                                content: <AssetChartsTab assetClass="forex" defaultTicker="EUR/USD" placeholder="Pair, e.g. EUR/USD" watchlistLabel="Currency" />,
-                              },
-                              {
-                                id: "backtest",
-                                label: "Backtest",
-                                content: <BacktestSuiteTab key="currency-backtest-suite" defaultTicker="EUR/USD" assetClass="forex" />,
-                              },
-                              {
-                                id: "vwap-band-study",
-                                label: "VWAP Band Study",
-                                content: <VwapBandStudyTab key="currency-vwap-band-study" defaultTicker="GBP/JPY" />,
-                              },
-                              {
-                                id: "gap-calendar-study",
-                                label: "Gap & Calendar Study",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <GapCalendarStudyTab key="currency-gap-calendar-study" defaultTicker="EUR/USD" />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "orb",
-                                label: "ORB Strategy",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <OrbStrategyTab filterAssetClass="forex" defaultTicker="EUR/USD" />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              { id: "news", label: "News Search", content: <InternationalEconomicsTab /> },
-                              {
-                                id: "shock-scan",
-                                label: "Supply/Demand Shock Scan",
-                                content: <SupplyDemandShockScanTab assetClass="forex" defaultTicker="EUR/USD" />,
-                              },
-                              {
-                                id: "session-analysis",
-                                label: "Session Analysis",
-                                content: <SessionAnalysisTab defaultTicker="EUR/USD" />,
-                              },
-                            ]}
-                          />
+                          <NavScope>
+                            <AssetGroupWorkspace groupId="currency" />
+                          </NavScope>
                         </div>
                       ),
                     },
