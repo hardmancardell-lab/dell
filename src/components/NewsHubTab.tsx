@@ -5,6 +5,7 @@ import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
 import { isHubSymbol, type TickerNewsGroups, type TrendingTopic } from "@/lib/news/news-core";
 import type { MarketNewsSection, WatchlistNewsSection } from "@/lib/news/news-hub";
+import { NewsImpactPanel } from "./NewsImpactPanel";
 import { EmptyOrError, NewsList, NotAdviceNote, readNewsError, SectionFooter, SourceList, TickerNewsGroupsView } from "./NewsParts";
 
 /**
@@ -229,6 +230,7 @@ function TickerView() {
       {state.status === "done" && (
         <>
           <TickerNewsGroupsView data={state.data} limit={8} />
+          {asked && <NewsImpactPanel key={`${asked.assetClass}:${asked.ticker}`} symbol={asked.ticker} assetClass={asked.assetClass} />}
           {canAddBackground && (
             <div className="jv-card mt-4">
               <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--text-0)" }}>Background articles (optional)</h3>

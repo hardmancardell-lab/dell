@@ -2,6 +2,7 @@
 
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
 import { TickerNewsBelowChart } from "@/components/TickerNewsBelowChart";
+import { NewsImpactPanel } from "@/components/NewsImpactPanel";
 
 /**
  * The news shown directly under a ticker's chart. Every place that looks up a ticker and shows a chart (the Equities chart tab,
@@ -15,5 +16,13 @@ import { TickerNewsBelowChart } from "@/components/TickerNewsBelowChart";
  * re-render this component), and TickerNewsBelowChart fetches only on a symbol or class change, so chart ticks never refetch news.
  */
 export function ChartNews({ symbol, assetClass }: { symbol: string; assetClass: AssetClass }) {
-  return <TickerNewsBelowChart key={`${assetClass}:${symbol}`} symbol={symbol} assetClass={assetClass} />;
+  // The impact panel stays on demand (autoLoad off): each run makes about 8 data calls, so it starts with a "Run the study" button.
+  return (
+    <TickerNewsBelowChart
+      key={`${assetClass}:${symbol}`}
+      symbol={symbol}
+      assetClass={assetClass}
+      impactSlot={<NewsImpactPanel symbol={symbol} assetClass={assetClass} />}
+    />
+  );
 }
