@@ -13,12 +13,14 @@ import { getChartBars } from "../../src/lib/agents/trading-agent/skills/chart-ba
 import { defaultScaleMode, effectiveScaleMode, parseScaleMode, loadScaleChoice, saveScaleChoice, SCALE_MODES, SCALE_LABELS, SCALE_DESCRIPTIONS } from "../../src/lib/chart/scale.ts";
 import { equitySessionOf, filterExtendedHours, hasExtendedBars, extendedShadeRanges, countSessions } from "../../src/lib/chart/sessions.ts";
 import { finiteNumbers, niceStep, niceTicks, median, histogram, fmtPct, fmtPctCompact, fmtMoneyCompact, barPercent, zeroBasedY } from "../../src/lib/chart/svg-math.ts";
-import { withCashSlice } from "../../src/components/AllocationPieChart.tsx";
+import { withCashSlice } from "../../src/lib/chart/allocation.ts";
 import { IndicatorManager } from "../../src/components/chart/IndicatorManager.ts";
 import { normalizeAlpacaActions, eventsToMarkers } from "../../src/lib/chart/events.ts";
 import { setProviderSleep } from "../../src/lib/data/provider-http.ts";
 import { validateDrawing, validateDrawings, drawingsStorageKey, loadDrawings, saveDrawings, newDrawingId, translateDrawing, moveEndpoint, distToSegment, hitGeometry, barSpacingSec, timeToBarIndex, barIndexToTime, snapToBar, keyboardPriceStep, MAX_DRAWINGS } from "../../src/lib/chart/drawings.ts";
 import { DEFAULT_DRAWING_COLOR, DRAWING_COLORS, isDrawingColor } from "../../src/lib/chart/colors.ts";
+import { INDICATOR_PRESETS, presetById, matchingPreset, validateLayout, saveLayout, loadLayout, clearLayout, presetsAreConsistent } from "../../src/lib/chart/layout.ts";
+import { CHART_SHORTCUTS, shortcutFor, isTypingTarget, stepTimeframe } from "../../src/lib/chart/shortcuts.ts";
 import { withAlpha } from "../../src/lib/chart/colors.ts";
 import { TIMEFRAME_PRESETS } from "../../src/lib/agents/trading-agent/skills/timeframe-presets.ts";
 import { formatBarLabel, formatTick, zoneForProvider } from "../../src/lib/chart/timeformat.ts";
@@ -431,6 +433,35 @@ t("market-data timeframe passes all through", param(calls[0].url, "adjustment") 
   t("keyboardPriceStep is 0.25% with a floor", keyboardPriceStep(400) === 1 && keyboardPriceStep(1) === 0.01 && keyboardPriceStep(-400) === 1);
   t("every drawing colour is from the shared palette and named", DRAWING_COLORS.every((c) => /^#[0-9a-f]{6}$/i.test(c.hex) && c.label.length > 0) && isDrawingColor(DEFAULT_DRAWING_COLOR) && !isDrawingColor("#123456"));
   t("the drawing code adds no colour literals (all from tokens)", ["DrawingsPrimitive.ts", "DrawingController.ts", "DrawingToolbar.tsx"].every((f) => !/["'`]#[0-9a-fA-F]{3,8}["'`]/.test(read(`src/components/chart/${f}`)) && !/rgba?\(/.test(read(`src/components/chart/${f}`))));
+}
+
+const blockedStore = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); }, removeItem: () => { throw new Error("blocked"); } };
+// ---------------------------------------------------------------- 9. presets, saved layout, shortcuts (WP2 item 8)
+{
+  t("presets only name indicators that exist, in the right group", presetsAreConsistent() && INDICATOR_PRESETS.every((p) => p.label && p.description));
+  t("preset ids are unique and 'clean' is empty", new Set(INDICATOR_PRESETS.map((p) => p.id)).size === INDICATOR_PRESETS.length && presetById("clean")!.overlays.length === 0 && presetById("clean")!.oscillators.length === 0 && presetById("nope") === undefined);
+  t("matchingPreset finds an exact set only", matchingPreset(new Set(["bollinger"]), new Set(["atr"]))?.id === "volatility" && matchingPreset(new Set(["bollinger", "ema20"]), new Set(["atr"])) === undefined && matchingPreset(new Set(), new Set())?.id === "clean");
+
+  const lay = validateLayout({ overlays: ["ema20", "bogus", "ema20", "rsi"], oscillators: ["rsi", "<img>", 5], scale: "log", timeframe: "5min", showSma20: false, adjustment: "all", includeExtended: false, savedAt: "2026-10-18T10:00:00Z", extra: "x" })!;
+  t("validateLayout keeps valid ids once, drops unknown and wrong-group ids and unknown fields", lay.overlays.join() === "ema20" && lay.oscillators.join() === "rsi" && !("extra" in lay));
+  t("validateLayout reads scale, timeframe, SMA, adjustment and extended hours", lay.scale === "log" && lay.timeframe === "5min" && lay.showSma20 === false && lay.showSma50 === true && lay.adjustment === "all" && lay.includeExtended === false);
+  const bad = validateLayout({ timeframe: "1sec", scale: "weird", adjustment: "zzz", overlays: "ema20" })!;
+  t("validateLayout falls back safely: unavailable timeframe, bad scale, bad adjustment, non-array lists", bad.timeframe === "1yr" && bad.scale === null && bad.adjustment === "split" && bad.overlays.length === 0);
+  t("validateLayout rejects non-objects", validateLayout(null) === null && validateLayout("x") === null && validateLayout(5) === null);
+  const lmem: Record<string, string> = {};
+  const lstore = { getItem: (k: string) => lmem[k] ?? null, setItem: (k: string, v: string) => void (lmem[k] = v), removeItem: (k: string) => void delete lmem[k] };
+  t("layout round-trips and clears", saveLayout(lay, lstore) && loadLayout(lstore)?.timeframe === "5min" && clearLayout(lstore) && loadLayout(lstore) === null);
+  lmem["dellegate.chart.layout.v1"] = "{oops";
+  t("corrupt layout loads as null, blocked storage never throws", loadLayout(lstore) === null && loadLayout(blockedStore as any) === null && saveLayout(lay, blockedStore as any) === false && clearLayout(blockedStore as any) === false);
+
+  t("shortcut keys are unique and every one has an id, action and group", new Set(CHART_SHORTCUTS.map((s) => s.key)).size === CHART_SHORTCUTS.length && new Set(CHART_SHORTCUTS.map((s) => s.id)).size === CHART_SHORTCUTS.length && CHART_SHORTCUTS.every((s) => s.action && s.group && s.id));
+  t("shortcutFor maps letters case-insensitively, arrows to nudge, Backspace to delete, unknown to null", shortcutFor("H") === "tool-hline" && shortcutFor("h") === "tool-hline" && shortcutFor("ArrowLeft") === "nudge" && shortcutFor("Backspace") === "delete" && shortcutFor("Delete") === "delete" && shortcutFor("?") === "help" && shortcutFor("q") === null && shortcutFor("Enter") === null && shortcutFor(" ") === null);
+  t("typing targets: text inputs, textareas, selects and contenteditable swallow shortcuts; checkboxes and buttons do not", isTypingTarget({ tagName: "INPUT", getAttribute: () => "text" }) && isTypingTarget({ tagName: "INPUT", getAttribute: () => null }) && isTypingTarget({ tagName: "TEXTAREA" }) && isTypingTarget({ tagName: "SELECT" }) && isTypingTarget({ tagName: "DIV", isContentEditable: true }) && !isTypingTarget({ tagName: "INPUT", getAttribute: () => "checkbox" }) && !isTypingTarget({ tagName: "BUTTON" }) && !isTypingTarget(null));
+  const order = ["5yr", "1yr", "6mo", "1mo"];
+  t("stepTimeframe moves one step and clamps at both ends", stepTimeframe(order, "1yr", 1) === "6mo" && stepTimeframe(order, "1yr", -1) === "5yr" && stepTimeframe(order, "5yr", -1) === "5yr" && stepTimeframe(order, "1mo", 1) === "1mo" && stepTimeframe(order, "zzz", 1) === "5yr");
+  t("the help popover lists every shortcut from the same data (no second copy)", /CHART_SHORTCUTS/.test(read("src/components/chart/ShortcutsHelp.tsx")) && /shortcutFor/.test(read("src/components/PriceChart.tsx")));
+  t("compare uses one percent axis (forced scale mode) and never adds a second price scale", /compareActive \? "percent"/.test(read("src/components/PriceChart.tsx")) && !/priceScaleId: "left"|leftPriceScale/.test(read("src/components/PriceChart.tsx")));
+  t("chart-to-alert is an optional host hook, not wired to anything", /onCreateAlert\?:/.test(read("src/components/PriceChart.tsx")));
 }
 
 summary();

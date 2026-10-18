@@ -58,6 +58,22 @@ export class IndicatorManager {
     return [...this.entries.keys()];
   }
 
+  /**
+   * One readout per drawn indicator, for the crosshair legend. `valueOf` gives a series' value at the cursor bar (or its
+   * newest value); histogram series (the MACD bars) are skipped so a readout is the lines only.
+   */
+  readouts(valueOf: (s: ISeriesApi<SeriesType>) => number | null): { id: string; label: string; values: (number | null)[] }[] {
+    const out: { id: string; label: string; values: (number | null)[] }[] = [];
+    for (const def of INDICATORS) {
+      const e = this.entries.get(def.id);
+      if (!e || e.series.length === 0) continue;
+      const lines = e.series.filter((x) => x.seriesType() !== "Histogram");
+      if (lines.length === 0) continue;
+      out.push({ id: def.id, label: def.label.replace(/ \(.*\)$/, ""), values: lines.map((x) => valueOf(x)) });
+    }
+    return out;
+  }
+
   /** Series of one indicator (for tests and the legend). */
   seriesOf(id: string): ISeriesApi<SeriesType>[] {
     return this.entries.get(id)?.series ?? [];

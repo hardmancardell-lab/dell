@@ -35,4 +35,5 @@ export const CHART_CHROME = {
   dividend: JARVIS.signal,
   compare: INDICATOR_COLORS.keltner,
   legendBg: withAlpha(JARVIS.ink950, 0.75),
+  popShadow: `0 8px 32px ${withAlpha(JARVIS.ink950, 0.6)}`,
 } as const;

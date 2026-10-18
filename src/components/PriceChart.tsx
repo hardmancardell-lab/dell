@@ -34,6 +34,9 @@ import { ChartHeader } from "./chart/ChartHeader";
 import { IndicatorManager } from "./chart/IndicatorManager";
 import { DrawingController, type DrawingUiState } from "./chart/DrawingController";
 import { DrawingToolbar } from "./chart/DrawingToolbar";
+import { ShortcutsHelp } from "./chart/ShortcutsHelp";
+import { INDICATOR_PRESETS, clearLayout, loadLayout, matchingPreset, presetById, saveLayout, type ChartLayout } from "@/lib/chart/layout";
+import { SCALE_CYCLE, isTypingTarget, shortcutFor, stepTimeframe } from "@/lib/chart/shortcuts";
 import { drawingsStorageKey, loadDrawings, saveDrawings } from "@/lib/chart/drawings";
 import { eventsToMarkers } from "@/lib/chart/events";
 import { formatDay } from "@/lib/chart/timeformat";
@@ -74,7 +77,8 @@ function writeLegend(
   index: number,
   timeframeId: string,
   fmt: (v: number) => string,
-  zone: ChartZone
+  zone: ChartZone,
+  extra = ""
 ) {
   if (!el) return;
   if (index < 0 || index >= candles.length) {
@@ -93,14 +97,27 @@ function writeLegend(
     if (color) e.style.color = color;
     return e;
   };
+  const changeAbs = prior ? c.close - prior.close : null;
+  const rangePct = c.low > 0 ? ((c.high - c.low) / c.low) * 100 : null;
   const changeColor = changePct === null ? "var(--text-2)" : changePct >= 0 ? "var(--signal)" : "var(--danger)";
   el.replaceChildren(
     span(dateKey, "var(--text-0)"),
     span(`  O ${fmt(c.open)}  H ${fmt(c.high)}  L ${fmt(c.low)}  C ${fmt(c.close)}  `),
-    span(changePct !== null ? `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%` : "N/A", changeColor),
-    span(`  Vol ${c.volume.toLocaleString()}`)
+    span(changePct !== null ? `${changeAbs !== null ? `${changeAbs >= 0 ? "+" : ""}${fmt(changeAbs)} ` : ""}(${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%)` : "N/A", changeColor),
+    span(`  Range ${rangePct !== null ? `${rangePct.toFixed(2)}%` : "N/A"}  Vol ${c.volume.toLocaleString()}`),
+    ...(extra ? [lineBreak(), span(extra)] : [])
   );
   el.style.display = "block";
+}
+
+function lineBreak(): HTMLElement {
+  return document.createElement("br");
+}
+
+/** Formats an indicator value for the crosshair line: two decimals, or none for large cumulative values (OBV). */
+function fmtReadout(v: number | null): string {
+  if (v === null || !Number.isFinite(v)) return "-";
+  return Math.abs(v) >= 100000 ? v.toExponential(2) : Math.abs(v) >= 1000 ? v.toFixed(0) : v.toFixed(2);
 }
 
 /** ET calendar date "YYYY-MM-DD" of an instant, for placing events on the first bar of their date. */
@@ -112,6 +129,7 @@ export function PriceChart({
   assetClass = "equity",
   readOnly = false,
   onManager,
+  onCreateAlert,
 }: {
   symbol: string;
   focusDate?: string;
@@ -120,6 +138,12 @@ export function PriceChart({
   readOnly?: boolean;
   /** Test hook: receives the IndicatorManager when the chart is created (null on teardown is not reported). */
   onManager?: (m: IndicatorManager) => void;
+  /**
+   * Chart-to-alert hook. When the host gives this, a selected horizontal line shows an "Alert at this level" button that
+   * calls it with the symbol, the price and whether the level is above or below the last price. The Alerts tab has no
+   * prefill entry point yet (see fix-batch-D.md), so no host passes it today.
+   */
+  onCreateAlert?: (a: { symbol: string; price: number; direction: "above" | "below" }) => void;
 }) {
   const onManagerRef = useRef(onManager);
   onManagerRef.current = onManager;
@@ -132,6 +156,8 @@ export function PriceChart({
   const managerRef = useRef<IndicatorManager | null>(null);
   const drawingRef = useRef<DrawingController | null>(null);
   const drawKeyRef = useRef("");
+  const compareSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const refreshLegendRef = useRef<() => void>(() => {});
   const timesRef = useRef<number[]>([]);
   const positionLineRef = useRef<IPriceLine | null>(null);
   const orderLinesRef = useRef<IPriceLine[]>([]);
@@ -176,6 +202,15 @@ export function PriceChart({
   // out of everything (candles, volume, indicators); the shading marks them while they are shown.
   const [drawUi, setDrawUi] = useState<DrawingUiState>({ tool: "select", selectedId: null, count: 0, color: "", hint: "" });
   const [includeExtended, setIncludeExtended] = useState(true);
+  // Compare overlay: a second symbol drawn as a percent-change line on the SAME percent axis as the price (never a second axis).
+  const [compareInput, setCompareInput] = useState("");
+  const [compareSymbol, setCompareSymbol] = useState<string | null>(null);
+  const [compareRaw, setCompareRaw] = useState<ChartBarsResult | null>(null);
+  const [compareNote, setCompareNote] = useState<string | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // Saved layout: loaded once at mount (before the first fetch, so the saved timeframe is the one fetched).
+  const [layoutReady, setLayoutReady] = useState(false);
+  const [layoutNote, setLayoutNote] = useState<string | null>(null);
   // Splits and dividends from the provider (equities only). `eventsNote` says why there are none when the source is unavailable.
   const [events, setEvents] = useState<CorporateEvent[]>([]);
   const [eventsNote, setEventsNote] = useState<string | null>(null);
@@ -197,7 +232,21 @@ export function PriceChart({
   // Price-scale mode: the user's choice (remembered for the browser session) or the default for the range (log from 2 years).
   const [scaleChoice, setScaleChoice] = useState<ScaleMode | null>(null);
   useEffect(() => {
+    const saved = loadLayout();
     setScaleChoice(loadScaleChoice());
+    if (saved) {
+      if (!focusDate) setTimeframe(saved.timeframe);
+      setAdjustment(saved.adjustment);
+      setEnabledOverlays(new Set(saved.overlays));
+      setEnabledOscillators(new Set(saved.oscillators));
+      setShowSma20(saved.showSma20);
+      setShowSma50(saved.showSma50);
+      setIncludeExtended(saved.includeExtended);
+      if (saved.scale) setScaleChoice(saved.scale);
+      setLayoutNote(saved.savedAt ? `Saved layout restored (${saved.savedAt.slice(0, 10)}).` : "Saved layout restored.");
+    }
+    setLayoutReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const lookbackMs = TIMEFRAME_PRESETS.find((p) => p.id === timeframe)?.lookbackMs ?? 0;
   const minLow = useMemo(() => {
@@ -205,7 +254,13 @@ export function PriceChart({
     for (const c of candles) if (m === null || c.low < m) m = c.low;
     return m;
   }, [candles]);
-  const scaleMode = effectiveScaleMode(scaleChoice, lookbackMs, minLow);
+  const compareActive = compareSymbol !== null && compareRaw !== null && compareRaw.candles.length > 0;
+  // With a comparison on, the one axis is percent change from the first visible bar: the two symbols are in different units.
+  const scaleMode: ScaleMode = compareActive ? "percent" : effectiveScaleMode(scaleChoice, lookbackMs, minLow);
+  const compareCandles = useMemo(
+    () => (compareRaw ? (extendedApplicable ? filterExtendedHours(compareRaw.candles, includeExtended) : compareRaw.candles) : []),
+    [compareRaw, extendedApplicable, includeExtended]
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -225,7 +280,7 @@ export function PriceChart({
     candles.forEach((c, i) => map.set(toSeconds(c.datetime), i));
     indexByTimeRef.current = map;
     hoverSecondsRef.current = null;
-    writeLegend(legendRef.current, candles, candles.length ? candles.length - 1 : -1, timeframe, fmtPx, zone);
+    refreshLegendRef.current();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candles, timeframe, assetClass, zone]);
 
@@ -257,6 +312,92 @@ export function PriceChart({
       else next.add(id);
       return next;
     });
+  }
+
+  function currentLayout(): ChartLayout {
+    return {
+      version: 1,
+      overlays: [...enabledOverlays],
+      oscillators: [...enabledOscillators],
+      scale: scaleChoice,
+      timeframe,
+      showSma20,
+      showSma50,
+      adjustment,
+      includeExtended,
+      savedAt: new Date().toISOString(),
+    };
+  }
+
+  function submitCompare() {
+    const sym = compareInput.trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9./-]{0,11}$/.test(sym)) {
+      setCompareNote("Enter a ticker such as SPY, QQQ or BTC-USD.");
+      return;
+    }
+    if (sym === symbol.trim().toUpperCase()) {
+      setCompareNote("That is the symbol already on the chart.");
+      return;
+    }
+    setCompareNote(null);
+    setCompareSymbol(sym);
+  }
+
+  /** Keyboard shortcuts: act only while focus is inside this chart section and not in a text box. */
+  function handleKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target as HTMLElement)) return;
+    const dc = drawingRef.current;
+    const id = shortcutFor(e.key);
+    if (!id) return;
+    switch (id) {
+      case "tool-select":
+      case "tool-hline":
+      case "tool-trend":
+      case "tool-rect":
+        dc?.setTool(id.slice(5) as "select" | "hline" | "trend" | "rect");
+        break;
+      case "cancel":
+        if (shortcutsOpen) setShortcutsOpen(false);
+        else dc?.cancel();
+        break;
+      case "delete":
+        if (!drawUi.selectedId) return;
+        dc?.deleteSelected();
+        break;
+      case "select-prev":
+      case "select-next":
+        dc?.selectNext(id === "select-next" ? 1 : -1);
+        break;
+      case "nudge":
+        if (!drawUi.selectedId) return;
+        dc?.nudge(e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0, e.key === "ArrowUp" ? 1 : e.key === "ArrowDown" ? -1 : 0);
+        break;
+      case "scale-cycle": {
+        if (compareActive) return;
+        const order = SCALE_CYCLE.filter((m) => m !== "log" || (minLow !== null && minLow > 0));
+        const next = order[(order.indexOf(scaleMode) + 1) % order.length];
+        setScaleChoice(next);
+        saveScaleChoice(next);
+        break;
+      }
+      case "extended":
+        if (extendedApplicable && extendedPresent) setIncludeExtended((v) => !v);
+        break;
+      case "tf-prev":
+      case "tf-next":
+        setTimeframe((cur) =>
+          stepTimeframe(
+            TIMEFRAME_PRESETS.filter((p) => p.alpacaTimeframe).map((p) => p.id),
+            cur,
+            id === "tf-prev" ? -1 : 1
+          )
+        );
+        break;
+      case "help":
+        setShortcutsOpen((v) => !v);
+        break;
+    }
+    e.preventDefault();
   }
 
   // Chart lifecycle: create once per mount, dispose on unmount. Single fixed
@@ -348,6 +489,37 @@ export function PriceChart({
     // real candle list (not just whatever lightweight-charts' own
     // seriesData snapshot exposes, since that doesn't include volume or a
     // prior-close-based change%).
+    // Second legend line: the value of every active indicator, the moving averages and the comparison at the cursor bar
+    // (or at the newest bar when the cursor is off the data).
+    const readoutLine = (valueOf: (s: ISeriesApi<SeriesType>) => number | null): string => {
+      const parts: string[] = [];
+      const one = (label: string, s: ISeriesApi<SeriesType> | null) => {
+        if (s) parts.push(`${label} ${fmtReadout(valueOf(s))}`);
+      };
+      if (sma20Series.options().visible) one("SMA20", sma20Series);
+      if (sma50Series.options().visible) one("SMA50", sma50Series);
+      for (const r of managerRef.current?.readouts(valueOf) ?? []) parts.push(`${r.label} ${r.values.map(fmtReadout).join("/")}`);
+      if (compareSeriesRef.current) parts.push(`${compareSeriesRef.current.options().title || "Compare"} ${fmtReadout(valueOf(compareSeriesRef.current))} (price)`);
+      return parts.join("  |  ");
+    };
+    const lastValue = (s: ISeriesApi<SeriesType>): number | null => {
+      const arr = s.data() as readonly { value?: number }[];
+      const v = arr.length ? arr[arr.length - 1].value : undefined;
+      return typeof v === "number" ? v : null;
+    };
+    refreshLegendRef.current = () => {
+      const candles = candlesRef.current;
+      if (candles.length === 0) return;
+      const seconds = hoverSecondsRef.current;
+      const index = seconds === null ? -1 : (indexByTimeRef.current.get(seconds) ?? -1);
+      const at = (s: ISeriesApi<SeriesType>): number | null => {
+        if (index === -1) return lastValue(s);
+        const t = candles[index].datetime / 1000;
+        const row = (s.data() as readonly { time?: number; value?: number }[]).find((d) => d.time === t);
+        return typeof row?.value === "number" ? row.value : null;
+      };
+      writeLegend(legendRef.current, candles, index === -1 ? candles.length - 1 : index, timeframeRef.current, fmtPxRef.current, zoneRef.current, readoutLine(at));
+    };
     chart.subscribeCrosshairMove((param) => {
       const candles = candlesRef.current;
       if (candles.length === 0) return;
@@ -356,8 +528,13 @@ export function PriceChart({
       if (seconds === hoverSecondsRef.current) return;
       hoverSecondsRef.current = seconds;
       const index = seconds === null ? -1 : (indexByTimeRef.current.get(seconds) ?? -1);
+      const valueOf = (s: ISeriesApi<SeriesType>): number | null => {
+        if (index === -1) return lastValue(s);
+        const d = param.seriesData.get(s) as { value?: number } | undefined;
+        return typeof d?.value === "number" ? d.value : null;
+      };
       // Off the data (or cursor left the chart): fall back to the latest bar.
-      writeLegend(legendRef.current, candles, index === -1 ? candles.length - 1 : index, timeframeRef.current, fmtPxRef.current, zoneRef.current);
+      writeLegend(legendRef.current, candles, index === -1 ? candles.length - 1 : index, timeframeRef.current, fmtPxRef.current, zoneRef.current, readoutLine(valueOf));
     });
 
     let lastWidth = containerRef.current.clientWidth;
@@ -411,7 +588,7 @@ export function PriceChart({
 
   // Fetch on symbol/timeframe change.
   useEffect(() => {
-    if (!symbol) return;
+    if (!symbol || !layoutReady) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -436,7 +613,51 @@ export function PriceChart({
     return () => {
       cancelled = true;
     };
-  }, [symbol, timeframe, focusDate, adjustment]);
+  }, [symbol, timeframe, focusDate, adjustment, layoutReady]);
+
+  // Compare symbol bars: same timeframe and adjustment as the main chart. A failure shows a note and draws nothing.
+  useEffect(() => {
+    if (!compareSymbol || !layoutReady) {
+      setCompareRaw(null);
+      return;
+    }
+    let cancelled = false;
+    setCompareNote(null);
+    const base = `/api/chart-bars?ticker=${encodeURIComponent(compareSymbol)}&timeframe=${timeframe}&adjustment=${adjustment}`;
+    fetch(focusDate ? `${base}&centerDate=${focusDate}` : base)
+      .then(async (res) => {
+        const json = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !Array.isArray(json?.candles) || json.candles.length === 0) {
+          setCompareRaw(null);
+          setCompareNote(`No data for ${compareSymbol}${json?.error ? `: ${String(json.error).slice(0, 120)}` : ""}`);
+        } else setCompareRaw(json as ChartBarsResult);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setCompareRaw(null);
+          setCompareNote(err instanceof Error ? err.message : "Compare failed");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compareSymbol, timeframe, adjustment, focusDate, layoutReady]);
+
+  // The comparison line itself: one extra series on the main (percent) scale, replaced when its data changes.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (compareSeriesRef.current) {
+      chart.removeSeries(compareSeriesRef.current);
+      compareSeriesRef.current = null;
+    }
+    if (!compareSymbol || compareCandles.length === 0) return;
+    const line = chart.addSeries(LineSeries, { color: CHART_CHROME.compare, lineWidth: 2, title: compareSymbol, priceLineVisible: false, lastValueVisible: true });
+    line.setData(compareCandles.map((c) => ({ time: toSeconds(c.datetime), value: c.close })));
+    compareSeriesRef.current = line;
+    refreshLegendRef.current();
+  }, [compareCandles, compareSymbol]);
 
   // Split and dividend events for the same window. Independent of the adjustment choice; failure only means no markers.
   useEffect(() => {
@@ -564,6 +785,7 @@ export function PriceChart({
   // series (the others keep their series objects); new candles rebuild the enabled ones. (Audit F3.)
   useEffect(() => {
     managerRef.current?.sync(candles, new Set([...enabledOverlays, ...enabledOscillators]));
+    refreshLegendRef.current();
   }, [candles, enabledOverlays, enabledOscillators]);
 
   // Cost-basis + open-order price lines — the real mechanism behind
@@ -630,7 +852,7 @@ export function PriceChart({
   }, [sessionId, symbol, assetClass, candles, positionRefreshKey]);
 
   return (
-    <div className="jarvis">
+    <div className="jarvis" tabIndex={-1} onKeyDown={handleKey} style={{ outline: "none" }}>
       <div className="flex flex-wrap gap-1.5 mb-3">
         {TIMEFRAME_PRESETS.map((p) => (
           <button
@@ -678,7 +900,12 @@ export function PriceChart({
           label="Scale"
           name="scale"
           value={scaleMode}
-          options={SCALE_MODES.map((m) => ({ value: m, label: SCALE_LABELS[m], title: SCALE_DESCRIPTIONS[m], disabled: m === "log" && !(minLow !== null && minLow > 0) }))}
+          options={SCALE_MODES.map((m) => ({
+            value: m,
+            label: SCALE_LABELS[m],
+            title: compareActive && m !== "percent" ? "A comparison is on: the chart uses one percent axis. Remove the comparison to change the scale." : SCALE_DESCRIPTIONS[m],
+            disabled: compareActive ? m !== "percent" : m === "log" && !(minLow !== null && minLow > 0),
+          }))}
           onChange={(m) => {
             setScaleChoice(m);
             saveScaleChoice(m);
@@ -705,12 +932,132 @@ export function PriceChart({
         )}
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3 text-xs" style={{ color: "var(--text-1)" }} data-testid="layout-row">
+        <label className="flex items-center gap-1.5">
+          <span className="text-[11px] font-mono uppercase tracking-wider" style={{ color: "var(--text-2)" }}>
+            Indicator set
+          </span>
+          <select
+            className="jv-select"
+            style={{ padding: "3px 8px", fontSize: 12 }}
+            data-testid="preset-select"
+            value={matchingPreset(enabledOverlays, enabledOscillators)?.id ?? ""}
+            onChange={(e) => {
+              const p = presetById(e.target.value);
+              if (!p) return;
+              setEnabledOverlays(new Set(p.overlays));
+              setEnabledOscillators(new Set(p.oscillators));
+            }}
+            title={matchingPreset(enabledOverlays, enabledOscillators)?.description}
+          >
+            <option value="">Custom</option>
+            {INDICATOR_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border"
+          style={{ borderColor: "var(--line-control)", color: "var(--text-1)" }}
+          data-testid="layout-save"
+          title="Remember indicators, scale, timeframe, moving averages and price adjustment in this browser"
+          onClick={() => setLayoutNote(saveLayout(currentLayout()) ? "Layout saved in this browser." : "Could not save (browser storage is blocked).")}
+        >
+          Save layout
+        </button>
+        <button
+          type="button"
+          className="px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border"
+          style={{ borderColor: "var(--line-control)", color: "var(--text-1)" }}
+          data-testid="layout-reset"
+          onClick={() => {
+            clearLayout();
+            setEnabledOverlays(new Set());
+            setEnabledOscillators(new Set());
+            setScaleChoice(null);
+            setShowSma20(true);
+            setShowSma50(true);
+            setAdjustment("split");
+            setIncludeExtended(true);
+            if (!focusDate) setTimeframe("1yr");
+            setLayoutNote("Saved layout cleared; defaults restored.");
+          }}
+        >
+          Reset layout
+        </button>
+        {layoutNote && (
+          <span role="status" style={{ color: "var(--text-2)" }} data-testid="layout-note">
+            {layoutNote}
+          </span>
+        )}
+        <form
+          className="flex items-center gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitCompare();
+          }}
+        >
+          <label className="flex items-center gap-1.5">
+            <span className="text-[11px] font-mono uppercase tracking-wider" style={{ color: "var(--text-2)" }}>
+              Compare
+            </span>
+            <input
+              className="jv-input"
+              style={{ padding: "3px 8px", fontSize: 12, width: 96 }}
+              data-testid="compare-input"
+              aria-label="Compare with another symbol"
+              placeholder="SPY"
+              value={compareInput}
+              maxLength={12}
+              onChange={(e) => setCompareInput(e.target.value)}
+            />
+          </label>
+          <button type="submit" className="px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border" style={{ borderColor: "var(--line-control)", color: "var(--text-1)" }} data-testid="compare-add">
+            Add
+          </button>
+          {compareSymbol && (
+            <button
+              type="button"
+              className="px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border"
+              style={{ borderColor: "var(--line-control)", color: "var(--text-1)" }}
+              data-testid="compare-remove"
+              onClick={() => {
+                setCompareSymbol(null);
+                setCompareNote(null);
+                setCompareInput("");
+              }}
+            >
+              Remove {compareSymbol}
+            </button>
+          )}
+        </form>
+        {compareNote && (
+          <span role="status" style={{ color: "var(--verdict)" }} data-testid="compare-note">
+            {compareNote}
+          </span>
+        )}
+        <ShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      </div>
+
       <DrawingToolbar
         state={drawUi}
         onTool={(t) => drawingRef.current?.setTool(t)}
         onColor={(hex) => drawingRef.current?.setColor(hex)}
         onDelete={() => drawingRef.current?.deleteSelected()}
         onClear={() => drawingRef.current?.clearAll()}
+        onCreateAlert={
+          onCreateAlert
+            ? () => {
+                const d = drawingRef.current?.getSelected();
+                const last = candlesRef.current[candlesRef.current.length - 1];
+                if (d && d.kind === "hline" && last) onCreateAlert({ symbol: symbol.trim().toUpperCase(), price: d.p1.price, direction: d.p1.price >= last.close ? "above" : "below" });
+              }
+            : undefined
+        }
+        selectedIsHLine={drawingRef.current?.getSelected()?.kind === "hline"}
         onAddHLineAtLast={() => {
           const last = candlesRef.current[candlesRef.current.length - 1];
           if (last) drawingRef.current?.addHLine(last.close);
@@ -764,22 +1111,7 @@ export function PriceChart({
         style={{ position: "relative" }}
         tabIndex={0}
         role="group"
-        aria-label="Price chart. Keys: Delete removes the selected drawing, Escape cancels, arrow keys nudge it, [ and ] select the previous or next drawing."
-        onKeyDown={(e) => {
-          const dc = drawingRef.current;
-          if (!dc || e.target !== e.currentTarget) return;
-          if (e.key === "Delete" || e.key === "Backspace") {
-            dc.deleteSelected();
-            e.preventDefault();
-          } else if (e.key === "Escape") {
-            dc.cancel();
-          } else if (e.key === "[" || e.key === "]") {
-            dc.selectNext(e.key === "]" ? 1 : -1);
-          } else if (e.key.startsWith("Arrow") && drawUi.selectedId) {
-            dc.nudge(e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0, e.key === "ArrowUp" ? 1 : e.key === "ArrowDown" ? -1 : 0);
-            e.preventDefault();
-          }
-        }}
+        aria-label="Price chart. Press ? for the keyboard shortcuts."
       >
         <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)", minHeight: 420 }} />
 
@@ -810,7 +1142,7 @@ export function PriceChart({
             style={{
               position: "absolute",
               left: 12,
-              bottom: 36,
+              top: 64, // under the two-line crosshair legend, inside the price pane
               zIndex: 5,
               background: CHART_CHROME.legendBg,
               border: "1px solid var(--line)",
@@ -897,6 +1229,7 @@ export function PriceChart({
         adjustment={data?.meta?.adjustment ?? null}
         showSma20={showSma20}
         showSma50={showSma50}
+        compareLabel={compareActive ? compareSymbol : null}
         eventLines={showEvents ? events.map((e) => `${new Date(e.dateMs).toISOString().slice(0, 10)} ${e.label}`) : []}
         activeIds={[...INDICATORS.filter((d) => enabledOverlays.has(d.id) || enabledOscillators.has(d.id)).map((d) => d.id)]}
       />

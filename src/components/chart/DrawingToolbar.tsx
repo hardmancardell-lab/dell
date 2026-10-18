@@ -21,6 +21,8 @@ export function DrawingToolbar({
   onDelete,
   onClear,
   onAddHLineAtLast,
+  onCreateAlert,
+  selectedIsHLine = false,
 }: {
   state: DrawingUiState;
   onTool: (t: DrawTool) => void;
@@ -28,6 +30,9 @@ export function DrawingToolbar({
   onDelete: () => void;
   onClear: () => void;
   onAddHLineAtLast: () => void;
+  /** Present only when the host can take an alert level (chart-to-alert). */
+  onCreateAlert?: () => void;
+  selectedIsHLine?: boolean;
 }) {
   const btn = "px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider border transition-colors disabled:cursor-not-allowed disabled:opacity-40";
   return (
@@ -76,6 +81,11 @@ export function DrawingToolbar({
             />
           ))}
         </span>
+        {onCreateAlert && (
+          <button type="button" className={btn} onClick={onCreateAlert} disabled={!selectedIsHLine} title="Create an alert at the selected horizontal line" data-testid="drawing-alert" style={{ borderColor: "var(--line-control)", color: "var(--text-1)" }}>
+            Alert at this level
+          </button>
+        )}
         <button type="button" className={btn} onClick={onDelete} disabled={!state.selectedId} data-testid="drawing-delete" style={{ borderColor: "var(--line-control)", color: "var(--text-1)" }}>
           Delete selected
         </button>

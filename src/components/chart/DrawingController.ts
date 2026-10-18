@@ -87,6 +87,10 @@ export class DrawingController {
     return this.drawings;
   }
 
+  getSelected(): Drawing | null {
+    return this.drawings.find((d) => d.id === this.selectedId) ?? null;
+  }
+
   /** Replaces the list (used when the symbol or timeframe changes). Does not call onPersist. */
   setDrawings(list: Drawing[]): void {
     this.drawings = list.slice(0, MAX_DRAWINGS);

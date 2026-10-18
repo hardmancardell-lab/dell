@@ -3,6 +3,7 @@
 import { indicatorDef } from "@/lib/chart/indicators";
 import { volumeLegendLabel } from "@/lib/chart/meta";
 import { SMA_COLORS, VOLUME_BAR } from "@/lib/design/tokens";
+import { CHART_CHROME } from "@/lib/chart/colors";
 import type { BarAdjustment } from "@/lib/data/market-data-types";
 
 /**
@@ -17,6 +18,7 @@ export function ActiveLegend({
   showSma50,
   activeIds,
   eventLines = [],
+  compareLabel = null,
 }: {
   feed: string | null;
   adjustment: BarAdjustment | null;
@@ -25,6 +27,8 @@ export function ActiveLegend({
   activeIds: readonly string[];
   /** "2026-08-11: Dividend $0.53" lines for the markers on the chart (S = split, D = dividend). */
   eventLines?: readonly string[];
+  /** Symbol drawn as a comparison line, or null. */
+  compareLabel?: string | null;
 }) {
   const items = activeIds.map(indicatorDef).filter((d): d is NonNullable<ReturnType<typeof indicatorDef>> => Boolean(d));
   return (
@@ -43,6 +47,14 @@ export function ActiveLegend({
         <li className="flex items-center gap-2">
           <span aria-hidden className="inline-block w-2.5 h-0.5" style={{ background: SMA_COLORS.sma50 }} />
           <span>SMA 50: 50-bar simple moving average of the close</span>
+        </li>
+      )}
+      {compareLabel && (
+        <li className="flex items-center gap-2" data-testid="legend-compare">
+          <span aria-hidden className="inline-block w-2.5 h-0.5" style={{ background: CHART_CHROME.compare }} />
+          <span>
+            Compare {compareLabel}: closing price of {compareLabel} on the same percent axis. Every line and candle on this chart is shown as percent change from the first visible bar, so the two symbols start together at 0%.
+          </span>
         </li>
       )}
       {eventLines.length > 0 && (

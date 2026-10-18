@@ -4,14 +4,8 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recha
 import { allocationSliceColor } from "@/lib/agents/trading-agent/allocation-colors";
 import type { AllocationSlice } from "@/lib/agents/trading-agent/types";
 
-/** Adds a Cash slice (uninvested reserve) so the chart reflects total funds, not just holdings. */
-export function withCashSlice(slices: AllocationSlice[], cashBalance: number, grandTotal: number): AllocationSlice[] {
-  const rescaled = slices.map((s) => ({ ...s, percent: grandTotal > 0 ? (s.value / grandTotal) * 100 : 0 }));
-  if (cashBalance > 0) {
-    rescaled.push({ label: "Cash", value: cashBalance, percent: grandTotal > 0 ? (cashBalance / grandTotal) * 100 : 0 });
-  }
-  return rescaled;
-}
+// Pure helper lives in src/lib/chart/allocation.ts (unit-tested without loading recharts); re-exported for the existing importers.
+export { withCashSlice } from "@/lib/chart/allocation";
 
 function fmtUsd(v: number): string {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
