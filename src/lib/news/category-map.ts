@@ -57,10 +57,8 @@ export const FEEDS: Record<string, FeedDef> = Object.fromEntries(
     probed("rigzone", "Rigzone", "Rigzone. An oil and gas industry news site.", "https://www.rigzone.com/news/rss/rigzone_latest.aspx"),
     probed("eia", "EIA", "EIA is a US government agency. It posts short reports on energy.", "https://www.eia.gov/rss/todayinenergy.xml"),
     probed("cnbc-energy", "CNBC Energy", "CNBC energy news. Headlines come from its public RSS feed.", "https://www.cnbc.com/id/19836768/device/rss/rss.html"),
-    // Metals, commodities in general.
+    // Metals.
     probed("mining", "Mining.com", "Mining.com. A mining and metals news site.", "https://www.mining.com/feed/"),
-    probed("cnbc-commodities", "CNBC Commodities", "CNBC commodities news. Headlines come from its public RSS feed.", "https://www.cnbc.com/id/15839069/device/rss/rss.html"),
-    probed("investing-commodities", "Investing.com commodities", "Investing.com commodities news. Times in this feed have no time zone, so they are read as UTC.", "https://www.investing.com/rss/news_11.rss"),
     // Agriculture.
     probed("farmprogress", "Farm Progress", "Farm Progress. A farm news site.", "https://www.farmprogress.com/rss.xml"),
     probed("usda", "USDA news", "USDA is a US government agency for farms and food. These are its news releases.", "https://www.usda.gov/rss/latest-releases.xml"),
@@ -68,9 +66,6 @@ export const FEEDS: Record<string, FeedDef> = Object.fromEntries(
     probed("fxstreet", "FXStreet", "FXStreet. A currency market news site.", "https://www.fxstreet.com/rss/news"),
     probed("forexlive", "ForexLive", "ForexLive. A currency market news site.", "https://www.forexlive.com/feed/news"),
     probed("investing-forex", "Investing.com currencies", "Investing.com currency news. Times in this feed have no time zone, so they are read as UTC.", "https://www.investing.com/rss/news_1.rss"),
-    // Bonds and interest rates.
-    probed("cnbc-bonds", "CNBC Bonds", "CNBC bond market news. Headlines come from its public RSS feed.", "https://www.cnbc.com/id/10000664/device/rss/rss.html"),
-    probed("investing-bonds", "Investing.com bonds", "Investing.com bond news. Times in this feed have no time zone, so they are read as UTC.", "https://www.investing.com/rss/news_95.rss"),
   ].map((f) => [f.id, f])
 );
 
@@ -84,6 +79,10 @@ export const REJECTED_FEEDS: { name: string; why: string }[] = [
   { name: "DailyFX", why: "request timed out" },
   { name: "Bitcoin Magazine", why: "feed stale (latest item two days old)" },
   { name: "Yahoo Finance front-page feed (Global News list)", why: "feed returns HTTP 404" },
+  { name: "CNBC Bonds section feed", why: "answers, but its headlines are general stock stories, not bond news" },
+  { name: "CNBC Commodities section feed", why: "answers, but its headlines are general stock stories, not commodity news" },
+  { name: "Investing.com commodities feed", why: "answers, but its headlines are general world news" },
+  { name: "Investing.com bonds feed", why: "answers, but its headlines are general world news" },
 ];
 
 /** Broad market outlets used for "Market and macro" on every asset class. */
@@ -108,15 +107,18 @@ export const TOPIC_LABEL: Record<Topic, string> = {
 export const TOPIC_FEED_IDS: Record<Topic, string[]> = {
   stock: [],
   crypto: ["coindesk", "cointelegraph", "decrypt", "theblock", "beincrypto", "investing-crypto"],
-  energy: ["oilprice", "rigzone", "eia", "cnbc-energy", "investing-commodities"],
-  metals: ["mining", "cnbc-commodities", "investing-commodities"],
-  agriculture: ["farmprogress", "usda", "cnbc-commodities", "investing-commodities"],
+  energy: ["oilprice", "rigzone", "eia", "cnbc-energy"],
+  metals: ["mining", "fxstreet"],
+  agriculture: ["farmprogress", "usda"],
   "equity-index": [],
-  rates: ["cnbc-bonds", "investing-bonds"],
+  rates: ["forexlive", "investing-forex", "fxstreet"],
   currency: ["fxstreet", "forexlive", "investing-forex"],
-  bond: ["cnbc-bonds", "investing-bonds"],
-  unknown: ["cnbc-commodities", "investing-commodities"],
+  bond: ["forexlive", "investing-forex", "fxstreet"],
+  unknown: ["fxstreet", "mining", "oilprice"],
 };
+
+/** Words that mark a headline as bond market or interest rate news. */
+export const RATES_KEYWORDS = ["bond", "bonds", "yield", "yields", "treasury", "treasuries", "fed", "federal reserve", "interest rate", "interest rates", "rate cut", "rate cuts", "rate hike", "rate hikes", "inflation", "central bank", "debt auction"];
 
 interface CommodityRule {
   topic: Topic;
@@ -155,9 +157,9 @@ const COMMODITY_RULES: Record<string, CommodityRule> = {
   DIA: { topic: "equity-index", keywords: ["dow"] },
   YM: { topic: "equity-index", keywords: ["dow"] },
   IWM: { topic: "equity-index", keywords: ["russell", "small-cap", "small cap"] },
-  TLT: { topic: "rates", keywords: ["treasury", "treasuries", "yield", "bond"] },
-  ZN: { topic: "rates", keywords: ["treasury", "treasuries", "yield", "10-year"] },
-  ZB: { topic: "rates", keywords: ["treasury", "treasuries", "yield", "30-year"] },
+  TLT: { topic: "rates", keywords: RATES_KEYWORDS },
+  ZN: { topic: "rates", keywords: RATES_KEYWORDS },
+  ZB: { topic: "rates", keywords: RATES_KEYWORDS },
 };
 
 const CRYPTO_ALIASES: Record<string, string[]> = {
@@ -206,8 +208,10 @@ export interface NewsPlan {
   macroFeedIds: string[];
   /** A headline in a category feed that contains one of these goes to "About this asset". */
   keywords: string[];
-  /** When true there is no per-asset feed, so every category-feed item belongs to "About this asset" (bonds). */
+  /** When true every category-feed item belongs to "About this asset". Not used by any class now; kept for maps that have a feed about exactly one thing. */
   categoryIsAbout: boolean;
+  /** When true the keyword match is also applied to the broad market outlets (bonds and rates, which no topic feed covers well). */
+  matchMacroToo: boolean;
   /** Plain note to show with the About group when it is not about one named asset. */
   aboutNote: string | null;
   /** True when the symbol-level feeds (Yahoo, FMP, SEC) can be asked about this symbol. */
@@ -258,7 +262,7 @@ export function matchesKeywords(title: string, keywords: string[]): boolean {
 /** Decides which feeds and keywords a symbol uses. Pure; no network. */
 export function planNews(symbolIn: string, assetClass: AssetClass): NewsPlan {
   const symbol = symbolIn.trim().toUpperCase();
-  const base = { macroFeedIds: MACRO_FEED_IDS, aboutNote: null as string | null };
+  const base = { macroFeedIds: MACRO_FEED_IDS, aboutNote: null as string | null, matchMacroToo: false };
 
   if (assetClass === "option") {
     const m = OCC_OPTION_RE.exec(symbol);
@@ -275,6 +279,7 @@ export function planNews(symbolIn: string, assetClass: AssetClass): NewsPlan {
       macroFeedIds: MACRO_FEED_IDS,
       keywords: [],
       categoryIsAbout: false,
+      matchMacroToo: false,
       aboutNote: "This option symbol could not be read, so there is no stock to look up. Try the stock it is based on.",
       hasSymbolFeed: false,
     };
@@ -300,8 +305,9 @@ export function planNews(symbolIn: string, assetClass: AssetClass): NewsPlan {
       topic: "bond",
       topicLabel: TOPIC_LABEL.bond,
       categoryFeedIds: TOPIC_FEED_IDS.bond,
-      keywords: [],
-      categoryIsAbout: true,
+      keywords: RATES_KEYWORDS,
+      categoryIsAbout: false,
+      matchMacroToo: true,
       aboutNote: "No outlet covers a single bond. This is bond market and interest rate news.",
       hasSymbolFeed: false,
     };
@@ -319,6 +325,7 @@ export function planNews(symbolIn: string, assetClass: AssetClass): NewsPlan {
     categoryFeedIds: TOPIC_FEED_IDS[topic],
     keywords: rule?.keywords ?? [],
     categoryIsAbout: false,
+    matchMacroToo: topic === "rates",
     hasSymbolFeed: true,
   };
 }

@@ -26,6 +26,8 @@ import { fetchText, getTickerNews, nowIso, registerCacheClearer, toItem } from "
 const PER_FEED = 20;
 const ABOUT_LIMIT = 20;
 const MACRO_LIMIT = 15;
+const MACRO_CATEGORY_LIMIT = 9;
+const MACRO_BROAD_MIN = 6;
 const FEED_TTL_MS = 10 * 60_000;
 const GROUPS_TTL_MS = 5 * 60_000;
 
@@ -58,7 +60,7 @@ async function fetchFeed(def: FeedDef): Promise<FeedFetch> {
 }
 
 function statusFor(def: FeedDef, r: FeedFetch, count: number): SourceStatus {
-  return { name: def.name, what: def.what, ok: r.error === null && count > 0, count, note: r.error ?? (count === 0 ? "No headline in this feed named the asset right now." : null) };
+  return { name: def.name, what: def.what, ok: r.error === null, count, note: r.error ?? (count === 0 ? "No headline in this feed named the asset right now." : null) };
 }
 
 function keysOf(items: NewsItem[]): { urls: Set<string>; titles: Set<string> } {
@@ -112,11 +114,32 @@ async function build(displaySymbol: string, assetClass: AssetClass, includeBackg
   });
   macroDefs.forEach((def, i) => macroSources.push(statusFor(def, macroR[i], macroR[i].items.length)));
 
+  // Bonds and rates: no topic feed covers them well, so broad outlets are also searched for rates words.
+  const macroBroad: NewsItem[] = [];
+  macroDefs.forEach((def, i) => {
+    let matched = 0;
+    for (const it of macroR[i].items) {
+      if (plan.matchMacroToo && matchesKeywords(it.title, plan.keywords)) {
+        aboutExtra.push(it);
+        matched += 1;
+      } else {
+        macroBroad.push(it);
+      }
+    }
+    if (plan.matchMacroToo) aboutSources.push(statusFor(def, macroR[i], matched));
+  });
+
   const aboutItems = dedupeNews([...(baseR?.items ?? []), ...aboutExtra]).slice(0, ABOUT_LIMIT);
   const seen = keysOf(aboutItems);
-  const macroItems = dedupeNews([...macroCategory, ...macroR.flatMap((r) => r.items)])
-    .filter((i) => !seen.urls.has(canonicalUrlKey(i.url)) && !seen.titles.has(titleTokens(i.title).join(" ")))
-    .slice(0, MACRO_LIMIT);
+  const notSeen = (i: NewsItem) => !seen.urls.has(canonicalUrlKey(i.url)) && !seen.titles.has(titleTokens(i.title).join(" "));
+  // Category news first (it is about the same market), then broad outlets, each newest first.
+  const categoryPart = dedupeNews(macroCategory).filter(notSeen).slice(0, MACRO_CATEGORY_LIMIT);
+  const catKeys = keysOf(categoryPart);
+  const broadPart = dedupeNews(macroBroad)
+    .filter(notSeen)
+    .filter((i) => !catKeys.urls.has(canonicalUrlKey(i.url)) && !catKeys.titles.has(titleTokens(i.title).join(" ")))
+    .slice(0, Math.max(MACRO_BROAD_MIN, MACRO_LIMIT - categoryPart.length));
+  const macroItems = [...categoryPart, ...broadPart];
 
   const notes: string[] = [...(baseR?.notes ?? [])];
   if (plan.aboutNote) notes.unshift(plan.aboutNote);

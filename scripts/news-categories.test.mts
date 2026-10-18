@@ -68,10 +68,13 @@ test("category map: each class gets its own category feeds plus broad macro", ()
   assert.ok(CM.planNews("WEAT", "commodity").categoryFeedIds.includes("usda"));
   assert.equal(CM.planNews("SPY", "future").topic, "equity-index");
   assert.equal(CM.planNews("TLT", "future").topic, "rates");
-  assert.ok(CM.planNews("TLT", "future").categoryFeedIds.includes("cnbc-bonds"));
+  assert.ok(CM.planNews("TLT", "future").categoryFeedIds.includes("forexlive"));
+  assert.equal(CM.planNews("TLT", "future").matchMacroToo, true, "rates news is also searched for in the broad outlets");
+  for (const gone of ["cnbc-bonds", "cnbc-commodities", "investing-commodities", "investing-bonds"]) assert.equal(CM.FEEDS[gone], undefined, `${gone} answers but is off topic, so it is not mapped`);
   assert.ok(CM.planNews("EUR/USD", "forex").categoryFeedIds.includes("fxstreet"));
   const bond = CM.planNews("US10Y", "bond");
-  assert.equal(bond.categoryIsAbout, true);
+  assert.equal(bond.categoryIsAbout, false);
+  assert.equal(bond.matchMacroToo, true);
   assert.equal(bond.hasSymbolFeed, false);
   assert.match(bond.aboutNote, /No outlet covers a single bond/);
   const eq = CM.planNews("AAPL", "equity");
@@ -197,10 +200,13 @@ test("two groups for currency pairs, bonds and options", async () => {
   assert.ok(fx.macro.items.some((i: any) => /Yen weakens/.test(i.title)));
 
   H.clearNewsHubCaches();
-  handlers = mappedFeeds({ "cnbc-bonds": [fi("Ten-year yield climbs as auction demand cools", 1)], cnbc: [fi("Markets await the jobs report on Friday", 2)] });
+  handlers = mappedFeeds({ forexlive: [fi("Ten-year yield climbs as auction demand cools", 1), fi("Eurozone factory output rises in September", 7)], cnbc: [fi("Treasury yields slip as Fed officials urge patience", 2), fi("Markets await the jobs report on Friday", 8)] });
   const bond = await TG.getTickerNewsGroups("US10Y", "bond");
   assert.equal(bond.topic, "Bonds");
   assert.ok(bond.about.items.some((i: any) => /Ten-year yield/.test(i.title)), "bond-market news fills About");
+  assert.ok(bond.about.items.some((i: any) => /Treasury yields slip/.test(i.title)), "a broad outlet headline with rates words is also About");
+  assert.ok(!bond.about.items.some((i: any) => /Eurozone factory|jobs report/.test(i.title)), "off-topic headlines are not About");
+  assert.ok(bond.macro.items.some((i: any) => /jobs report/.test(i.title)));
   assert.ok(bond.notes.some((n: string) => /No outlet covers a single bond/.test(n)));
 
   H.clearNewsHubCaches();
@@ -214,6 +220,23 @@ test("two groups for currency pairs, bonds and options", async () => {
   handlers = mappedFeeds({});
   const junk = await TG.getTickerNewsGroups("WEIRD", "option");
   assert.match(junk.about.empty, /could not be read/);
+});
+
+test("a category feed with no matching headline is reported as working with zero, not as down", async () => {
+  H.clearNewsHubCaches();
+  handlers = mappedFeeds({ coindesk: [fi("Solana network upgrade ships on schedule this week", 2)], cnbc: [fi("Markets await the jobs report on Friday", 1)] }, [yahoo([])]);
+  const g = await TG.getTickerNewsGroups("ETH-USD", "crypto");
+  const cd = g.about.sources.find((s: any) => s.name === "CoinDesk");
+  assert.ok(cd && cd.ok === true && cd.count === 0 && /named the asset/.test(cd.note));
+});
+
+test("market and macro lists category news first, then broad outlets", async () => {
+  H.clearNewsHubCaches();
+  handlers = mappedFeeds({ oilprice: [fi("Europe braces for a winter energy crisis as reserves run low", 1, 30)], cnbc: [fi("Evercore names two co presidents in a shake up", 2, 1)], ft: [fi("Macron faces political firestorm after riots", 3, 1)] }, [yahoo([])]);
+  const g = await TG.getTickerNewsGroups("USO", "commodity");
+  const titles = g.macro.items.map((i: any) => i.title);
+  assert.ok(/winter energy crisis/.test(titles[0]), "category news leads even when a broad story is newer");
+  assert.ok(titles.length >= 3);
 });
 
 test("category feed failures are named in plain words, shown per group, and never cached", async () => {

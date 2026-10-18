@@ -63,7 +63,7 @@ export function SourceList({ sources }: { sources: SourceStatus[] }) {
         {sources.map((s) => (
           <li key={s.name} className="text-xs" style={{ color: "var(--text-2)" }}>
             <span style={{ color: s.ok ? "var(--text-0)" : "var(--verdict)" }}>
-              {s.name}: {s.ok ? `${s.count} headline${s.count === 1 ? "" : "s"}` : "not working right now"}
+              {s.name}: {s.ok ? `${s.count} headline${s.count === 1 ? "" : "s"} read` : "not working right now"}
             </span>
             <div>{s.what}</div>
             {s.note && <div style={{ color: "var(--verdict)" }}>{s.note}</div>}
