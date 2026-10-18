@@ -604,48 +604,9 @@ export default async function Home() {
                             Trading Agent &middot; Bonds
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Bonds</h1>
-                          <Tabs
-                            size="tertiary"
-                            tabs={[
-                              { id: "overview", label: "Overview", content: <BondDashboardTab /> },
-                              {
-                                id: "charts",
-                                label: "Charts",
-                                content: <AssetChartsTab assetClass="bond" defaultTicker="TLT" placeholder="Ticker, e.g. TLT" watchlistLabel="Bonds" />,
-                              },
-                              { id: "yield-curve", label: "Yield Curve", content: <YieldCurveTab /> },
-                              {
-                                id: "backtest",
-                                label: "Backtest",
-                                content: <HistoricalBacktestTab key="bonds-backtest" defaultTicker="TLT" assetClass="bond" />,
-                              },
-                              {
-                                id: "calendar-effects",
-                                label: "Calendar Effects",
-                                content: <CalendarEffectsTab key="bonds-calendar-effects" defaultTicker="TLT" assetClass="bond" />,
-                              },
-                              {
-                                id: "vwap-reversion-backtest",
-                                label: "VWAP Reversion Backtest",
-                                content: <VwapReversionBacktestTab key="bonds-vwap-reversion-backtest" defaultTicker="TLT" />,
-                              },
-                              {
-                                id: "vwap-band-study",
-                                label: "VWAP Band Study",
-                                content: <VwapBandStudyTab key="bonds-vwap-band-study" defaultTicker="TLT" />,
-                              },
-                              {
-                                id: "rolling-move-stats",
-                                label: "Rolling Move Stats",
-                                content: <RollingMoveStatsTab defaultTicker="TLT" defaultAssetClass="bond" />,
-                              },
-                              {
-                                id: "yield-alert-threshold",
-                                label: "Yield Alert Threshold",
-                                content: <YieldAlertThresholdTab />,
-                              },
-                            ]}
-                          />
+                          <NavScope>
+                            <AssetGroupWorkspace groupId="bonds" />
+                          </NavScope>
                         </div>
                       ),
                     },
