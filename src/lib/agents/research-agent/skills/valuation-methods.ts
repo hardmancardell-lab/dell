@@ -3,10 +3,10 @@ import type { FmpCashFlowStatement, FmpDividendRecord, FmpIncomeStatement } from
 import type { ValuationResult, ValuationVerdict } from "../types";
 
 const DEFAULT_AAA_YIELD_PCT = 5.5; // used only if the live FRED fetch fails
-const DISCOUNT_RATE_PCT = 9; // assumed required return for EPV/DCF/DDM — flagged explicitly in each result
-const TERMINAL_GROWTH_PCT = 2.5; // assumed long-run terminal growth for DCF
-const DCF_PROJECTION_YEARS = 5;
-const MAX_GROWTH_ASSUMPTION_PCT = 15; // caps extrapolated historical growth to avoid absurd projections
+export const DISCOUNT_RATE_PCT = 9; // assumed required return for EPV/DCF/DDM — flagged explicitly in each result
+export const TERMINAL_GROWTH_PCT = 2.5; // assumed long-run terminal growth for DCF
+export const DCF_PROJECTION_YEARS = 5;
+export const MAX_GROWTH_ASSUMPTION_PCT = 15; // caps extrapolated historical growth to avoid absurd projections
 
 function classify(impliedValue: number | null, marketPrice: number): {
   percentDifference: number | null;
