@@ -16,6 +16,23 @@ export interface BusinessVerdict {
   text: string;
 }
 
+/** Short names for the sentence that points at the filing types that stand out. */
+const SHORT_TYPE: Record<string, string> = {
+  earnings: "earnings days",
+  leadership: "days with leadership changes",
+  deals: "days with deals or financing news",
+  other: "days with other announcements",
+  periodic: "days with annual or quarterly reports",
+};
+
+/** One sentence naming the filing types that pass the corrected test on their own, or "" when none do. Needs 10 or more events per type. */
+export function standoutSentence(study: EventStudyResult): string {
+  const hits = study.groups.filter((g) => g.day0.enough && g.day0.pAdj !== null && g.day0.pAdj < 0.05 && g.day0.ratioLo !== null && g.day0.ratioLo > 1 && g.day0.ratio !== null);
+  if (hits.length === 0) return "";
+  const parts = hits.map((g) => `${SHORT_TYPE[g.id] ?? g.label.toLowerCase()} (${x(g.day0.ratio)}, ${g.day0.n} days)`);
+  return ` By type, these stand out: ${parts.join("; ")}.`;
+}
+
 export function businessVerdict(symbol: string, study: EventStudyResult | null, unavailableReason: string | null): BusinessVerdict {
   if (!study) return { kind: "unavailable", text: unavailableReason ?? "No dated company events are available for this asset, so this test does not run." };
   const p = study.pooled;
@@ -32,7 +49,7 @@ export function businessVerdict(symbol: string, study: EventStudyResult | null, 
     const how = study.effect === "clearly-larger" ? "much more" : "somewhat more";
     return {
       kind: study.effect,
-      text: `${symbol} moved ${how} on days it filed with the SEC: about ${x(r)} the usual size (95% range ${range}, ${n} filing days). It moves with company filings. This does not show the filings caused the moves.`,
+      text: `${symbol} moved ${how} on days it filed with the SEC: about ${x(r)} the usual size (95% range ${range}, ${n} filing days). It moves with company filings. This does not show the filings caused the moves.${standoutSentence(study)}`,
     };
   }
   if (study.effect === "smaller") {
@@ -40,7 +57,7 @@ export function businessVerdict(symbol: string, study: EventStudyResult | null, 
   }
   return {
     kind: "no-clear-difference",
-    text: `No clear difference. On ${n} filing days, ${symbol} moved about ${x(r)} the usual size (95% range ${range}). This does not prove filings do not matter. With this many events we could miss an effect up to about ${x(p.day0.ratioHi)}.`,
+    text: `No clear difference. On ${n} filing days, ${symbol} moved about ${x(r)} the usual size (95% range ${range}). This does not prove filings do not matter. With this many events we could miss an effect up to about ${x(p.day0.ratioHi)}.${standoutSentence(study)}`,
   };
 }
 

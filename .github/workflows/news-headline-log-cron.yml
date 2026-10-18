@@ -1,0 +1,42 @@
+name: News Headline Log (Daily Counts)
+
+# Counts headlines per symbol per day (see src/lib/news-impact/headline-log.ts and the News Impact notes), so that "does a busier
+# news day come with a bigger move" can be tested after a few months of data. There is no archive of past headlines, so this
+# is the only way to get one. Same mechanism as option-flow-cron.yml: Vercel Hobby allows one daily cron, so this workflow
+# hits the authenticated /api/cron/news-headline-log route.
+#
+# Four runs a day (UTC): 02:20, 08:20, 14:20 and 21:20. The feed holds only about 20 recent items per symbol, so several runs
+# a day keep busy symbols from losing stories; the route never counts a story twice.
+#
+# BEST EFFORT: GitHub's scheduled workflows can be delayed or skipped. Each row records how many captures it has and whether
+# the feed cap probably bound (feed_capped), and analysis should drop capped days or treat them as lower bounds.
+on:
+  schedule:
+    - cron: "20 2,8,14,21 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  news-headline-log:
+    # Off until you turn it on: set the repository variable NEWS_LOG_ENABLED to true (Settings > Secrets and variables >
+    # Actions > Variables) AFTER running db/migrations/2026-10-18_news_headline_counts.sql. A skipped job does not fail or send email.
+    if: ${{ vars.NEWS_LOG_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit /api/cron/news-headline-log
+        run: |
+          # Never follow redirects (no -L): a 307 to /gate or /login used to look like success under `curl -sf`.
+          # Pass only on HTTP 200 whose JSON body says ok:true.
+          status=$(curl -sS --max-time 75 --max-redirs 0 -X GET "${{ secrets.APP_URL }}/api/cron/news-headline-log" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -o response.json -w "%{http_code}")
+          echo "HTTP $status"
+          cat response.json
+          echo
+          if [ "$status" != "200" ]; then
+            echo "::error::Expected HTTP 200, got $status"
+            exit 1
+          fi
+          jq -e '.ok == true' response.json > /dev/null || {
+            echo "::error::Response body is not ok:true"
+            exit 1
+          }
