@@ -140,6 +140,24 @@ const secOff: Handler = (url) => (url.includes("sec.gov") ? new Response("down",
   const html = `<li><a href="/news.release/archives/cpi_10142026.htm">September 2026 CPI</a></li><li><a href="/news.release/archives/cpi_11132026.htm">October</a></li><li><a href="/news.release/archives/cpi_12102025.htm">Nov 2025</a></li><a href="/news.release/archives/cpi_12102025.pdf">PDF</a><a href="/news.release/archives/empsit_10022026.htm">x</a>`;
   const ds = D.parseBlsArchiveDates(html, "cpi", "2025-06-01", "2026-10-18");
   t("parseBlsArchiveDates: reads MMDDYYYY from the archive links, drops future dates, de-duplicates, ignores other releases", JSON.stringify(ds) === JSON.stringify(["2025-12-10", "2026-10-14"]), JSON.stringify(ds));
+  // FRED release dates: sorted, filtered to the window, and a failure never leaks the key; then the fallback to the BLS archive
+  process.env.FRED_API_KEY = "FAKE_FRED_KEY_98765";
+  const today = new Date().toISOString().slice(0, 10);
+  const many = Array.from({ length: 30 }, (_, i) => new Date(Date.UTC(2024, i % 12, 1 + i)).toISOString().slice(0, 10));
+  handlers = [(url) => (url.includes("api.stlouisfed.org/fred/release/dates") ? new Response(JSON.stringify({ release_dates: [...many.map((d) => ({ date: d })), { date: "2999-01-01" }, { date: "1999-01-01" }, { date: "junk" }] }), { status: 200 }) : null)];
+  const fr = await D.fetchFredReleaseDates(10, "2020-01-01");
+  const frUrl = calls.filter((c) => c.url.includes("release/dates")).pop().url;
+  t("fetchFredReleaseDates: asks for the right release, drops future, ancient and malformed dates, returns ascending", /release_id=10/.test(frUrl) && fr.length === 30 && fr.every((d, i) => i === 0 || fr[i - 1] <= d) && !fr.includes("2999-01-01"), JSON.stringify(fr.slice(0, 3)));
+  handlers = [(url) => (url.includes("api.stlouisfed.org") ? new Response(JSON.stringify({ error_message: "bad key FAKE_FRED_KEY_98765" }), { status: 400 }) : null)];
+  const bad = await D.fetchFredReleaseDates(10, "2020-01-01").then(() => null, (e) => e);
+  t("fetchFredReleaseDates: a FRED failure is an error that does not contain the key or the URL", bad instanceof Error && !/FAKE_FRED_KEY|api_key|https?:/.test(bad.message), String(bad && bad.message));
+  const blsHtml = Array.from({ length: 15 }, (_, i) => `<a href="/news.release/archives/cpi_${String(1 + (i % 9)).padStart(2, "0")}1${String(1 + (i % 9))}2024.htm">x</a>`).join("") + Array.from({ length: 15 }, (_, i) => `<a href="/news.release/archives/cpi_${String(1 + (i % 12)).padStart(2, "0")}15${2020 + Math.floor(i / 12)}.htm">y</a>`).join("");
+  handlers = [(url) => (url.includes("api.stlouisfed.org") ? new Response("no", { status: 400 }) : null), (url) => (url.includes("bls.gov/bls/news-release/cpi.htm") ? new Response(blsHtml, { status: 200 }) : null)];
+  const viaBls = await D.releaseDates("cpi", "2019-01-01");
+  t("releaseDates: when FRED fails it falls back to the BLS archive page", Array.isArray(viaBls) && viaBls.length >= 12, JSON.stringify(viaBls && viaBls.length));
+  handlers = [(url) => new Response("no", { status: 500 })];
+  t("releaseDates: when neither answers it returns null (the macro test then says dates were missing)", (await D.releaseDates("jobs", "2019-01-01")) === null);
+  delete process.env.FRED_API_KEY;
   t("parseBlsArchiveDates: an unexpected page gives an empty list", D.parseBlsArchiveDates("<html>blocked</html>", "cpi", "2020-01-01", "2026-10-18").length === 0);
 }
 

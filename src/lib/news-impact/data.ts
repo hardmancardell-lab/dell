@@ -97,7 +97,13 @@ export async function fetchFredReleaseDates(releaseId: number, since: string): P
   url.searchParams.set("file_type", "json");
   url.searchParams.set("sort_order", "desc");
   url.searchParams.set("limit", "400");
-  const doc = await providerJson<{ release_dates?: { date: string }[] }>(url.toString(), {}, { provider: "FRED", path: `release ${releaseId} dates`, revalidateSeconds: 60 * 60 * 12 });
+  let doc: { release_dates?: { date: string }[] };
+  try {
+    doc = await providerJson<{ release_dates?: { date: string }[] }>(url.toString(), {}, { provider: "FRED", path: `release ${releaseId} dates`, revalidateSeconds: 60 * 60 * 12 });
+  } catch {
+    // The provider's own message can echo the request, which carries the key. Say only what failed.
+    throw new Error("FRED did not return release dates.");
+  }
   const today = new Date().toISOString().slice(0, 10);
   return (doc.release_dates ?? [])
     .map((d) => d.date)
