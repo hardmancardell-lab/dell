@@ -1,6 +1,7 @@
 "use client";
 
 import type { FundType } from "@/lib/agents/retirement/retirement-math";
+import { barPercent } from "@/lib/chart/svg-math";
 
 /**
  * Two small charts for the 401(k) plan analyzer, drawn in the app's theme
@@ -19,8 +20,10 @@ export interface CostBarRow {
 }
 
 export function CostBars({ rows }: { rows: CostBarRow[] }) {
-  if (rows.length === 0) return null;
-  const sorted = [...rows].sort((a, b) => b.pct - a.pct);
+  // Funds without a usable cost are left out rather than drawn as NaN-width bars; a zero cost draws a zero-length bar.
+  const usable = rows.filter((r) => Number.isFinite(r.pct) && r.pct >= 0);
+  if (usable.length === 0) return null;
+  const sorted = [...usable].sort((a, b) => b.pct - a.pct);
   const max = Math.max(...sorted.map((r) => r.pct), 0.0001);
   return (
     <div role="img" aria-label="Yearly cost of each fund, as a percent" className="flex flex-col gap-2">
@@ -37,7 +40,8 @@ export function CostBars({ rows }: { rows: CostBarRow[] }) {
             <div style={{ height: 8, background: "var(--ink-800)", border: "1px solid var(--line)", borderRadius: 2 }}>
               <div
                 style={{
-                  width: `${Math.max(1.5, (r.pct / max) * 100)}%`,
+                  // Bars start at zero and their length is proportional to the cost: 0% is an empty bar, not a sliver.
+                  width: `${barPercent(r.pct, max)}%`,
                   height: "100%",
                   background: isTarget ? "var(--signal)" : "var(--text-2)",
                   borderRadius: 1,
@@ -68,6 +72,8 @@ export function FeeDragChart({
 }) {
   const n = Math.min(a.length, b.length);
   if (n < 2) return null;
+  // A series with a missing or non-finite value cannot be drawn honestly: show nothing rather than NaN paths.
+  if (![...a.slice(0, n), ...b.slice(0, n)].every((v) => Number.isFinite(v))) return null;
   const W = 420;
   const H = 230;
   const L = 14;

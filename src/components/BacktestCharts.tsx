@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { fmtPct, fmtPctCompact, histogram, median, niceTicks } from "@/lib/chart/svg-math";
 
 /**
  * Visual layer for backtest results, one chart per analytical question —
@@ -56,26 +57,15 @@ const C = {
   mono: "var(--font-mono)",
 };
 
-const fmt = (v: number | null | undefined, d = 2) => (v === null || v === undefined ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`);
+// Shared with the chart-integrity test: src/lib/chart/svg-math.ts (finite-safe ticks, histogram buckets, compact labels).
+const fmt = fmtPct;
 
-function niceStep(range: number, target: number): number {
-  const raw = (range || 1) / target;
-  const p = Math.pow(10, Math.floor(Math.log10(raw)));
-  const f = raw / p;
-  return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p;
-}
-
-function niceTicks(min: number, max: number, target = 6): number[] {
-  const step = niceStep(max - min, target);
-  const out: number[] = [];
-  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-6; v += step) out.push(Number(v.toFixed(10)));
-  return out;
-}
-
-function median(xs: number[]): number {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+function EmptyChart({ what }: { what: string }) {
+  return (
+    <p className="text-xs" style={{ color: "var(--text-2)" }} role="status">
+      {what}
+    </p>
+  );
 }
 
 function ChartCard({
@@ -141,10 +131,10 @@ function HorizonPicker({ labels, value, onChange }: { labels: string[]; value: s
 
 function EdgeForest({ horizons }: { horizons: ChartHorizon[] }) {
   const [tip, setTip] = useState<string | null>(null);
-  const rows = horizons.filter((h) => h.mean !== null);
+  const rows = horizons.filter((h) => h.mean !== null && Number.isFinite(h.mean));
   const W = 420, top = 12, rowH = 38, left = 40, right = 80, axisH = 38;
   const H = top + rows.length * rowH + axisH;
-  const vals = rows.flatMap((h) => [h.ciLo ?? h.mean ?? 0, h.ciHi ?? h.mean ?? 0, 0]);
+  const vals = rows.flatMap((h) => [h.ciLo ?? h.mean ?? 0, h.ciHi ?? h.mean ?? 0, 0]).filter((v) => Number.isFinite(v));
   const lo = Math.min(...vals), hi = Math.max(...vals);
   const pad = (hi - lo) * 0.06 || 1;
   const x = (v: number) => left + ((v - (lo - pad)) / (hi - lo + 2 * pad)) * (W - left - right);
@@ -164,6 +154,9 @@ function EdgeForest({ horizons }: { horizons: ChartHorizon[] }) {
       takeaway={takeaway}
       tip={tip}
     >
+      {rows.length === 0 ? (
+        <EmptyChart what="No horizon has enough occurrences to estimate a mean." />
+      ) : (
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="Forest plot of mean forward return with confidence intervals by horizon" onMouseLeave={() => setTip(null)}>
         {ticks.map((t) => (
           <g key={t}>
@@ -195,7 +188,7 @@ function EdgeForest({ horizons }: { horizons: ChartHorizon[] }) {
               )}
               <circle cx={x(h.mean as number)} cy={y} r={h.passes ? 5.5 : 4.5} style={h.passes ? { fill: C.signal } : { fill: "var(--ink-900)", stroke: C.t2, strokeWidth: 1.6 }} />
               <text x={W - right + 10} y={y - 1} style={{ fill: C.t0, fontSize: 11, fontFamily: C.mono }}>
-                {fmt(h.mean, 2)}
+                {fmtPctCompact(h.mean, 2)}
               </text>
               <text x={W - right + 10} y={y + 11} style={{ fill: C.t2, fontSize: 9, fontFamily: C.mono }}>
                 n={h.n}
@@ -204,6 +197,7 @@ function EdgeForest({ horizons }: { horizons: ChartHorizon[] }) {
           );
         })}
       </svg>
+      )}
     </ChartCard>
   );
 }
@@ -214,7 +208,7 @@ function EdgeForest({ horizons }: { horizons: ChartHorizon[] }) {
 
 function OosDumbbell({ horizons }: { horizons: ChartHorizon[] }) {
   const [tip, setTip] = useState<string | null>(null);
-  const rows = horizons.filter((h) => h.train !== null && h.test !== null);
+  const rows = horizons.filter((h) => h.train !== null && h.test !== null && Number.isFinite(h.train) && Number.isFinite(h.test));
   const W = 420, top = 12, rowH = 38, left = 40, right = 80, axisH = 38;
   const H = top + rows.length * rowH + axisH;
   const vals = rows.flatMap((h) => [h.train as number, h.test as number, 0]);
@@ -233,6 +227,9 @@ function OosDumbbell({ horizons }: { horizons: ChartHorizon[] }) {
       takeaway={takeaway}
       tip={tip}
     >
+      {rows.length === 0 ? (
+        <EmptyChart what="No horizon has both a training and a test slice large enough to compare." />
+      ) : (
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="Paired dot chart of training and test mean return by horizon" onMouseLeave={() => setTip(null)}>
         {ticks.map((t) => (
           <g key={t}>
@@ -255,8 +252,11 @@ function OosDumbbell({ horizons }: { horizons: ChartHorizon[] }) {
               <line x1={x(h.train as number)} x2={x(h.test as number)} y1={y} y2={y} style={{ stroke: flip ? C.danger : C.lineB, strokeWidth: 2.5, strokeLinecap: "round" }} />
               <circle cx={x(h.train as number)} cy={y} r={5} style={{ fill: C.t1 }} />
               <circle cx={x(h.test as number)} cy={y} r={5} style={{ fill: C.verdict }} />
+              <text x={W - right + 10} y={y - 1} style={{ fill: C.t2, fontSize: 9, fontFamily: C.mono }}>
+                n={h.n} total
+              </text>
               {flip && (
-                <text x={W - right + 10} y={y + 4} style={{ fill: C.danger, fontSize: 10, fontFamily: C.mono }}>
+                <text x={W - right + 10} y={y + 11} style={{ fill: C.danger, fontSize: 10, fontFamily: C.mono }}>
                   sign flips
                 </text>
               )}
@@ -274,6 +274,7 @@ function OosDumbbell({ horizons }: { horizons: ChartHorizon[] }) {
           </text>
         </g>
       </svg>
+      )}
     </ChartCard>
   );
 }
@@ -284,7 +285,7 @@ function OosDumbbell({ horizons }: { horizons: ChartHorizon[] }) {
 
 function stratReturns(trades: ChartTrade[], label: string, isShort: boolean) {
   return trades
-    .filter((t) => t.returns[label] !== null && t.returns[label] !== undefined)
+    .filter((t) => typeof t.returns[label] === "number" && Number.isFinite(t.returns[label]))
     .map((t) => ({ date: t.date, r: (isShort ? -1 : 1) * (t.returns[label] as number) }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -299,16 +300,11 @@ function ReturnHistogram({ trades, labels, isShort }: { trades: ChartTrade[]; la
   let body: React.ReactNode = <p className="text-xs" style={{ color: "var(--text-2)" }}>Not enough occurrences at this horizon.</p>;
   let takeaway: string | null = null;
 
-  if (data.length >= 5) {
+  const bins = histogram(data, 5);
+  if (bins) {
     const mn = Math.min(...data), mx = Math.max(...data);
-    const k = Math.max(6, Math.min(14, Math.round(Math.sqrt(data.length))));
-    const w = niceStep(mx - mn, k);
-    const e0 = Math.floor(mn / w) * w;
-    // When every trade has the same return the range collapses to zero width and every x position becomes NaN.
-    const e1 = Math.max(Math.ceil(mx / w) * w, e0 + w);
-    const nb = Math.max(1, Math.round((e1 - e0) / w));
-    const counts = new Array(nb).fill(0);
-    for (const v of data) counts[Math.min(nb - 1, Math.floor((v - e0) / w + 1e-9))]++;
+    // Bucketing (including the all-equal case, where the range has zero width) lives in src/lib/chart/svg-math.ts.
+    const { e0, e1, w, counts } = bins;
     const mean = data.reduce((s, v) => s + v, 0) / data.length;
     const med = median(data);
     const sd = Math.sqrt(data.reduce((s, v) => s + (v - mean) ** 2, 0) / data.length);
@@ -356,6 +352,9 @@ function ReturnHistogram({ trades, labels, isShort }: { trades: ChartTrade[]; la
             </text>
           </g>
         ))}
+        <text x={left - 6} y={top - 12} textAnchor="end" style={{ fill: C.t2, fontSize: 9, fontFamily: C.mono }}>
+          trades
+        </text>
         {counts.map((c, i) => {
           const a = e0 + i * w;
           const b = a + w;
@@ -431,6 +430,7 @@ function EquityDrawdown({ trades, labels, isShort }: { trades: ChartTrade[]; lab
     let eq = 1;
     let peak = 1;
     for (const d of stratReturns(trades, label, isShort)) {
+      if (!Number.isFinite(Date.parse(d.date))) continue;
       eq *= 1 + d.r / 100;
       peak = Math.max(peak, eq);
       out.push({ date: d.date, t: Date.parse(d.date), r: d.r, cum: (eq - 1) * 100, dd: (eq / peak - 1) * 100 });
@@ -466,7 +466,7 @@ function EquityDrawdown({ trades, labels, isShort }: { trades: ChartTrade[]; lab
     const worst = series.reduce((a, b) => (b.dd < a.dd ? b : a), series[0]);
     const years = [...new Set(series.map((s) => s.date.slice(0, 4)))];
     const hv = hover !== null ? series[hover] : null;
-    takeaway = `Compounded in order: ${fmt(final.cum, 1)} total, max drawdown ${worst.dd.toFixed(1)}% (${worst.date}). Overlapping windows make this smoother than a real account would feel.`;
+    takeaway = `Compounded in order over n=${series.length} trades: ${fmt(final.cum, 1)} total, max drawdown ${worst.dd.toFixed(1)}% (${worst.date}). Overlapping windows make this smoother than a real account would feel.`;
     body = (
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -493,13 +493,13 @@ function EquityDrawdown({ trades, labels, isShort }: { trades: ChartTrade[]; lab
             </text>
           </g>
         ))}
-        <text x={left} y={eqTop - 3} style={{ fill: C.t2, fontSize: 10 }}>cumulative return</text>
+        <text x={left} y={eqTop - 3} style={{ fill: C.t2, fontSize: 10 }}>cumulative return, % (n={series.length} trades)</text>
         <path d={line} fill="none" style={{ stroke: C.signal, strokeWidth: 2, strokeLinejoin: "round" }} />
         <circle cx={x(final.t)} cy={yE(final.cum)} r={4.5} style={{ fill: C.signal, stroke: "var(--ink-900)", strokeWidth: 2 }} />
         <text x={x(final.t) - 8} y={yE(final.cum) - 8} textAnchor="end" style={{ fill: C.t0, fontSize: 11, fontFamily: C.mono }}>
           {fmt(final.cum, 1)}
         </text>
-        <text x={left} y={eqTop + eqH + gap - 8} style={{ fill: C.t2, fontSize: 10 }}>drawdown from peak</text>
+        <text x={left} y={eqTop + eqH + gap - 8} style={{ fill: C.t2, fontSize: 10 }}>drawdown from prior peak, % (its own scale, separate panel)</text>
         {dTicks.map((t) => (
           <g key={`d${t}`}>
             <line x1={left} x2={W - right} y1={yD(t)} y2={yD(t)} style={{ stroke: t === 0 ? C.lineB : C.line }} />

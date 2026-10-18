@@ -12,6 +12,8 @@ import { parseBarAdjustment, DEFAULT_BAR_ADJUSTMENT } from "../../src/lib/data/m
 import { getChartBars } from "../../src/lib/agents/trading-agent/skills/chart-bars.ts";
 import { defaultScaleMode, effectiveScaleMode, parseScaleMode, loadScaleChoice, saveScaleChoice, SCALE_MODES, SCALE_LABELS, SCALE_DESCRIPTIONS } from "../../src/lib/chart/scale.ts";
 import { equitySessionOf, filterExtendedHours, hasExtendedBars, extendedShadeRanges, countSessions } from "../../src/lib/chart/sessions.ts";
+import { finiteNumbers, niceStep, niceTicks, median, histogram, fmtPct, fmtPctCompact, fmtMoneyCompact, barPercent, zeroBasedY } from "../../src/lib/chart/svg-math.ts";
+import { withCashSlice } from "../../src/components/AllocationPieChart.tsx";
 import { withAlpha } from "../../src/lib/chart/colors.ts";
 import { TIMEFRAME_PRESETS } from "../../src/lib/agents/trading-agent/skills/timeframe-presets.ts";
 import { formatBarLabel, formatTick, zoneForProvider } from "../../src/lib/chart/timeformat.ts";
@@ -213,6 +215,67 @@ t("market-data timeframe passes all through", param(calls[0].url, "adjustment") 
   const counts = countSessions(day.map((b) => b.datetime));
   t("countSessions", counts.pre === 3 && counts.regular === 3 && counts.post === 2 && counts.closed === 0, JSON.stringify(counts));
   t("withAlpha builds rgba and rejects bad input", withAlpha("#4fe8d0", 0.5) === "rgba(79, 232, 208, 0.5)" && withAlpha("nope", 0.5) === "nope" && withAlpha("#000000", 5) === "rgba(0, 0, 0, 1)");
+}
+
+// ---------------------------------------------------------------- 5. misleading-chart rules on the hand-built charts (WP1 item 4)
+{
+  const OWNED = ["BacktestCharts.tsx", "RetirementCharts.tsx", "PhaseCharts.tsx", "IndicatorChart.tsx", "AllocationPieChart.tsx", "PriceChart.tsx"];
+  const src = Object.fromEntries(OWNED.map((f) => [f, read(`src/components/${f}`)]));
+  const code = (f: string) => src[f].replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  // R1: every bar rectangle is drawn from the zero baseline (height = y(0) - y(count)).
+  const bt = code("BacktestCharts.tsx");
+  const barRects = bt.match(/<rect[^>]*\by=\{y\([^}]*\}[^>]*>/g) ?? [];
+  t("R1 histogram bars exist and every one is anchored at y(0)", barRects.length >= 1 && barRects.every((r) => /height=\{y\(0\) - y\(/.test(r)), barRects.join(" | "));
+  t("R1 cost bars scale from zero through barPercent (no minimum sliver)", /barPercent\(r\.pct, max\)/.test(code("RetirementCharts.tsx")) && !/Math\.max\(1\.5/.test(code("RetirementCharts.tsx")));
+  t("R1 no owned recharts <Bar> chart sets a non-zero y domain", OWNED.every((f) => !/<Bar\b/.test(code(f))));
+
+  // R2: never two y axes.
+  t("R2 no dual y-axes: no yAxisId, no right-hand YAxis, at most one YAxis per file", OWNED.every((f) => !/yAxisId|orientation="right"/.test(code(f)) && (code(f).match(/<YAxis\b/g) ?? []).length <= 1));
+  t("R2 the stacked equity and drawdown panels are labelled as separate scales", /its own scale, separate panel/.test(bt));
+
+  // R3: no smoothed lines or spline paths.
+  t("R3 no smoothed recharts lines or areas", OWNED.every((f) => !/type="(monotone|natural|basis|cardinal|bump)/.test(code(f))));
+  t("R3 no spline commands in hand-built SVG paths", ["BacktestCharts.tsx", "RetirementCharts.tsx", "PhaseCharts.tsx"].every((f) => !/[ "`](C|S|Q|T)\$\{/.test(code(f))));
+
+  // R4: text alternative and sample size.
+  t("R4 every hand-built svg has role=img and an aria-label", ["BacktestCharts.tsx", "RetirementCharts.tsx", "PhaseCharts.tsx"].every((f) => [...code(f).matchAll(/<svg\b/g)].map((m) => code(f).slice(m.index, m.index + 700)).filter((tag) => /^<svg[\s\S]{0,400}?viewBox/.test(tag)).every((tag) => /^<svg[\s\S]{0,700}?role="img"/.test(tag) && /^<svg[\s\S]{0,700}?aria-label/.test(tag))));
+  t("R4 sample size is printed where a statistic is (forest n=, dumbbell n=, histogram n=, equity n=, reversion n=)", /n=\{h\.n\}/.test(bt) && /n=\{h\.n\} total/.test(bt) && /n=\{data\.length\}/.test(bt) && /n=\{series\.length\}/.test(bt) && /n=\{total\}/.test(bt));
+  t("R4 IndicatorChart states n, the unit and that its axis does not start at zero", /n=\{pts\.length\}/.test(code("IndicatorChart.tsx")) && /does not start at zero/.test(code("IndicatorChart.tsx")));
+  t("R4 empty charts say so instead of drawing an empty frame", /EmptyChart what=/.test(bt) && /role="status"/.test(code("IndicatorChart.tsx")));
+  t("R5 log axes are labelled: the price chart prints LOG SCALE / PERCENT SCALE", /LOG SCALE/.test(code("PriceChart.tsx")) && /PERCENT SCALE/.test(code("PriceChart.tsx")));
+}
+
+// pure helpers: finite, terminating, honest for empty / single / equal / NaN input
+{
+  t("niceTicks terminates and returns [] for NaN / Infinity / reversed ranges", niceTicks(NaN, 5).length === 0 && niceTicks(-Infinity, 5).length === 0 && niceTicks(0, Infinity).length === 0 && niceTicks(5, 1).length === 0);
+  t("niceTicks of a normal range has round values and covers it", (() => { const ts = niceTicks(-3.2, 8.7, 5); return ts.length >= 3 && ts[0] >= -3.2 && ts[ts.length - 1] <= 8.7 + 1e-6; })());
+  t("niceTicks of a zero-width range is finite", niceTicks(2, 2).every(Number.isFinite));
+  t("niceStep never returns 0 / NaN", [0, -4, NaN, Infinity].every((r) => { const s = niceStep(r, 5); return Number.isFinite(s) && s > 0; }));
+  t("finiteNumbers drops null, NaN, Infinity", finiteNumbers([1, null, NaN, Infinity, -Infinity, undefined, 2]).join() === "1,2");
+  t("median of empty is NaN, of odd and even sets correct", Number.isNaN(median([])) && median([3, 1, 2]) === 2 && median([4, 1, 2, 3]) === 2.5);
+
+  t("histogram: fewer than 5 finite values gives null (message path)", histogram([1, 2, 3, 4]) === null && histogram([]) === null && histogram([NaN, NaN, NaN, NaN, NaN, 1]) === null);
+  const vals = Array.from({ length: 200 }, (_, i) => Math.sin(i) * 7 + (i % 5));
+  const h = histogram(vals)!;
+  t("histogram: counts are non-negative integers that sum to n (every value in exactly one bucket)", h.counts.every((c) => Number.isInteger(c) && c >= 0) && h.counts.reduce((a, b) => a + b, 0) === 200 && h.n === 200);
+  t("histogram: buckets cover the data range", h.e0 <= Math.min(...vals) + 1e-9 && h.e1 >= Math.max(...vals) - 1e-9 && h.e1 > h.e0);
+  const same = histogram([2, 2, 2, 2, 2, 2])!;
+  t("histogram: all values equal still has a positive-width range and finite buckets", same.e1 > same.e0 && Number.isFinite(same.w) && same.counts.reduce((a, b) => a + b, 0) === 6);
+  const dirty = histogram([1, 2, 3, 4, 5, NaN, Infinity, null as any])!;
+  t("histogram: NaN and Infinity are dropped, not bucketed", dirty.n === 5 && dirty.counts.reduce((a, b) => a + b, 0) === 5);
+  t("histogram: the max value lands in the last bucket, not past it", histogram([0, 1, 2, 3, 4, 10])!.counts.at(-1)! >= 1);
+
+  t("fmtPct signs and N/A", fmtPct(1.234) === "+1.23%" && fmtPct(-0.5, 1) === "-0.5%" && fmtPct(null) === "N/A" && fmtPct(NaN) === "N/A");
+  t("fmtPctCompact keeps huge numbers inside a narrow margin (no clipping)", fmtPctCompact(1000000) === "+1.0M%" && fmtPctCompact(-12345) === "-12.3k%" && fmtPctCompact(5.5) === "+5.50%" && fmtPctCompact(1e12).length <= 12 && fmtPctCompact(Infinity) === "N/A");
+  t("fmtMoneyCompact: small amounts keep their size, negatives signed", fmtMoneyCompact(400_000) === "$400K" && fmtMoneyCompact(2_500_000) === "$2.5M" && fmtMoneyCompact(1.5e9) === "$1.5B" && fmtMoneyCompact(-3.2e9) === "-$3.2B" && fmtMoneyCompact(0) === "$0" && fmtMoneyCompact(950) === "$950" && fmtMoneyCompact(NaN) === "N/A");
+  t("barPercent: zero is zero, largest is 100, junk is 0", barPercent(0, 5) === 0 && barPercent(5, 5) === 100 && barPercent(2.5, 5) === 50 && barPercent(NaN, 5) === 0 && barPercent(-1, 5) === 0 && barPercent(1, 0) === 0 && barPercent(9, 5) === 100);
+  t("zeroBasedY puts zero at the bottom and max at the top", zeroBasedY(0, 10, 20, 120) === 120 && zeroBasedY(10, 10, 20, 120) === 20 && zeroBasedY(5, 10, 20, 120) === 70 && zeroBasedY(-3, 10, 20, 120) === 120 && zeroBasedY(NaN, 10, 20, 120) === 120);
+
+  // pie: the cash slice and percentages
+  const slices = withCashSlice([{ label: "A", value: 600, percent: 0 }, { label: "B", value: 300, percent: 0 }] as any, 100, 1000);
+  t("pie: slices with cash sum to 100%", Math.abs(slices.reduce((a: number, x: any) => a + x.percent, 0) - 100) < 1e-9 && slices.length === 3);
+  t("pie: zero grand total gives 0% not NaN", withCashSlice([{ label: "A", value: 0, percent: 0 }] as any, 0, 0).every((x: any) => x.percent === 0));
 }
 
 summary();

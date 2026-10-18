@@ -63,6 +63,7 @@ export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
   }
 
   if (!data) return null;
+  const pts = data.points ?? [];
 
   return (
     <div className="jarvis jv-card">
@@ -73,6 +74,9 @@ export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
       </div>
       <p className="text-xs mb-4" style={{ color: "var(--text-2)" }}>{data.meta.classificationNote}</p>
 
+      {pts.length === 0 ? (
+        <p className="text-xs" style={{ color: "var(--text-2)" }} role="status">No data points returned for this indicator.</p>
+      ) : (
       <ResponsiveContainer width="100%" height={180}>
         <LineChart data={data.points}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
@@ -83,12 +87,16 @@ export function IndicatorChart({ indicatorId }: { indicatorId: string }) {
             labelStyle={{ color: "var(--text-2)" }}
             itemStyle={{ color: "var(--text-0)" }}
           />
-          <Line type="monotone" dataKey="value" stroke="var(--signal)" dot={false} strokeWidth={2} />
+          {/* Straight segments between the real observations: a smoothed curve would draw values that were never published. */}
+          <Line type="linear" dataKey="value" stroke="var(--signal)" dot={pts.length < 3} strokeWidth={2} />
         </LineChart>
       </ResponsiveContainer>
+      )}
 
       <p className="text-sm mt-3" style={{ color: "var(--text-1)" }}>{data.meta.description}</p>
-      <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>Unit: {data.meta.unit}</p>
+      <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>
+        Unit: {data.meta.unit}. n={pts.length} observations{pts.length > 0 ? `, ${pts[0].date} to ${pts[pts.length - 1].date}` : ""}. The vertical axis is scaled to the data range and does not start at zero.
+      </p>
     </div>
   );
 }

@@ -4,17 +4,15 @@ import type { ChartPoint, Phase } from "@/lib/agents/research-agent/skills/lifec
 import { PHASE_NAMES } from "@/lib/agents/research-agent/skills/lifecycle-phase";
 import type { Rating, RatingBands } from "@/lib/agents/research-agent/skills/valuation-rating";
 import { RATING_ORDER } from "@/lib/agents/research-agent/skills/valuation-rating";
+import { fmtMoneyCompact } from "@/lib/chart/svg-math";
 
 /**
  * Charts for the business-phase page, drawn in the app's theme variables.
  * Revenue and the profit lines share one axis so their gaps are honest.
  */
 
-const fmtB = (v: number) => {
-  const a = Math.abs(v);
-  const s = a >= 1e12 ? `${(a / 1e12).toFixed(1)}T` : a >= 1e9 ? `${(a / 1e9).toFixed(a >= 1e11 ? 0 : 1)}B` : `${(a / 1e6).toFixed(0)}M`;
-  return `${v < 0 ? "-" : ""}$${s}`;
-};
+// Small amounts keep their size ("$400K", not "$0M"); see fmtMoneyCompact in src/lib/chart/svg-math.ts.
+const fmtB = fmtMoneyCompact;
 
 /** Round-number tick positions between lo and hi (inclusive of the nearest nice bounds). */
 function niceTicks(lo: number, hi: number, count = 4): number[] {
@@ -48,7 +46,7 @@ export function RevenueProfitChart({ points, visible, emphasize }: { points: Cha
   const T = 16;
   const B = 34;
   const shown = SERIES.filter((s) => visible[s.key]);
-  const vals = points.flatMap((p) => shown.map((s) => p[s.key]).filter((v): v is number => v !== null));
+  const vals = points.flatMap((p) => shown.map((s) => p[s.key]).filter((v): v is number => v !== null && Number.isFinite(v)));
   const hi = Math.max(...vals, 1);
   const lo = Math.min(0, ...vals);
   const ticks = niceTicks(lo, hi);
@@ -60,8 +58,8 @@ export function RevenueProfitChart({ points, visible, emphasize }: { points: Cha
     let d = "";
     points.forEach((p, i) => {
       const v = p[key];
-      if (v === null) return;
-      d += `${d === "" || points[i - 1]?.[key] == null ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
+      if (v === null || !Number.isFinite(v)) return;
+      d += `${d === "" || points[i - 1]?.[key] == null || !Number.isFinite(points[i - 1]?.[key]) ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
     });
     return d.trim();
   };
@@ -69,7 +67,7 @@ export function RevenueProfitChart({ points, visible, emphasize }: { points: Cha
   const lastIdx = points.length - 1;
   const ends = shown
     .map((s) => ({ s, v: points[lastIdx][s.key] }))
-    .filter((e): e is { s: (typeof SERIES)[number]; v: number } => e.v !== null)
+    .filter((e): e is { s: (typeof SERIES)[number]; v: number } => e.v !== null && Number.isFinite(e.v))
     .sort((a, b) => y(a.v) - y(b.v));
   const labelY: number[] = [];
   ends.forEach((e, i) => {
@@ -96,7 +94,7 @@ export function RevenueProfitChart({ points, visible, emphasize }: { points: Cha
       {shown.map((s) =>
         points.map((p, i) => {
           const v = p[s.key];
-          if (v === null) return null;
+          if (v === null || !Number.isFinite(v)) return null;
           return (
             <circle key={`${s.key}${i}`} cx={x(i)} cy={y(v)} r={p.isTtm ? 4.5 : 3} fill={p.isTtm ? "var(--ink-900)" : s.color} stroke={s.color} strokeWidth={p.isTtm ? 2 : 0}>
               <title>{`${s.label}, ${p.label}${p.isTtm ? " (last twelve months)" : ""}: ${fmtB(v)}`}</title>
@@ -225,7 +223,7 @@ export function RatingGauge({ premiumPct, bands, headline }: { premiumPct: numbe
 // ------------------------------------------------------------ value-by-growth
 
 export function ValueCurveChart({ curve, price, impliedGrowth }: { curve: { growthPct: number; valuePerShare: number | null }[]; price: number; impliedGrowth: number | null }) {
-  const pts = curve.filter((c): c is { growthPct: number; valuePerShare: number } => c.valuePerShare !== null);
+  const pts = curve.filter((c): c is { growthPct: number; valuePerShare: number } => c.valuePerShare !== null && Number.isFinite(c.valuePerShare) && Number.isFinite(c.growthPct));
   if (pts.length < 2) return null;
   const W = 640;
   const H = 260;
