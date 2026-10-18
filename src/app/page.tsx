@@ -87,7 +87,7 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { HelpMenu } from "@/components/HelpMenu";
 import { FayeChatWidget } from "@/components/FayeChatWidget";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
-import { StudiesTab } from "@/components/navigation/lazy";
+import { AssetGroupWorkspace, StudiesTab } from "@/components/navigation/lazy";
 import { PaletteHost } from "@/components/navigation/PaletteHost";
 
 // The navigation surfaces (Study Library, group workspace) use the jarvis tokens, and the Trading Agent's page is not
@@ -589,133 +589,9 @@ export default async function Home() {
                             Trading Agent &middot; Equities
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Equities</h1>
-                          <Tabs
-                            size="tertiary"
-                            tabs={[
-                              {
-                                id: "dashboard",
-                                label: "Dashboard",
-                                content: <TradingDashboardTab filterAssetClass="equity" />,
-                              },
-                              { id: "charts", label: "Charts", content: <EquityChartsTab /> },
-                              {
-                                id: "backtest",
-                                label: "Backtest",
-                                content: <HistoricalBacktestTab key="equities-backtest" defaultTicker="AAPL" assetClass="equity" />,
-                              },
-                              {
-                                id: "calendar-effects",
-                                label: "Calendar Effects",
-                                content: <CalendarEffectsTab key="equities-calendar-effects" defaultTicker="AAPL" assetClass="equity" />,
-                              },
-                              {
-                                id: "vwap-reversion-backtest",
-                                label: "VWAP Reversion Backtest",
-                                content: <VwapReversionBacktestTab key="equities-vwap-reversion-backtest" defaultTicker="AAPL" />,
-                              },
-                              {
-                                id: "vwap-band-study",
-                                label: "VWAP Band Study",
-                                content: <VwapBandStudyTab key="equities-vwap-band-study" defaultTicker="SPY" />,
-                              },
-                              {
-                                id: "volume-profile",
-                                label: "Volume Profile",
-                                content: <AnchoredVolumeProfileTab key="equities-volume-profile" defaultTicker="SPY" />,
-                              },
-                              {
-                                id: "premarket-gaps",
-                                label: "Premarket Gaps",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <PremarketGapHodLodTab key="equities-premarket-gaps" defaultTicker="AAPL" />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "gap-calendar-study",
-                                label: "Gap & Calendar Study",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <GapCalendarStudyTab key="equities-gap-calendar-study" defaultTicker="AAPL" />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "orb",
-                                label: "ORB Strategy",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <OrbStrategyTab />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "quad-witching",
-                                label: "Quad Witching Study",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <QuadWitchingStudyTab />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "witching-range-containment",
-                                label: "Witching Range Containment",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <WitchingRangeContainmentTab />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "week-start-momentum",
-                                label: "Week Start Momentum",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <WeekStartMomentumTab />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "overnight-intraday",
-                                label: "Overnight vs Intraday",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <OvernightIntradayPatternTab />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "post-big-day",
-                                label: "Post-Big-Day Study",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <PostBigDayStudyTab />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "low-of-day-timing",
-                                label: "Low-of-Day Timing",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <LowOfDayTimingTab />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "treasury-buyback-anomaly",
-                                label: "Treasury Buyback Anomaly",
-                                content: <BuybackAnomalyTab />,
-                              },
-                              {
-                                id: "corporate-buyback-offering",
-                                label: "Corporate Buybacks & Offerings",
-                                content: <CorporateBuybackOfferingTab />,
-                              },
-                            ]}
-                          />
+                          <NavScope>
+                            <AssetGroupWorkspace groupId="equities" />
+                          </NavScope>
                         </div>
                       ),
                     },
