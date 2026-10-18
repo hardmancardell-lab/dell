@@ -1,41 +1,109 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
+import { buildNavQuery, navReducer, parseNavQuery, type NavState } from "./nav-state";
+import { resolveStudyRoute, resolveTickerRoute } from "./study-routes";
+import { groupById } from "./trading-structure";
+import type { AssetClass } from "@/lib/agents/trading-agent/types";
 
+// Kept for existing imports: the Assistant and the onboarding wizard describe a target as a primary id plus an optional secondary id.
 export interface NavTarget {
   primaryId: string;
   secondaryId?: string;
 }
 
 interface AppNavigationContextValue {
-  pending: NavTarget | null;
+  /** What is on screen, in the same shape as the URL (see nav-state.ts). Tabs with a `navLevel` read their active tab from here. */
+  state: NavState;
+  /** The asset class of the Trading Agent group the user was last in, so the Study Library can default to the current context. */
+  lastAssetClass: AssetClass | null;
+  /** Existing API (Assistant, onboarding wizard): go to a primary tab and optionally one of its secondary tabs. */
   navigateTo: (primaryId: string, secondaryId?: string) => void;
-  // Called by a Tabs instance once it has applied its matching part of
-  // `pending`. "primary" clears pending only if there's no secondaryId left
-  // to deliver (otherwise the secondary Tabs instance, which mounts after
-  // the primary tab switches, still needs it); "secondary" always clears.
-  consume: (matched: "primary" | "secondary") => void;
+  /** Replace the whole state, for example with the result of resolveStudyRoute. */
+  navigate: (next: NavState) => void;
+  /** Change part of the current state (open or close a study, set a ticker) without leaving the current tab. */
+  patch: (patch: Partial<NavState>) => void;
+  select: (level: "primary" | "secondary" | "tertiary", id: string, parentId?: string) => void;
+  /** Open a study by registry id in its asset-class group (or the given class). Returns false when the id is unknown. */
+  openStudy: (studyId: string, opts?: { assetClass?: AssetClass; ticker?: string }) => boolean;
+  /** Open a ticker's chart in its asset-class group. */
+  openTicker: (symbol: string, assetClass?: AssetClass) => boolean;
+  /** Build a shareable same-page link (path plus query) for a state. */
+  hrefFor: (next: NavState) => string;
 }
 
 const AppNavigationContext = createContext<AppNavigationContextValue | null>(null);
 
-export function AppNavigationProvider({ children }: { children: ReactNode }) {
-  const [pending, setPending] = useState<NavTarget | null>(null);
+const EMPTY: NavState = {};
+
+export function AppNavigationProvider({ children, syncUrl = true }: { children: ReactNode; syncUrl?: boolean }) {
+  const [state, dispatch] = useReducer(navReducer, EMPTY);
+  const [lastAssetClass, setLastAssetClass] = useState<AssetClass | null>(null);
+  // False until the URL has been read on the client. The server and the first client render both show the default tabs
+  // (so hydration matches); the URL is applied right after, and nothing is written back to it until then.
+  const [ready, setReady] = useState(!syncUrl);
+  const pathRef = useRef("");
+
+  // Read the URL once, then follow Back and Forward.
+  useEffect(() => {
+    if (!syncUrl) return;
+    pathRef.current = window.location.pathname;
+    dispatch({ type: "hydrate", state: parseNavQuery(window.location.search) });
+    setReady(true);
+    const onPop = () => dispatch({ type: "hydrate", state: parseNavQuery(window.location.search) });
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [syncUrl]);
+
+  // Write state changes to the URL (a history entry each, so Back works). Skipped when the URL already says the same thing.
+  useEffect(() => {
+    if (!syncUrl || !ready) return;
+    const wanted = buildNavQuery(state);
+    const current = buildNavQuery(parseNavQuery(window.location.search));
+    if (wanted === current) return;
+    try {
+      window.history.pushState(null, "", wanted ? `${pathRef.current || window.location.pathname}?${wanted}` : pathRef.current || window.location.pathname);
+    } catch {
+      // History API blocked (sandboxed frame): navigation still works, it just is not addressable.
+    }
+  }, [state, ready, syncUrl]);
+
+  useEffect(() => {
+    const group = state.primaryId === "trading" ? groupById(state.secondaryId) : undefined;
+    if (group) setLastAssetClass(group.assetClass);
+    else if (state.assetClass && state.secondaryId === "studies") setLastAssetClass(state.assetClass as AssetClass);
+  }, [state]);
 
   const navigateTo = useCallback((primaryId: string, secondaryId?: string) => {
-    setPending({ primaryId, secondaryId });
+    dispatch({ type: "navigate", state: secondaryId ? { primaryId, secondaryId } : { primaryId } });
+  }, []);
+  const navigate = useCallback((next: NavState) => dispatch({ type: "navigate", state: next }), []);
+  const patch = useCallback((p: Partial<NavState>) => dispatch({ type: "patch", patch: p }), []);
+  const select = useCallback((level: "primary" | "secondary" | "tertiary", id: string, parentId?: string) => {
+    if (level === "primary") dispatch({ type: "select", level, id });
+    else dispatch({ type: "select", level, id, parentId: parentId ?? "" });
+  }, []);
+  const openStudy = useCallback((studyId: string, opts?: { assetClass?: AssetClass; ticker?: string }) => {
+    const route = resolveStudyRoute(studyId, opts?.assetClass, opts?.ticker);
+    if (!route) return false;
+    dispatch({ type: "navigate", state: route });
+    return true;
+  }, []);
+  const openTicker = useCallback((symbol: string, assetClass?: AssetClass) => {
+    const route = resolveTickerRoute(symbol, assetClass);
+    if (!route) return false;
+    dispatch({ type: "navigate", state: route });
+    return true;
+  }, []);
+  const hrefFor = useCallback((next: NavState) => {
+    const q = buildNavQuery(next);
+    return q ? `?${q}` : "?";
   }, []);
 
-  const consume = useCallback((matched: "primary" | "secondary") => {
-    setPending((current) => {
-      if (!current) return current;
-      if (matched === "secondary") return null;
-      if (matched === "primary" && !current.secondaryId) return null;
-      return current;
-    });
-  }, []);
-
-  const value = useMemo(() => ({ pending, navigateTo, consume }), [pending, navigateTo, consume]);
+  const value = useMemo<AppNavigationContextValue>(
+    () => ({ state, lastAssetClass, navigateTo, navigate, patch, select, openStudy, openTicker, hrefFor }),
+    [state, lastAssetClass, navigateTo, navigate, patch, select, openStudy, openTicker, hrefFor]
+  );
 
   return <AppNavigationContext.Provider value={value}>{children}</AppNavigationContext.Provider>;
 }

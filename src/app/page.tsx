@@ -87,6 +87,17 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { HelpMenu } from "@/components/HelpMenu";
 import { FayeChatWidget } from "@/components/FayeChatWidget";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
+import { StudiesTab } from "@/components/navigation/lazy";
+
+// The navigation surfaces (Study Library, group workspace) use the jarvis tokens, and the Trading Agent's page is not
+// inside a jarvis island, so they render inside this transparent one. It lives in page.tsx, which already opens islands.
+function NavScope({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="jarvis" style={{ padding: 0, background: "none", backgroundImage: "none", borderRadius: 0 }}>
+      {children}
+    </div>
+  );
+}
 
 function ConditionBadge({ text }: { text: string }) {
   return <span className="jv-badge c-neutral">{text}</span>;
@@ -427,6 +438,8 @@ export default async function Home() {
                   </div>
                   <Tabs
                     size="secondary"
+                    navLevel="secondary"
+                    navParentId="top-down"
                     tabs={[
                     {
                       id: "macro",
@@ -540,11 +553,28 @@ export default async function Home() {
                   size="secondary"
                   navLevel="secondary"
                   navParentId="trading"
+                  mobileDropdown
+                  ariaLabel="Trading sections"
                   tabs={[
                     {
                       id: "guided-signals",
                       label: "Guided Signals",
                       content: <GuidedTradeSignalsTab />,
+                    },
+                    {
+                      id: "studies",
+                      label: "Studies",
+                      content: (
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">
+                            Trading Agent &middot; Studies
+                          </div>
+                          <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Studies</h1>
+                          <NavScope>
+                            <StudiesTab />
+                          </NavScope>
+                        </div>
+                      ),
                     },
                     {
                       id: "equities",
@@ -1104,6 +1134,8 @@ export default async function Home() {
                   <Tabs
                     size="secondary"
                     mobileDropdown
+                    navLevel="secondary"
+                    navParentId="portfolio"
                     tabs={[
                       { id: "dashboard", label: "Dashboard", content: <PortfolioDashboardTab /> },
                       { id: "traditional", label: "Traditional", content: <TraditionalPortfolioTab /> },

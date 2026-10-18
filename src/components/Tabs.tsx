@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { useAppNavigationOptional } from "@/lib/navigation/app-navigation";
 
@@ -38,21 +38,27 @@ export function Tabs({
   // the primary agent switcher, a hidden-by-default dropdown made it
   // non-obvious that other agents existed at all, so it defaults off.
   mobileDropdown?: boolean;
-  // Opt-in, additive: when set, this instance also reacts to
-  // AppNavigationProvider's `pending` target (if one is in scope) and
-  // switches its own active tab to match. "primary" listens for
-  // pending.primaryId; "secondary" listens for pending.secondaryId, but
-  // only when pending.primaryId === navParentId (so e.g. Trading Agent's
-  // secondary Tabs doesn't react to a target meant for a different primary
-  // tab). Omitted everywhere except the 2 instances the Assistant routes
-  // into — every other call site is unaffected.
-  navLevel?: "primary" | "secondary";
+  // Opt-in: when set (and an AppNavigationProvider is in scope), the active
+  // tab is read from the provider's navigation state and clicks write back to
+  // it, which is what makes the tab addressable by URL (reload, Back/Forward,
+  // shared links) and by navigateTo (Assistant, onboarding wizard).
+  // "primary" uses state.primaryId; "secondary" uses state.secondaryId when
+  // state.primaryId === navParentId; "tertiary" uses state.tab when
+  // state.secondaryId === navParentId (an asset-class group's own tab row).
+  // Without a navLevel, or outside a provider, the tabs keep their own state.
+  navLevel?: "primary" | "secondary" | "tertiary";
   navParentId?: string;
 }) {
-  const [active, setActive] = useState(tabs[0]?.id);
-  const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
+  const [localActive, setLocalActive] = useState(tabs[0]?.id);
   const { track } = useTrackEvent();
   const nav = useAppNavigationOptional();
+  const navControlled = Boolean(nav && navLevel);
+  let navActive: string | undefined;
+  if (nav && navLevel === "primary") navActive = nav.state.primaryId;
+  else if (nav && navLevel === "secondary") navActive = nav.state.primaryId === navParentId ? nav.state.secondaryId : undefined;
+  else if (nav && navLevel === "tertiary") navActive = nav.state.secondaryId === navParentId ? nav.state.tab : undefined;
+  const active = navControlled ? navActive : localActive;
+  const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
   const uid = useId();
   const btnRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const listLabel = ariaLabel ?? (size === "primary" ? "Agents" : size === "secondary" ? "Sections" : "Views");
@@ -98,26 +104,10 @@ export function Tabs({
   ) : null;
 
   function selectTab(id: string, label: string) {
-    setActive(id);
+    if (nav && navLevel) nav.select(navLevel, id, navParentId);
+    else setLocalActive(id);
     track("tab_view", { tab: label, metadata: { level: size, tabId: id } });
   }
-
-  useEffect(() => {
-    if (!nav || !navLevel) return;
-    const pending = nav.pending;
-    if (!pending) return;
-    if (navLevel === "primary") {
-      setActive(pending.primaryId);
-      if (!pending.secondaryId) nav.consume("primary");
-    } else if (navLevel === "secondary" && pending.primaryId === navParentId && pending.secondaryId) {
-      setActive(pending.secondaryId);
-      nav.consume("secondary");
-    }
-    // Only re-run when the pending target itself changes — nav/navLevel/
-    // navParentId are stable per instance (nav's identity is memoized by
-    // AppNavigationProvider).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nav?.pending]);
 
   if (size === "tertiary") {
     return (

@@ -143,7 +143,7 @@ const pageIds = (prefix: string) => current.filter((r) => r.path.startsWith(pref
 t("primary tabs in structure match page.tsx", JSON.stringify(current.filter((r) => !r.path.includes("/")).map((r) => r.path)) === JSON.stringify(PRIMARY_TABS.map((p) => p.id)), JSON.stringify(current.filter((r) => !r.path.includes("/")).map((r) => r.path)));
 for (const agent of Object.keys(SECONDARY_TABS)) {
   const inPage = pageIds(agent);
-  const expected = SECONDARY_TABS[agent].map((s) => s.id).filter((id) => id !== "studies" || pageSource.includes("<StudiesTab"));
+  const expected = SECONDARY_TABS[agent].map((s) => s.id);
   t(`${agent}: secondary tabs in structure match page.tsx`, JSON.stringify(inPage) === JSON.stringify(expected), `page: ${inPage.join(",")}\n  structure: ${expected.join(",")}`);
   t(`${agent}: default secondary tab is the first one in page.tsx`, inPage[0] === DEFAULT_SECONDARY[agent], `${inPage[0]} vs ${DEFAULT_SECONDARY[agent]}`);
 }
