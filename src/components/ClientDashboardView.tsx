@@ -10,15 +10,13 @@ import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
 import type { AssetClass, PortfolioSummary, RealizedSale } from "@/lib/agents/trading-agent/types";
 import type { WashSaleFlag } from "@/lib/agents/trading-agent/skills/wash-sale-check";
 
-// Loaded only when the client opens the Research tab, so the portfolio view stays as light as before.
+// Loaded after the portfolio itself, so the figures above are not held up by the research code.
 const ClientResearchView = dynamic(() => import("./ClientResearchView").then((m) => m.ClientResearchView), {
   ssr: false,
   loading: () => <p className="text-xs" style={{ color: "var(--text-2)" }}>Loading research…</p>,
 });
 
 const ClientNewsPanel = dynamic(() => import("./ClientNewsPanel").then((m) => m.ClientNewsPanel), { ssr: false });
-
-type ClientView = "portfolio" | "research";
 
 function fmtUsd(v: number | null): string {
   return v !== null ? v.toLocaleString("en-US", { style: "currency", currency: "USD" }) : "N/A";
@@ -60,14 +58,8 @@ export function ClientDashboardView({ slug }: { slug: string }) {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chartSymbol, setChartSymbol] = useState<{ symbol: string; assetClass: AssetClass } | null>(null);
-  const [view, setView] = useState<ClientView>("portfolio");
-  // Research stays mounted after the first visit, so switching tabs does not refetch or lose the open sections.
-  const [researchOpened, setResearchOpened] = useState(false);
-  const sessionExpired = useCallback(() => {
-    setResearchOpened(false);
-    setView("portfolio");
-    setState("needs-passcode");
-  }, []);
+  // A research request answered 401 (the session ended or the passcode changed): ask for the passcode again.
+  const sessionExpired = useCallback(() => setState("needs-passcode"), []);
 
   async function loadDashboard() {
     try {
@@ -182,27 +174,6 @@ export function ClientDashboardView({ slug }: { slug: string }) {
           <div className="text-xs uppercase tracking-wide" style={{ color: "var(--text-2)" }}>Portfolio Dashboard</div>
           <h1 className="text-2xl font-semibold mt-1" style={{ color: "var(--text-0)" }}>{clientName}</h1>
         </div>
-
-        <div role="tablist" aria-label="Dashboard sections" className="flex gap-2">
-          {(["portfolio", "research"] as const).map((v) => (
-            <button
-              key={v}
-              role="tab"
-              id={`client-tab-${v}`}
-              aria-selected={view === v}
-              aria-controls={`client-panel-${v}`}
-              onClick={() => {
-                setView(v);
-                if (v === "research") setResearchOpened(true);
-              }}
-              className={view === v ? "jv-btn" : "jv-btn-outline"}
-            >
-              {v === "portfolio" ? "Portfolio" : "Research"}
-            </button>
-          ))}
-        </div>
-
-        <div role="tabpanel" id="client-panel-portfolio" aria-labelledby="client-tab-portfolio" hidden={view !== "portfolio"} className="flex flex-col gap-8">
 
         <div className="jv-card" style={{ borderColor: "var(--signal-dim)" }}>
           <div className="text-xs" style={{ color: "var(--signal)" }}>
@@ -319,13 +290,12 @@ export function ClientDashboardView({ slug }: { slug: string }) {
         )}
 
         <RealizedPnlPanel sales={sales} totalRealizedPnl={totalRealizedPnl} washSaleFlags={washSaleFlags} />
-        </div>
 
-        <div role="tabpanel" id="client-panel-research" aria-labelledby="client-tab-research" hidden={view !== "research"} className="flex flex-col gap-10">
-          {researchOpened && <ClientResearchView slug={slug} onSessionExpired={sessionExpired} />}
-          {/* News on the client's holdings (the News agent's panel). Inside this panel so it only loads when Research is opened. */}
-          {researchOpened && <ClientNewsPanel slug={slug} />}
-        </div>
+        {/* Research: a section of the Portfolio view, not a separate tab. It hides itself when the owner switches it off (CLIENT_RESEARCH_ENABLED=false). */}
+        <ClientResearchView slug={slug} onSessionExpired={sessionExpired} />
+
+        {/* News on the client's holdings (the News agent's panel), directly under the research. */}
+        <ClientNewsPanel slug={slug} />
 
         <p className="text-xs pt-6" style={{ color: "var(--text-2)", borderTop: "1px solid var(--line)" }}>
           Real market data, no fabricated figures. This is a portfolio snapshot, not investment advice.

@@ -7,6 +7,7 @@
 //   SUPABASE_URL=http://127.0.0.1:4010 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:4010 SUPABASE_SERVICE_ROLE_KEY=stub \
 //   ACCESS_COOKIE_KEY=local-test-only SITE_ACCESS_PASSWORD= npm run dev
 //
+// The test clients start with the OLD unsalted hash on purpose, so a first sign-in shows the upgrade to the salted hash.
 // TEST CLIENT (fiction, not a person): open /client/test-research-client and use the passcode below.
 export const TEST_SLUG = "test-research-client";
 export const TEST_PASSCODE = "research-demo-0000"; // test value for this stub only; never a real passcode
@@ -57,6 +58,18 @@ export function startStub(port = 4010) {
     const send = (body, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
     const t = url.pathname.replace("/rest/v1/", "");
     const eq = (k) => (url.searchParams.get(k) ?? "").replace(/^eq\./, "");
+    if (req.method === "PATCH" && t === "advisor_clients") {
+      // Compare-and-set like PostgREST: the passcode hash upgrade only applies if the stored hash is still the old one.
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        const row = clients.find((c) => c.slug === eq("slug") && (!url.searchParams.has("passcode_hash") || c.passcode_hash === eq("passcode_hash")));
+        if (!row) return send([]);
+        Object.assign(row, JSON.parse(raw || "{}"));
+        send([row]);
+      });
+      return;
+    }
     if (t === "advisor_clients") return send(url.searchParams.has("slug") ? clients.filter((c) => c.slug === eq("slug")) : clients);
     if (t === "advisor_client_holdings") return send(holdings.filter((x) => x.client_id === eq("client_id")));
     if (t === "advisor_client_sales" || t === "advisor_client_realized_pnl") return send([]);

@@ -285,7 +285,11 @@ test("rate limit runs before the database lookup, so junk traffic from one addre
 test("kill switch: CLIENT_RESEARCH_ENABLED=false turns every route off with 503 before any work", async () => {
   process.env.CLIENT_RESEARCH_ENABLED = "false";
   dbCalls = 0;
-  for (const [name, call] of routes) assert.equal((await call("slugAAAA1111", ckA)).status, 503, name);
+  for (const [name, call] of routes) {
+    const res = await call("slugAAAA1111", ckA);
+    assert.equal(res.status, 503, name);
+    assert.equal((await res.json()).disabled, true, "the page uses this flag to hide the whole section");
+  }
   assert.equal(dbCalls, 0);
   delete process.env.CLIENT_RESEARCH_ENABLED;
 });
@@ -488,4 +492,47 @@ test("clientWords: price words become neutral, 'this page' becomes 'our', senten
   assert.deepEqual(card.valuation.otherThings.map((o: any) => o.title), ["Margins above their own average"], "duplicate and 'you' checks are not listed");
   assert.match(card.valuation.otherThings[0].detail, /lower priced than it is/);
   assert.match(card.valuation.otherThings[0].detail, /30\.0x instead of 20\.0x/);
+});
+
+test("track record text: always states the sample size; none graded and few graded are said plainly; no percentages from a handful", () => {
+  const base = { logged: 0, graded: 0, regimeRight: 0, regimeWrong: 0, pathRight: 0, pathWrong: 0 };
+  const none = M.trackRecordText({ ...base, logged: 2 });
+  assert.match(none, /2 outlook calls, and none has been graded yet/);
+  assert.match(none, /untested/);
+  const few = M.trackRecordText({ logged: 4, graded: 3, regimeRight: 2, regimeWrong: 1, pathRight: 1, pathWrong: 2 });
+  assert.match(few, /graded only 3/);
+  assert.match(few, /2 of 3 graded were right/);
+  assert.match(few, /too few to say/);
+  assert.ok(!/%/.test(few), "no percentage from three calls");
+  const one = M.trackRecordText({ ...base, logged: 1 });
+  assert.match(one, /1 outlook call,/);
+  const many = M.trackRecordText({ logged: 14, graded: 12, regimeRight: 9, regimeWrong: 3, pathRight: 6, pathWrong: 6 });
+  assert.match(many, /graded 12/);
+  assert.match(many, /9 of 12/);
+  assert.doesNotMatch(many, /too few/);
+  assert.match(many, /do not promise future ones/);
+  assert.ok(RL.readingStats([none, few, many].join(" ")).fk <= 8.0, "reads at grade 8 or lower");
+});
+
+test("ClientResearchView source: the model-written rate path is labelled as a model estimate with an as-of date and not-advice wording", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/components/ClientResearchView.tsx", import.meta.url), "utf8");
+  assert.match(src, /Model estimate/);
+  assert.match(src, /Our model&rsquo;s estimate of the rate path/);
+  assert.match(src, /It is not a promise, it can be wrong, and it is not advice/);
+  assert.match(src, /Model estimate as of \{o\.asOfDate\}/);
+  assert.ok(!/Our own estimate of the path/.test(src), "the old unlabelled wording is gone");
+});
+
+test("ClientDashboardView source: Research is a section of the Portfolio view (no tab), the News panel sits under it, kill switch hides the section", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/components/ClientDashboardView.tsx", import.meta.url), "utf8");
+  assert.ok(!/role="tab/.test(src) && !/role="tablist"/.test(src), "no tabs");
+  const iPnl = src.indexOf("<RealizedPnlPanel");
+  const iRes = src.indexOf("<ClientResearchView");
+  const iNews = src.indexOf("<ClientNewsPanel");
+  const iFoot = src.indexOf("not investment advice");
+  assert.ok(iPnl > 0 && iPnl < iRes && iRes < iNews && iNews < iFoot, "order: portfolio, research, news, footer");
+  const comp = readFileSync(new URL("../src/components/ClientResearchView.tsx", import.meta.url), "utf8");
+  assert.match(comp, /index\.state === "disabled"\) return null/);
 });

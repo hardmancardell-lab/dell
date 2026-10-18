@@ -47,7 +47,7 @@ function readCookie(request: Request, name: string): string | undefined {
 export type ClientAccess = { ok: true; client: AdvisorClient & { passcodeHash: string } } | { ok: false; response: Response };
 
 export async function authorizeClient(request: Request, slug: string): Promise<ClientAccess> {
-  if (!clientResearchEnabled()) return { ok: false, response: jsonResponse({ error: "Research is switched off right now." }, 503) };
+  if (!clientResearchEnabled()) return { ok: false, response: jsonResponse({ error: "Research is switched off right now.", disabled: true }, 503) };
   if (!isValidId(slug)) return { ok: false, response: jsonResponse({ error: "Client not found." }, 404) };
 
   const ip = clientIp(request);

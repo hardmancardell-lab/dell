@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ResearchNotice } from "./ResearchNotice";
-import { holdingMeaning } from "@/lib/client-research/meaning";
+import { holdingMeaning, trackRecordText } from "@/lib/client-research/meaning";
 import type {
   CatalystView,
   CryptoRegimeView,
@@ -13,7 +13,6 @@ import type {
   ResearchEnvironment,
   ResearchHoldingRef,
   ResearchIndex,
-  ScorecardSummary,
 } from "@/lib/client-research/types";
 
 /**
@@ -24,7 +23,7 @@ import type {
  * shows where it came from and as of when; a missing number is shown as missing, never as zero.
  */
 
-type Load<T> = { state: "loading" } | { state: "ready"; data: T } | { state: "error"; message: string };
+type Load<T> = { state: "loading" } | { state: "ready"; data: T } | { state: "error"; message: string } | { state: "disabled" };
 
 async function getJson<T>(url: string, signal: AbortSignal, onExpired?: () => void): Promise<Load<T>> {
   try {
@@ -32,6 +31,10 @@ async function getJson<T>(url: string, signal: AbortSignal, onExpired?: () => vo
     if (res.status === 401) {
       onExpired?.();
       return { state: "error", message: "Your session ended. Enter your passcode again." };
+    }
+    if (res.status === 503) {
+      const body = (await res.json().catch(() => null)) as { disabled?: boolean } | null;
+      if (body?.disabled) return { state: "disabled" };
     }
     if (res.status === 429) return { state: "error", message: "Too many requests. Wait a few minutes and reload." };
     if (!res.ok) return { state: "error", message: "This part is not available right now." };
@@ -218,11 +221,11 @@ function HoldingsSection({ index, cards }: { index: Load<ResearchIndex>; cards: 
                 </div>
               );
             }
-            if (c.state === "error") {
+            if (c.state === "error" || c.state === "disabled") {
               return (
                 <div key={h.symbol} className="jv-card">
                   <Muted>
-                    {h.symbol}: {c.message}
+                    {h.symbol}: {c.state === "error" ? c.message : "Research is switched off."}
                   </Muted>
                 </div>
               );
@@ -249,7 +252,7 @@ function HoldingsSection({ index, cards }: { index: Load<ResearchIndex>; cards: 
 
 // ---------------------------------------------------------------------------------------------- environment
 
-function OutlookBlock({ o }: { o: OutlookView }) {
+function OutlookBlock({ o, readAt }: { o: OutlookView; readAt: string }) {
   return (
     <div className="jv-card flex flex-col gap-3" data-testid="outlook">
       <div className="flex flex-wrap items-center gap-2">
@@ -257,10 +260,10 @@ function OutlookBlock({ o }: { o: OutlookView }) {
           Economic outlook
         </h3>
         <Badge tone="signal">{o.regime.label}</Badge>
-        <Badge>Estimate</Badge>
+        <Badge title="Written by a model from public data. It can be wrong and it is not advice.">Model estimate</Badge>
       </div>
       <Muted>
-        As of {o.asOfDate}. Next planned update: {o.nextScheduledRefresh}. Where the economy sits in its cycle: {o.regime.cyclePhase}. Money conditions: {o.regime.financialConditions}.
+        This outlook was written by a computer model from public data. It is not advice and not a promise. Model estimate as of {o.asOfDate}; read by this page {fmtEt(readAt) ?? "just now"}. Next planned update: {o.nextScheduledRefresh}. Where the economy sits in its cycle: {o.regime.cyclePhase}. Money conditions: {o.regime.financialConditions}.
       </Muted>
       {o.glance && (
         <p className="text-sm" style={{ color: "var(--text-0)", margin: 0, lineHeight: 1.6 }}>
@@ -291,9 +294,16 @@ function OutlookBlock({ o }: { o: OutlookView }) {
       </div>
 
       <div>
-        <div className="jv-strip-title">Interest rates</div>
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <div className="jv-strip-title" style={{ margin: 0 }}>Interest rates</div>
+          <Badge tone="danger" title="A forecast from our model. It can be wrong and it is not advice.">Model estimate</Badge>
+        </div>
+        <Muted>Rate now: {o.policy.currentTargetRange}. Where the market prices rates: {o.policy.marketImpliedPath}.</Muted>
+        <p className="text-sm" style={{ color: "var(--text-0)", margin: "6px 0 0", lineHeight: 1.6 }} data-testid="model-rate-path">
+          Our model&rsquo;s estimate of the rate path: {o.policy.houseViewPath}
+        </p>
         <Muted>
-          Rate now: {o.policy.currentTargetRange}. Where the market prices rates: {o.policy.marketImpliedPath}. Our own estimate of the path: {o.policy.houseViewPath}. That last one is a forecast. It is not a promise and it can be wrong.
+          This is a forecast from a computer model, as of {o.asOfDate}. It is not a promise, it can be wrong, and it is not advice about what you should do. See the track record in the note on forecasts below.
         </Muted>
       </div>
 
@@ -435,7 +445,7 @@ function EnvironmentSection({ env, holdsCrypto }: { env: Load<ResearchEnvironmen
       {env.state === "ready" && (
         <>
           {env.data.stale && <Problem>Some of this is the last good copy, because a fresh read failed. Check the dates below.</Problem>}
-          {env.data.outlook ? <OutlookBlock o={env.data.outlook} /> : <Problem>{env.data.outlookNote}</Problem>}
+          {env.data.outlook ? <OutlookBlock o={env.data.outlook} readAt={env.data.asOf} /> : <Problem>{env.data.outlookNote}</Problem>}
           {env.data.catalysts && <CatalystsBlock c={env.data.catalysts} />}
           {holdsCrypto && (env.data.crypto ? <CryptoBlock r={env.data.crypto} /> : <Problem>{env.data.cryptoNote ?? "The crypto read is not available right now."}</Problem>)}
         </>
@@ -538,13 +548,6 @@ function MethodSection({ method }: { method: Load<MethodExplainer> }) {
 
 // ---------------------------------------------------------------------------------------------- forecasting note
 
-function trackRecord(s: ScorecardSummary): string {
-  if (s.graded === 0) return `We have logged ${s.logged} outlook call${s.logged === 1 ? "" : "s"}, and none has been graded yet. There is no track record to show, so treat the outlook as untested.`;
-  const regime = s.regimeRight + s.regimeWrong;
-  const path = s.pathRight + s.pathWrong;
-  return `We have logged ${s.logged} outlook call${s.logged === 1 ? "" : "s"} and graded ${s.graded}. On the regime label, ${s.regimeRight} of ${regime} graded were right. On the rate path, ${s.pathRight} of ${path} were right. Counts this small say very little about how good the calls will be.`;
-}
-
 function ForecastNote({ env, method }: { env: Load<ResearchEnvironment>; method: Load<MethodExplainer> }) {
   return (
     <Section id="research-forecast" eyebrow="Read this first" title="A note on forecasts">
@@ -557,7 +560,7 @@ function ForecastNote({ env, method }: { env: Load<ResearchEnvironment>; method:
         </p>
         {env.state === "ready" && env.data.scorecard && (
           <p className="text-sm" style={{ color: "var(--text-0)", margin: 0, lineHeight: 1.6 }} data-testid="track-record">
-            {trackRecord(env.data.scorecard)}
+            {trackRecordText(env.data.scorecard)}
           </p>
         )}
         {env.state === "ready" && !env.data.scorecard && <Muted>{env.data.scorecardNote ?? "The track record is not available right now."}</Muted>}
@@ -626,6 +629,8 @@ export function ClientResearchView({ slug, onSessionExpired }: { slug: string; o
   }, [slug]);
 
   const holdsCrypto = index.state === "ready" && index.data.holdsCrypto;
+  // The owner can switch the section off (CLIENT_RESEARCH_ENABLED=false): then nothing is shown, not even a heading.
+  if (index.state === "disabled") return null;
 
   return (
     <div className="flex flex-col gap-10" data-testid="client-research">
