@@ -7,7 +7,9 @@ import type {
   MarketOptionContract,
   MarketOptionsChain,
   MarketQuote,
+  CorporateEvent,
 } from "./market-data-types";
+import { normalizeAlpacaActions } from "../chart/events";
 import { cleanCandles, logReport, normalizeSymbol, providerJson, snapWindow } from "./provider-http";
 
 const DATA_BASE_URL = "https://data.alpaca.markets/v2";
@@ -198,6 +200,42 @@ export async function fetchBarsForTimeframeDetailed(
   opts: BarFetchOptions = {}
 ): Promise<MarketCandlesResult> {
   return fetchBars(symbol, timeframe, startMs, endMs, revalidateSeconds, opts.adjustment);
+}
+
+const ALPACA_CORPORATE_ACTIONS_MAX_PAGES = 5;
+
+/**
+ * Splits and cash dividends for a symbol between two dates, from Alpaca's market-data corporate actions endpoint
+ * (https://data.alpaca.markets/v1/corporate-actions). Endpoint and response shape follow Alpaca's public docs and are
+ * NOT yet checked against a live response (no keys were available): the parser in src/lib/chart/events.ts drops what it
+ * cannot read. Throws on missing keys or an HTTP error; the caller (market-data.fetchCorporateEvents) turns that into
+ * "no markers" so the chart never breaks over it.
+ */
+export async function fetchCorporateActions(symbol: string, startMs: number, endMs: number, revalidateSeconds = 6 * 3600): Promise<CorporateEvent[]> {
+  const sym = normalizeSymbol(symbol);
+  const { keyId, secretKey } = getCredentials();
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const events: CorporateEvent[] = [];
+  let pageToken: string | undefined;
+  let pages = 0;
+  do {
+    const url = new URL("https://data.alpaca.markets/v1/corporate-actions");
+    url.searchParams.set("symbols", sym);
+    url.searchParams.set("types", "forward_split,reverse_split,cash_dividend");
+    url.searchParams.set("start", day(startMs));
+    url.searchParams.set("end", day(endMs));
+    url.searchParams.set("limit", "1000");
+    if (pageToken) url.searchParams.set("page_token", pageToken);
+    const data = await providerJson<{ next_page_token?: string | null }>(
+      url.toString(),
+      { headers: { "APCA-API-KEY-ID": keyId, "APCA-API-SECRET-KEY": secretKey } },
+      { provider: "Alpaca", path: "/corporate-actions", revalidateSeconds }
+    );
+    events.push(...normalizeAlpacaActions(data));
+    pageToken = data.next_page_token ?? undefined;
+    pages += 1;
+  } while (pageToken && pages < ALPACA_CORPORATE_ACTIONS_MAX_PAGES);
+  return events.sort((a, b) => a.dateMs - b.dateMs);
 }
 
 interface AlpacaSnapshotResponse {

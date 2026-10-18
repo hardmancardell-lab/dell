@@ -22,7 +22,7 @@ import { TIMEFRAME_PRESETS } from "@/lib/agents/trading-agent/skills/timeframe-p
 import { SESSIONS, toUtcParts } from "@/lib/agents/trading-agent/skills/time-windows";
 import type { ChartBarsResult } from "@/lib/agents/trading-agent/skills/chart-bars";
 import { getOrCreateSessionId } from "@/lib/analytics/use-track";
-import type { BarAdjustment } from "@/lib/data/market-data-types";
+import type { BarAdjustment, CorporateEvent } from "@/lib/data/market-data-types";
 import { INDICATORS } from "@/lib/chart/indicators";
 import { formatBarLabel, formatTick, zoneForProvider, type ChartZone } from "@/lib/chart/timeformat";
 import { effectiveScaleMode, loadScaleChoice, saveScaleChoice, SCALE_DESCRIPTIONS, SCALE_LABELS, SCALE_MODES, type ScaleMode } from "@/lib/chart/scale";
@@ -32,6 +32,8 @@ import { SessionShade } from "./chart/SessionShade";
 import { ToggleGroup } from "./chart/ToggleGroup";
 import { ChartHeader } from "./chart/ChartHeader";
 import { IndicatorManager } from "./chart/IndicatorManager";
+import { eventsToMarkers } from "@/lib/chart/events";
+import { formatDay } from "@/lib/chart/timeformat";
 import { ActiveLegend } from "./chart/ActiveLegend";
 import dynamic from "next/dynamic";
 import { JARVIS as TOKENS, SMA_COLORS, VOLUME_BAR } from "@/lib/design/tokens";
@@ -97,6 +99,9 @@ function writeLegend(
   );
   el.style.display = "block";
 }
+
+/** ET calendar date "YYYY-MM-DD" of an instant, for placing events on the first bar of their date. */
+const etDayKey = (ms: number) => formatDay(Math.floor(ms / 1000), "America/New_York");
 
 export function PriceChart({
   symbol,
@@ -164,6 +169,10 @@ export function PriceChart({
   // Extended hours: only intraday US equity bars have a pre-market and after-hours session. The toggle filters those bars
   // out of everything (candles, volume, indicators); the shading marks them while they are shown.
   const [includeExtended, setIncludeExtended] = useState(true);
+  // Splits and dividends from the provider (equities only). `eventsNote` says why there are none when the source is unavailable.
+  const [events, setEvents] = useState<CorporateEvent[]>([]);
+  const [eventsNote, setEventsNote] = useState<string | null>(null);
+  const [showEvents, setShowEvents] = useState(true);
   const extendedApplicable = Boolean(data?.meta && data.meta.provider === "Alpaca" && intraday);
   const extendedPresent = useMemo(
     () => (extendedApplicable && data ? hasExtendedBars(data.candles.map((c) => c.datetime)) : false),
@@ -393,6 +402,29 @@ export function PriceChart({
     };
   }, [symbol, timeframe, focusDate, adjustment]);
 
+  // Split and dividend events for the same window. Independent of the adjustment choice; failure only means no markers.
+  useEffect(() => {
+    if (!symbol || assetClass !== "equity") return;
+    let cancelled = false;
+    const base = `/api/chart-bars?ticker=${encodeURIComponent(symbol)}&timeframe=${timeframe}&events=1`;
+    fetch(focusDate ? `${base}&centerDate=${focusDate}` : base)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((j: { events?: CorporateEvent[]; available?: boolean; reason?: string } | null) => {
+        if (cancelled) return;
+        setEvents(Array.isArray(j?.events) ? j.events : []);
+        setEventsNote(j && j.available === false ? (j.reason ?? "unavailable") : null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEvents([]);
+          setEventsNote("unavailable");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol, timeframe, focusDate, assetClass]);
+
   // Push candles/volume/SMA20/SMA50 when the data changes. The SMA toggles only show or hide a series (next effect), so
   // clicking one no longer resends all the data or resets the user's zoom (audit F5).
   useEffect(() => {
@@ -453,38 +485,44 @@ export function PriceChart({
     const plugin = sessionMarkersRef.current ?? createSeriesMarkers(candleSeries, []);
     sessionMarkersRef.current = plugin;
 
-    if (candles.length < 2 || (assetClass !== "forex" && assetClass !== "future")) {
-      plugin.setMarkers([]);
-      return;
-    }
-    const avgSpacingMs = (candles[candles.length - 1].datetime - candles[0].datetime) / (candles.length - 1);
-    if (avgSpacingMs >= 20 * 60 * 60 * 1000) {
-      plugin.setMarkers([]); // daily+ bars — session boundaries within a bar aren't meaningful
-      return;
+    type Mark = { time: UTCTimestamp; position: "aboveBar" | "belowBar"; color: string; shape: "circle" | "square"; text: string };
+    const markers: Mark[] = [];
+
+    // Split and dividend markers (equities and ETFs): S = split, D = dividend, on the bar of the ex-date.
+    if (showEvents && events.length > 0) {
+      for (const m of eventsToMarkers(events, candles, etDayKey)) {
+        markers.push({
+          time: m.time as UTCTimestamp,
+          position: m.position,
+          color: m.kind === "split" ? CHART_CHROME.split : CHART_CHROME.dividend,
+          shape: m.shape === "square" ? "square" : "circle",
+          text: m.text,
+        });
+      }
     }
 
-    const SESSION_MARKS: { id: "asian" | "london" | "newYork"; startMinute: number; color: string; text: string }[] = [
-      { id: "asian", startMinute: SESSIONS.ASIAN.start, color: JARVIS.text1, text: "Asian" },
-      { id: "london", startMinute: SESSIONS.LONDON.start, color: JARVIS.signal, text: "London" },
-      { id: "newYork", startMinute: SESSIONS.NEW_YORK.start, color: JARVIS.verdict, text: "NY" },
-    ];
-    let prevMinutes: number | null = null;
-    const markers: { time: UTCTimestamp; position: "aboveBar"; color: string; shape: "circle"; text: string }[] = [];
-    for (const c of candles) {
-      const { minutesSinceMidnight } = toUtcParts(c.datetime);
-      for (const s of SESSION_MARKS) {
-        const crossedIntoSession =
-          prevMinutes === null
-            ? minutesSinceMidnight === s.startMinute
-            : prevMinutes < s.startMinute && minutesSinceMidnight >= s.startMinute;
-        if (crossedIntoSession) {
-          markers.push({ time: toSeconds(c.datetime), position: "aboveBar", color: s.color, shape: "circle", text: s.text });
+    // Session boundaries on intraday forex/futures bars, inferred from the real bar spacing (daily+ bars have none).
+    const avgSpacingMs = candles.length > 1 ? (candles[candles.length - 1].datetime - candles[0].datetime) / (candles.length - 1) : Infinity;
+    if (candles.length >= 2 && (assetClass === "forex" || assetClass === "future") && avgSpacingMs < 20 * 60 * 60 * 1000) {
+      const SESSION_MARKS: { id: "asian" | "london" | "newYork"; startMinute: number; color: string; text: string }[] = [
+        { id: "asian", startMinute: SESSIONS.ASIAN.start, color: JARVIS.text1, text: "Asian" },
+        { id: "london", startMinute: SESSIONS.LONDON.start, color: JARVIS.signal, text: "London" },
+        { id: "newYork", startMinute: SESSIONS.NEW_YORK.start, color: JARVIS.verdict, text: "NY" },
+      ];
+      let prevMinutes: number | null = null;
+      for (const c of candles) {
+        const { minutesSinceMidnight } = toUtcParts(c.datetime);
+        for (const s of SESSION_MARKS) {
+          const crossedIntoSession =
+            prevMinutes === null ? minutesSinceMidnight === s.startMinute : prevMinutes < s.startMinute && minutesSinceMidnight >= s.startMinute;
+          if (crossedIntoSession) markers.push({ time: toSeconds(c.datetime), position: "aboveBar", color: s.color, shape: "circle", text: s.text });
         }
+        prevMinutes = minutesSinceMidnight;
       }
-      prevMinutes = minutesSinceMidnight;
     }
+    markers.sort((a, b) => (a.time as number) - (b.time as number));
     plugin.setMarkers(markers);
-  }, [candles, assetClass]);
+  }, [candles, assetClass, events, showEvents]);
 
   // Indicators: one IndicatorManager owns the extra series. Toggling an indicator adds or removes only that indicator's
   // series (the others keep their series objects); new candles rebuild the enabled ones. (Audit F3.)
@@ -610,6 +648,12 @@ export function PriceChart({
             saveScaleChoice(m);
           }}
         />
+        {assetClass === "equity" && (
+          <label className="flex items-center gap-1.5" title={eventsNote ? `Split and dividend markers unavailable: ${eventsNote}` : "S = split, D = dividend (ex-date)"}>
+            <input type="checkbox" data-testid="show-events" checked={showEvents} disabled={events.length === 0} onChange={(e) => setShowEvents(e.target.checked)} />
+            Splits and dividends{events.length > 0 ? ` (${events.length})` : eventsNote ? " (unavailable)" : " (none in range)"}
+          </label>
+        )}
         {data?.meta?.provider === "Alpaca" && (
           <label className="flex items-center gap-1.5" title={!intraday ? "Daily and weekly bars have no extended-hours session" : undefined}>
             <input
@@ -785,6 +829,7 @@ export function PriceChart({
         adjustment={data?.meta?.adjustment ?? null}
         showSma20={showSma20}
         showSma50={showSma50}
+        eventLines={showEvents ? events.map((e) => `${new Date(e.dateMs).toISOString().slice(0, 10)} ${e.label}`) : []}
         activeIds={[...INDICATORS.filter((d) => enabledOverlays.has(d.id) || enabledOscillators.has(d.id)).map((d) => d.id)]}
       />
 

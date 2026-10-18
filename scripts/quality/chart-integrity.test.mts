@@ -15,6 +15,8 @@ import { equitySessionOf, filterExtendedHours, hasExtendedBars, extendedShadeRan
 import { finiteNumbers, niceStep, niceTicks, median, histogram, fmtPct, fmtPctCompact, fmtMoneyCompact, barPercent, zeroBasedY } from "../../src/lib/chart/svg-math.ts";
 import { withCashSlice } from "../../src/components/AllocationPieChart.tsx";
 import { IndicatorManager } from "../../src/components/chart/IndicatorManager.ts";
+import { normalizeAlpacaActions, eventsToMarkers } from "../../src/lib/chart/events.ts";
+import { setProviderSleep } from "../../src/lib/data/provider-http.ts";
 import { withAlpha } from "../../src/lib/chart/colors.ts";
 import { TIMEFRAME_PRESETS } from "../../src/lib/agents/trading-agent/skills/timeframe-presets.ts";
 import { formatBarLabel, formatTick, zoneForProvider } from "../../src/lib/chart/timeformat.ts";
@@ -324,6 +326,66 @@ t("market-data timeframe passes all through", param(calls[0].url, "adjustment") 
   t("no candles draws nothing and does not throw", mgr.active().length === 0);
   mgr.sync(daily, new Set(["nope"]));
   t("unknown indicator ids are ignored", mgr.active().length === 0);
+}
+
+// ---------------------------------------------------------------- 7. split and dividend events (WP2 item 6)
+{
+  const body = {
+    corporate_actions: {
+      forward_splits: [{ symbol: "AAPL", new_rate: 4, old_rate: 1, ex_date: "2020-08-31", process_date: "2020-08-31" }, { symbol: "AAPL", new_rate: "bad", old_rate: 1, ex_date: "2020-09-01" }],
+      reverse_splits: [{ symbol: "XYZ", new_rate: 1, old_rate: 10, ex_date: "2024-03-04" }],
+      cash_dividends: [{ symbol: "AAPL", rate: 0.24, ex_date: "2026-08-11" }, { symbol: "AAPL", rate: 0.5, special: true, ex_date: "2026-09-01" }, { symbol: "AAPL", rate: -1, ex_date: "2026-09-02" }, { symbol: "AAPL", rate: 0.1, ex_date: "garbage" }],
+    },
+    next_page_token: null,
+  };
+  const evs = normalizeAlpacaActions(body);
+  t("normalizeAlpacaActions reads splits, reverse splits and dividends, sorted, dropping unreadable rows", evs.length === 4 && evs.every((e, i) => i === 0 || evs[i - 1].dateMs <= e.dateMs), JSON.stringify(evs.map((e) => e.label)));
+  t("split labels and ratios", evs.find((e) => e.label === "Split 4-for-1")?.ratio === 4 && evs.find((e) => e.label === "Split 1-for-10")?.ratio === 0.1);
+  t("special dividend is labelled", evs.some((e) => e.label === "Dividend $0.5 (special)"));
+  t("junk input gives []", normalizeAlpacaActions(null).length === 0 && normalizeAlpacaActions({}).length === 0 && normalizeAlpacaActions({ corporate_actions: { forward_splits: "x" } }).length === 0);
+
+  const etDay = (ms: number) => new Date(ms - 4 * 3600_000).toISOString().slice(0, 10);
+  const D = (iso: string) => Date.parse(`${iso}T04:00:00Z`);
+  const daily = ["2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13"].map((d) => ({ datetime: D(d) }));
+  const ev = (iso: string, kind: any, extra: any = {}) => ({ kind, dateMs: Date.parse(`${iso}T00:00:00Z`), label: kind === "split" ? "Split 4-for-1" : "Dividend $0.24", ...extra });
+  let mk = eventsToMarkers([ev("2026-08-11", "dividend", { amount: 0.24 })], daily, etDay);
+  t("a dividend lands on the bar of its ex-date", mk.length === 1 && mk[0].time === D("2026-08-11") / 1000 && mk[0].text === "D $0.24" && mk[0].position === "belowBar");
+  mk = eventsToMarkers([ev("2026-08-11", "dividend", { amount: 0.24 }), ev("2026-08-11", "split")], daily, etDay);
+  t("two events on one bar become one marker and the split wins", mk.length === 1 && mk[0].kind === "split" && mk[0].detail.length === 2 && mk[0].text === "S 4-for-1");
+  mk = eventsToMarkers([ev("2026-08-09", "dividend", { amount: 1 })], daily, etDay);
+  t("a weekend ex-date falls back to the prior bar", mk.length === 1 && mk[0].time === D("2026-08-07") / 1000);
+  t("events outside the drawn range are dropped", eventsToMarkers([ev("2025-01-01", "split"), ev("2027-01-01", "split")], daily, etDay).length === 0);
+  const intra = [] as { datetime: number }[];
+  for (const d of ["2026-08-10", "2026-08-11"]) for (let m = 0; m < 6; m++) intra.push({ datetime: Date.parse(`${d}T13:30:00Z`) + m * 300000 });
+  mk = eventsToMarkers([ev("2026-08-11", "split")], intra, etDay);
+  t("on intraday bars the event sits on the first bar of its date", mk.length === 1 && mk[0].time === intra[6].datetime / 1000);
+  t("no bars or no events gives no markers", eventsToMarkers([], daily, etDay).length === 0 && eventsToMarkers([ev("2026-08-11", "split")], [], etDay).length === 0);
+
+  // provider call: URL, parsing and graceful fallback
+  setFakeEnv();
+  install(() => json(body));
+  const got = await alpaca.fetchCorporateActions("AAPL", Date.UTC(2020, 0, 1), Date.UTC(2026, 9, 1));
+  const u = new URL(calls[0].url);
+  t("fetchCorporateActions asks the v1 corporate-actions endpoint with symbol, types and dates", u.pathname === "/v1/corporate-actions" && u.searchParams.get("symbols") === "AAPL" && /forward_split/.test(u.searchParams.get("types") ?? "") && /cash_dividend/.test(u.searchParams.get("types") ?? "") && u.searchParams.get("start") === "2020-01-01" && got.length === 4, calls[0]?.url);
+  install(() => json(body));
+  const ok = await md.fetchCorporateEvents("AAPL", Date.UTC(2020, 0, 1), Date.UTC(2026, 9, 1));
+  t("fetchCorporateEvents returns events with available=true", ok.available === true && ok.events.length === 4);
+  install(() => json("boom", 500));
+  setProviderSleep(async () => {});
+  const bad = await md.fetchCorporateEvents("AAPL", Date.UTC(2020, 0, 1), Date.UTC(2026, 9, 1));
+  t("an HTTP error becomes available=false with a reason, never a throw", bad.available === false && bad.events.length === 0 && (bad.reason ?? "").length > 0);
+  setFakeEnv({ ALPACA_API_KEY_ID: undefined, ALPACA_SECRET_KEY: undefined, MARKET_DATA_PROVIDER: "alpaca" });
+  const nokeys = await md.fetchCorporateEvents("AAPL", Date.UTC(2020, 0, 1), Date.UTC(2026, 9, 1));
+  t("no Alpaca keys: graceful, available=false", nokeys.available === false && /ALPACA|Alpaca|provider/.test(nokeys.reason ?? ""));
+  setFakeEnv();
+  install(() => json(body));
+  const fx = await md.fetchCorporateEvents("EUR/USD", Date.UTC(2020, 0, 1), Date.UTC(2026, 9, 1));
+  const cr = await md.fetchCorporateEvents("BTC-USD", Date.UTC(2020, 0, 1), Date.UTC(2026, 9, 1));
+  t("forex and crypto have no events and make no request", fx.available === false && cr.available === false && calls.length === 0);
+  setFakeEnv({ MARKET_DATA_MOCK_MODE: "true" });
+  const mock = await md.fetchCorporateEvents("AAPL", Date.UTC(2020, 0, 1), Date.UTC(2026, 9, 1));
+  t("mock mode: no events, says why", mock.available === false && /Synthetic/.test(mock.reason ?? ""));
+  setFakeEnv();
 }
 
 summary();

@@ -1,7 +1,7 @@
-import { classifySymbol, fetchBarsForTimeframeDetailed } from "@/lib/data/market-data";
+import { classifySymbol, fetchBarsForTimeframeDetailed, fetchCorporateEvents } from "@/lib/data/market-data";
 import { TIMEFRAME_PRESETS } from "./timeframe-presets";
 import { deriveChartMeta, type ChartBarsMeta } from "@/lib/chart/meta";
-import { DEFAULT_BAR_ADJUSTMENT, type BarAdjustment, type MarketCandle } from "@/lib/data/market-data-types";
+import { DEFAULT_BAR_ADJUSTMENT, type BarAdjustment, type CorporateEventsResult, type MarketCandle } from "@/lib/data/market-data-types";
 
 export interface ChartBarsResult {
   symbol: string;
@@ -72,4 +72,15 @@ export async function getChartBars(
     dataLimitations,
     meta,
   };
+}
+
+/** Splits and dividends inside the same window a chart preset shows. Never throws (see fetchCorporateEvents). */
+export async function getChartEvents(symbol: string, timeframeId: string, centerDateKey?: string): Promise<CorporateEventsResult> {
+  const preset = TIMEFRAME_PRESETS.find((p) => p.id === timeframeId);
+  if (!preset || !preset.alpacaTimeframe) return { events: [], available: false, reason: "Unknown timeframe." };
+  const now = Date.now();
+  const centerMs = centerDateKey ? Date.parse(`${centerDateKey}T12:00:00Z`) : NaN;
+  const startMs = Number.isFinite(centerMs) ? centerMs - preset.lookbackMs / 2 : now - preset.lookbackMs;
+  const endMs = Number.isFinite(centerMs) ? Math.min(now, centerMs + preset.lookbackMs / 2) : now;
+  return fetchCorporateEvents(symbol, startMs, endMs);
 }

@@ -16,12 +16,15 @@ export function ActiveLegend({
   showSma20,
   showSma50,
   activeIds,
+  eventLines = [],
 }: {
   feed: string | null;
   adjustment: BarAdjustment | null;
   showSma20: boolean;
   showSma50: boolean;
   activeIds: readonly string[];
+  /** "2026-08-11: Dividend $0.53" lines for the markers on the chart (S = split, D = dividend). */
+  eventLines?: readonly string[];
 }) {
   const items = activeIds.map(indicatorDef).filter((d): d is NonNullable<ReturnType<typeof indicatorDef>> => Boolean(d));
   return (
@@ -40,6 +43,11 @@ export function ActiveLegend({
         <li className="flex items-center gap-2">
           <span aria-hidden className="inline-block w-2.5 h-0.5" style={{ background: SMA_COLORS.sma50 }} />
           <span>SMA 50: 50-bar simple moving average of the close</span>
+        </li>
+      )}
+      {eventLines.length > 0 && (
+        <li data-testid="legend-events">
+          Markers: S = split, D = dividend (on the ex-date bar). {eventLines.slice(-8).join("; ")}
         </li>
       )}
       {items.map((d) => (

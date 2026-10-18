@@ -151,3 +151,22 @@ export interface MarketOptionsChain {
   /** True for generated (mock-mode) data. */
   synthetic?: boolean;
 }
+
+/** A corporate action to mark on a price chart. Dates are epoch ms at 00:00 UTC of the ex-date. */
+export interface CorporateEvent {
+  kind: "split" | "dividend";
+  dateMs: number;
+  /** Plain label for a tooltip or legend, for example "Split 4-for-1" or "Dividend $0.53". */
+  label: string;
+  /** Splits: new shares per old share (4 for a 4-for-1, 0.1 for a 1-for-10 reverse split). */
+  ratio?: number;
+  /** Dividends: cash amount per share. */
+  amount?: number;
+}
+
+export interface CorporateEventsResult {
+  events: CorporateEvent[];
+  /** False when no event source answered (no keys, not an equity, provider error). `reason` then says why; the chart shows no markers and no error. */
+  available: boolean;
+  reason?: string;
+}

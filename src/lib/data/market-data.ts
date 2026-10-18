@@ -12,6 +12,7 @@ import {
 import { aggregateCandles } from "../agents/trading-agent/skills/candle-aggregation";
 import type {
   BarFetchOptions,
+  CorporateEventsResult,
   MarketBidAsk,
   MarketCandle,
   MarketCandlesResult,
@@ -321,4 +322,21 @@ export async function fetchOptionsChain(
   return getProvider() === "alpaca"
     ? alpaca.fetchOptionsChain(c.symbol, expirationDate)
     : schwab.fetchOptionsChain(c.symbol, expirationDate);
+}
+
+/**
+ * Splits and dividends to mark on a chart. Only US equities and ETFs on Alpaca have a source here (earnings dates have no
+ * provider in this app, so they are not offered). Never throws: with no keys, another provider, mock mode or an HTTP
+ * error it returns { events: [], available: false, reason } and the chart simply shows no markers.
+ */
+export async function fetchCorporateEvents(symbol: string, startMs: number, endMs: number): Promise<CorporateEventsResult> {
+  try {
+    if (isMockMode()) return { events: [], available: false, reason: "Synthetic data has no real corporate actions." };
+    const c = classifySymbol(symbol);
+    if (c.kind !== "equity") return { events: [], available: false, reason: "Split and dividend markers exist for stocks and ETFs only." };
+    if (getProvider() !== "alpaca") return { events: [], available: false, reason: "Split and dividend markers need the Alpaca data provider." };
+    return { events: await alpaca.fetchCorporateActions(c.symbol, startMs, endMs), available: true };
+  } catch (e) {
+    return { events: [], available: false, reason: e instanceof Error ? e.message.slice(0, 160) : "corporate actions unavailable" };
+  }
 }
