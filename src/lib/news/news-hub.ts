@@ -58,8 +58,14 @@ const marketCache = new TtlCache<MarketNewsSection>(MARKET_TTL_MS, 4);
 const tickerCache = new TtlCache<NewsSection>(TICKER_TTL_MS, 100);
 const symbolCache = new TtlCache<SymbolFetch>(SYMBOL_TTL_MS, 300);
 
+const extraClearers: (() => void)[] = [];
+/** Lets another module add its caches to clearNewsHubCaches. */
+export function registerCacheClearer(fn: () => void): void {
+  extraClearers.push(fn);
+}
 /** Clears every hub cache. For tests. */
 export function clearNewsHubCaches(): void {
+  for (const fn of extraClearers) fn();
   marketCache.clear();
   tickerCache.clear();
   symbolCache.clear();
@@ -72,7 +78,7 @@ function asArray<T>(v: T | T[] | undefined): T[] {
   return Array.isArray(v) ? v : [v];
 }
 
-async function fetchText(url: string, accept: string, revalidateSeconds: number, label: string): Promise<string> {
+export async function fetchText(url: string, accept: string, revalidateSeconds: number, label: string): Promise<string> {
   const res = await providerFetch(
     url,
     { headers: { "User-Agent": BROWSER_UA, Accept: accept } },
@@ -86,11 +92,11 @@ export interface MarketNewsSection extends NewsSection {
   trending: TrendingTopic[];
 }
 
-function nowIso(): string {
+export function nowIso(): string {
   return new Date().toISOString();
 }
 
-function toItem(
+export function toItem(
   h: { title: string; url: string; publishedAt: string | null },
   source: string,
   provider: string,

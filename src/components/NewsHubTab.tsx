@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
-import { isHubSymbol, type NewsSection, type TrendingTopic } from "@/lib/news/news-core";
+import { isHubSymbol, type TickerNewsGroups, type TrendingTopic } from "@/lib/news/news-core";
 import type { MarketNewsSection, WatchlistNewsSection } from "@/lib/news/news-hub";
-import { EmptyOrError, NewsList, NotAdviceNote, readNewsError, SectionFooter, SourceList } from "./NewsParts";
+import { EmptyOrError, NewsList, NotAdviceNote, readNewsError, SectionFooter, SourceList, TickerNewsGroupsView } from "./NewsParts";
 
 /**
  * The News hub: market headlines, news for one ticker, and news for the watchlist, in one place.
@@ -153,9 +153,10 @@ function TickerView() {
   const [input, setInput] = useState("");
   const [assetClass, setAssetClass] = useState<AssetClass>("equity");
   const [asked, setAsked] = useState<{ ticker: string; assetClass: AssetClass } | null>(null);
-  const [state, setState] = useState<Load<NewsSection>>({ status: "idle" });
+  const [state, setState] = useState<Load<TickerNewsGroups>>({ status: "idle" });
   const [inputError, setInputError] = useState<string | null>(null);
-  const [background, setBackground] = useState<Load<NewsSection>>({ status: "idle" });
+  const [background, setBackground] = useState<"idle" | "loading" | "done">("idle");
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
 
   async function search(e?: React.FormEvent) {
     e?.preventDefault();
@@ -166,29 +167,32 @@ function TickerView() {
     }
     setInputError(null);
     setAsked({ ticker, assetClass });
-    setBackground({ status: "idle" });
+    setBackground("idle");
+    setBackgroundError(null);
     setState({ status: "loading" });
     try {
-      setState({ status: "done", data: await getJson<NewsSection>(`/api/news-hub?section=ticker&ticker=${encodeURIComponent(ticker)}&assetClass=${assetClass}`) });
+      setState({ status: "done", data: await getJson<TickerNewsGroups>(`/api/news-hub?section=ticker&ticker=${encodeURIComponent(ticker)}&assetClass=${assetClass}`) });
     } catch (err) {
       setState({ status: "error", message: err instanceof Error ? err.message : "News could not be loaded." });
     }
   }
 
+  // Optional slow GDELT articles. The server adds them to "About this asset" and sends the whole answer again.
   async function loadBackground() {
     if (!asked) return;
-    setBackground({ status: "loading" });
+    setBackground("loading");
+    setBackgroundError(null);
     try {
-      setBackground({
-        status: "done",
-        data: await getJson<NewsSection>(`/api/news-hub?section=ticker&ticker=${encodeURIComponent(asked.ticker)}&assetClass=${asked.assetClass}&background=1`),
-      });
+      const data = await getJson<TickerNewsGroups>(`/api/news-hub?section=ticker&ticker=${encodeURIComponent(asked.ticker)}&assetClass=${asked.assetClass}&background=1`);
+      setState({ status: "done", data });
+      setBackground("done");
     } catch (err) {
-      setBackground({ status: "error", message: err instanceof Error ? err.message : "News could not be loaded." });
+      setBackground("idle");
+      setBackgroundError(err instanceof Error ? err.message : "News could not be loaded.");
     }
   }
 
-  const bgItems = background.status === "done" ? background.data.items.filter((i) => i.provider === "GDELT") : [];
+  const canAddBackground = asked !== null && asked.assetClass !== "crypto" && asked.assetClass !== "bond";
 
   return (
     <div>
@@ -211,47 +215,34 @@ function TickerView() {
           ))}
         </select>
         <button type="submit" className="jv-btn" disabled={state.status === "loading"}>
-          {state.status === "loading" ? "Loading…" : "Get news"}
+          {state.status === "loading" ? "Loading\u2026" : "Get news"}
         </button>
       </form>
       {inputError && <p role="alert" className="text-xs mb-2" style={{ color: "var(--danger)" }}>{inputError}</p>}
       <p className="text-xs mb-4" style={{ color: "var(--text-2)" }}>
-        For a stock or fund this combines company news, filings with the SEC, and a public Yahoo Finance feed.
+        You get two lists: news about the asset, and wider market news for its category. The sources depend on the type you pick.
       </p>
 
       {state.status === "idle" && <EmptyOrError tone="empty" message="Type a ticker above to see its latest headlines." />}
-      {state.status === "loading" && <p className="text-sm" style={{ color: "var(--text-2)" }}>Loading news for {asked?.ticker}{"…"}</p>}
+      {state.status === "loading" && <p className="text-sm" style={{ color: "var(--text-2)" }}>Loading news for {asked?.ticker}{"\u2026"}</p>}
       {state.status === "error" && <EmptyOrError tone="error" message={state.message} />}
       {state.status === "done" && (
         <>
-          {state.data.error ? (
-            <EmptyOrError tone="empty" message={state.data.error} />
-          ) : (
-            <div className="jv-card">
-              <div className="jv-br-b" />
-              <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-0)" }}>
-                News for {asked?.ticker} ({state.data.items.length})
-              </h3>
-              <NewsList items={state.data.items} />
-            </div>
-          )}
-
-          {asked && (asked.assetClass === "equity" || asked.assetClass === "forex" || asked.assetClass === "future" || asked.assetClass === "commodity") && (
+          <TickerNewsGroupsView data={state.data} limit={8} />
+          {canAddBackground && (
             <div className="jv-card mt-4">
               <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--text-0)" }}>Background articles (optional)</h3>
               <p className="text-xs mb-2" style={{ color: "var(--text-2)" }}>
                 A free index called GDELT lists articles about the topic around this symbol, such as its sector. It matches keywords, so
-                some results may not be about {asked.ticker}. It can take 15 seconds or more, and it often says to wait.
+                some results may not be about {asked?.ticker}. It can take 15 seconds or more, and it often says to wait. Results are added
+                to the first list.
               </p>
-              {background.status === "idle" && <button className="jv-btn-outline" onClick={() => void loadBackground()}>Load background articles</button>}
-              {background.status === "loading" && <p className="text-sm" style={{ color: "var(--text-2)" }}>Asking GDELT{"…"} this is slow.</p>}
-              {background.status === "error" && <EmptyOrError tone="error" message={background.message} />}
-              {background.status === "done" && (bgItems.length > 0 ? <NewsList items={bgItems} /> : <EmptyOrError tone="empty" message={background.data.sources.find((s) => s.name === "GDELT background")?.note ?? "GDELT had nothing for this topic right now."} />)}
+              {background === "idle" && <button className="jv-btn-outline" onClick={() => void loadBackground()}>Load background articles</button>}
+              {background === "loading" && <p className="text-sm" style={{ color: "var(--text-2)" }}>Asking GDELT{"\u2026"} this is slow.</p>}
+              {background === "done" && <p className="text-xs" style={{ color: "var(--text-1)" }}>Done. Check the source list under the first group to see what GDELT returned.</p>}
+              {backgroundError && <EmptyOrError tone="error" message={backgroundError} />}
             </div>
           )}
-
-          <SourceList sources={background.status === "done" ? background.data.sources : state.data.sources} />
-          <SectionFooter section={state.data} />
         </>
       )}
       {state.status !== "done" && <div className="mt-4"><NotAdviceNote /></div>}

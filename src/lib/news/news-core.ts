@@ -431,3 +431,30 @@ export function describeNewsTime(item: Pick<NewsItem, "publishedAt" | "timeKind"
   const base = `${when}${age ? ` (${age})` : ""}`;
   return item.timeKind === "seen" ? `First seen by ${item.provider} ${base}` : base;
 }
+
+/** One labelled group of headlines on a ticker view. */
+export interface NewsGroup {
+  /** Reader-facing title, for example "About this asset". */
+  title: string;
+  /** One plain sentence on what the group holds. */
+  description: string;
+  items: NewsItem[];
+  sources: SourceStatus[];
+  /** Plain empty or failure message when there is nothing to show, otherwise null. */
+  empty: string | null;
+}
+
+/** What a ticker lookup returns: two labelled groups. */
+export interface TickerNewsGroups {
+  symbol: string;
+  assetClass: string;
+  /** Plain name of the category used to pick feeds, for example "Crypto" or "Energy". */
+  topic: string;
+  about: NewsGroup;
+  macro: NewsGroup;
+  asOf: string;
+  notes: string[];
+}
+
+export const GROUP_ABOUT_TITLE = "About this asset";
+export const GROUP_MACRO_TITLE = "Market and macro";

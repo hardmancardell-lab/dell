@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { clientIp, SlidingWindowLimiter, tooManyRequests } from "@/lib/access/rate-limit";
-import { getMarketNews, getTickerNews, getWatchlistNews, MAX_WATCHLIST_SYMBOLS } from "@/lib/news/news-hub";
+import { getMarketNews, getWatchlistNews, MAX_WATCHLIST_SYMBOLS } from "@/lib/news/news-hub";
+import { getTickerNewsGroups } from "@/lib/news/ticker-groups";
 import { isHubSymbol } from "@/lib/news/news-core";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
 
@@ -19,6 +20,7 @@ function limited(request: Request): Response | null {
 /**
  * GET /api/news-hub?section=market
  * GET /api/news-hub?section=ticker&ticker=AAPL&assetClass=equity[&background=1]
+ *   returns { about, macro, topic, ... }: two labelled groups chosen by the category map (src/lib/news/category-map.ts)
  * Needs a signed-in session like every other app route (src/middleware.ts).
  */
 export async function GET(request: Request) {
@@ -36,7 +38,7 @@ export async function GET(request: Request) {
       if (!isHubSymbol(ticker)) return NextResponse.json({ error: "Enter a ticker with letters and numbers only." }, { status: 400 });
       if (!VALID_ASSET_CLASSES.includes(assetClass as AssetClass)) return NextResponse.json({ error: "Unknown asset type." }, { status: 400 });
       const background = searchParams.get("background") === "1";
-      return NextResponse.json(await getTickerNews(ticker, assetClass as AssetClass, background), { headers: CACHE_HEADERS });
+      return NextResponse.json(await getTickerNewsGroups(ticker, assetClass as AssetClass, background), { headers: CACHE_HEADERS });
     }
     return NextResponse.json({ error: "Use section=market or section=ticker." }, { status: 400 });
   } catch {

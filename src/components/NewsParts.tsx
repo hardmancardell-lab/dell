@@ -1,6 +1,7 @@
 "use client";
 
-import type { NewsItem, NewsSection, SourceStatus } from "@/lib/news/news-core";
+import { useState } from "react";
+import type { NewsGroup, NewsItem, NewsSection, SourceStatus, TickerNewsGroups } from "@/lib/news/news-core";
 import { describeNewsTime, HUB_NOTE_AS_WRITTEN, HUB_NOTE_NOT_ADVICE } from "@/lib/news/news-core";
 
 /**
@@ -114,4 +115,37 @@ export async function readNewsError(res: Response): Promise<string> {
   const body = await res.json().catch(() => null);
   const msg = body && typeof body.error === "string" ? body.error : "";
   return msg.length > 0 && msg.length < 200 ? msg : "News could not be loaded right now. Try again in a few minutes.";
+}
+
+/** One labelled group (About this asset, or Market and macro) with a plain empty state and a show-more toggle. */
+export function NewsGroupCard({ group, limit = 6, now }: { group: NewsGroup; limit?: number; now?: number }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? group.items : group.items.slice(0, limit);
+  return (
+    <section className="jv-card" aria-label={group.title}>
+      <div className="jv-br-b" />
+      <h3 className="text-sm font-semibold" style={{ color: "var(--text-0)" }}>
+        {group.title} {group.items.length > 0 && <span className="text-xs font-normal" style={{ color: "var(--text-2)" }}>({group.items.length})</span>}
+      </h3>
+      <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>{group.description}</p>
+      {group.items.length === 0 ? <EmptyOrError tone="empty" message={group.empty ?? "No headlines right now."} /> : <NewsList items={shown} now={now} />}
+      {group.items.length > limit && (
+        <button className="jv-btn-outline mt-3" onClick={() => setAll((v) => !v)}>
+          {all ? "Show fewer" : `Show all ${group.items.length}`}
+        </button>
+      )}
+      <SourceList sources={group.sources} />
+    </section>
+  );
+}
+
+/** Both groups for a ticker, with the notes and the not-advice line. Used by the hub and by the news under a chart. */
+export function TickerNewsGroupsView({ data, limit = 6 }: { data: TickerNewsGroups; limit?: number }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <NewsGroupCard group={data.about} limit={limit} />
+      <NewsGroupCard group={data.macro} limit={limit} />
+      <SectionFooter section={{ asOf: data.asOf, notes: data.notes }} />
+    </div>
+  );
 }
