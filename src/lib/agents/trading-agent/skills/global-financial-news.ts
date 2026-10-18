@@ -128,13 +128,13 @@ function atomLinkHref(rawLink: unknown): string {
  * (an attribute, possibly multiple <link> tags with different rel values)
  * rather than RSS's plain-text <link>.
  */
-function extractHeadlines(xml: string): GlobalNewsHeadline[] {
+export function extractHeadlines(xml: string, limit: number = MAX_HEADLINES_PER_SOURCE): GlobalNewsHeadline[] {
   const parsed = xmlParser.parse(xml);
 
   if (parsed?.feed?.entry) {
     const entries = asArray(parsed.feed.entry);
     return entries
-      .slice(0, MAX_HEADLINES_PER_SOURCE)
+      .slice(0, limit)
       .map((entry: Record<string, unknown>) => ({
         title: String(entry.title ?? "").trim(),
         url: atomLinkHref(entry.link).trim(),
@@ -145,7 +145,7 @@ function extractHeadlines(xml: string): GlobalNewsHeadline[] {
 
   const items = asArray(parsed?.rss?.channel?.item ?? parsed?.["rdf:RDF"]?.item);
   return items
-    .slice(0, MAX_HEADLINES_PER_SOURCE)
+    .slice(0, limit)
     .map((item: Record<string, unknown>) => {
       const rawLink = item.link;
       const link = typeof rawLink === "string" ? rawLink : (rawLink as { "@_rdf:resource"?: string } | undefined)?.["@_rdf:resource"] ?? "";

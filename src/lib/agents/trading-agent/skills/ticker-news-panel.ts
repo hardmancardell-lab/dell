@@ -11,7 +11,9 @@ import type { AssetClass, CompanyNewsArticle, SecFilingSummary, TickerNewsPanelR
  * section only, never blanks the whole panel. Company news/filings are
  * equity-only (no CIK, not applicable to forex/commodities/futures).
  */
-export async function getTickerNewsPanel(ticker: string, assetClass: AssetClass): Promise<TickerNewsPanelResult> {
+export async function getTickerNewsPanel(ticker: string, assetClass: AssetClass, opts: { includeMacro?: boolean } = {}): Promise<TickerNewsPanelResult> {
+  // includeMacro (default true) lets a caller skip the GDELT sector/macro part, which is slow (about 6 s) and rate limited.
+  const includeMacro = opts.includeMacro !== false;
   const symbol = ticker.trim().toUpperCase();
   const dataLimitations: string[] = [];
   let companyNews: CompanyNewsArticle[] | null = null;
@@ -61,7 +63,7 @@ export async function getTickerNewsPanel(ticker: string, assetClass: AssetClass)
       dataLimitations.push(`SEC filings unavailable: ${filingsResult.reason instanceof Error ? filingsResult.reason.message : "Unknown error"}`);
     }
 
-    try {
+    if (includeMacro) try {
       const profiles = await fetchProfile(symbol);
       const sector = profiles[0]?.sector ?? null;
       const kw = (sector ? SECTOR_NEWS_KEYWORDS[sector] : null) ?? FALLBACK_SECTOR_KEYWORDS;
@@ -73,6 +75,8 @@ export async function getTickerNewsPanel(ticker: string, assetClass: AssetClass)
     // No crypto news source is wired up: FMP company news and SEC filings are equity-only, and the macro-news keyword
     // maps cover currency pairs, commodities and futures, not coins. Say so instead of showing unrelated equity news.
     dataLimitations.push("News is not available for crypto in this app. Company news and SEC filings cover equities only, and no macro-news keyword mapping exists for coins.");
+  } else if (!includeMacro) {
+    // Nothing else to fetch for this asset class without the macro lookup.
   } else {
     const kw = assetClass === "forex" ? MAJOR_PAIR_KEYWORDS.find((p) => p.pair === symbol) : COMMODITY_FUTURES_NEWS_KEYWORDS[symbol];
     if (kw) {
