@@ -295,7 +295,7 @@ export function NewsImpactView({ data }: { data: NewsImpactResult }) {
         {study && (
           <p className="text-xs mt-2" style={{ color: "var(--text-2)" }}>
             The first row needs {study.minHeadlineEvents} filing days to count; each type needs {study.minTypeEvents}. A filing is a dated event, not a count of headlines.{" "}
-            {study.testsInFamily} tests were run together; the bright bars passed after the false-discovery correction.
+            {study.testsInFamily} tests were run in all. The first row is corrected on its own; the type rows are corrected together. Bright bars passed.
           </p>
         )}
       </div>

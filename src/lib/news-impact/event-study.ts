@@ -14,7 +14,8 @@ import type { DatedEvent, EffectWord, EventGroupResult, EventStudyResult, EventT
  *
  * Test: Welch two-sample t with the exact Student t distribution. The ordinary-day standard error uses batch means
  * (10-day blocks) because absolute moves cluster in time. Interval: seeded bootstrap of the event days' own mean
- * (divided by the ordinary-day mean for a ratio). Correction: Benjamini-Hochberg over every test in the table.
+ * (divided by the ordinary-day mean for a ratio). Correction: Benjamini-Hochberg in two families: the pooled headline row
+ * (3 measures) and the by-type rows (5 types x 3 measures).
  */
 
 export const MIN_HEADLINE_EVENTS = 20;
@@ -203,7 +204,12 @@ function evalGroup(id: string, label: string, idxs: number[], s: StudySeries, b:
   };
 }
 
-/** Fills pAdj on every test with Benjamini-Hochberg over the whole table. Returns the family size. */
+/**
+ * Fills pAdj on the tests of these groups with Benjamini-Hochberg, treating them as ONE family (each group contributes its
+ * three measures). Returns the family size. The study calls it twice: once for the pooled headline row (its 3 measures) and
+ * once for the by-type rows (5 types x 3 measures), so the single pre-declared headline is not penalised for the many
+ * exploratory type rows.
+ */
 export function adjustFamily(groups: EventGroupResult[]): number {
   const tests: GroupTest[] = [];
   for (const g of groups) tests.push(g.day0, g.car, g.volume);
@@ -239,7 +245,7 @@ export function runEventStudy(series: StudySeries, events: DatedEvent[], typeDef
       groups.push(evalGroup(def.id, def.label, idxs, series, b, { mode: "abs", minN: minType, thinBelow, ...base }));
     }
   }
-  const testsInFamily = adjustFamily([pooled, ...groups]);
+  const testsInFamily = adjustFamily([pooled]) + adjustFamily(groups);
   return {
     groups,
     pooled,

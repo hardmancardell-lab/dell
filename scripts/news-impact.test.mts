@@ -3,7 +3,7 @@
 // News Impact study, pure computation: market model with purge gap, event study (planted effect found, null not found),
 // Benjamini-Hochberg over the table, minimum-n refusals, variance split and half-sample stability, SEC filing timing,
 // macro days, placebo false-pass rate, plain-language wording. Synthetic seeded data only; no network, no key.
-import { mulberry32 } from "../src/lib/agents/trading-agent/skills/stats-tests.ts";
+import { mulberry32, benjaminiHochberg } from "../src/lib/agents/trading-agent/skills/stats-tests.ts";
 import { makeT } from "./fixtures/fake-fetch.mts";
 import { olsFit, scoreRolling, logVolumeRatio, trailingSd, PURGE_GAP } from "../src/lib/news-impact/market-model.ts";
 import { alignReturns, cleanBars, firstIndexOnOrAfter } from "../src/lib/news-impact/returns.ts";
@@ -161,6 +161,11 @@ const evs = (s: Synth, type = "earnings") => s.eventIdx.map((i) => ({ date: s.da
   const ps = [rm.pooled, ...rm.groups].flatMap((g) => [g.day0, g.car, g.volume]).filter((x) => x.p !== null);
   t("event study: every p has a Benjamini-Hochberg adjusted p at least as large", ps.every((x) => x.pAdj !== null && x.pAdj >= x.p - 1e-12));
   t("event study: family size equals the number of tests with a p-value", rm.testsInFamily === ps.length);
+  const headlineAdj = benjaminiHochberg([rm.pooled.day0.p, rm.pooled.car.p, rm.pooled.volume.p]);
+  t("event study: the pooled headline row is corrected across its own 3 measures only, so the many type rows do not penalise it", near(rm.pooled.day0.pAdj, headlineAdj[0], 1e-12) && near(rm.pooled.car.pAdj, headlineAdj[1], 1e-12) && near(rm.pooled.volume.pAdj, headlineAdj[2], 1e-12));
+  const typeTests = rm.groups.flatMap((g) => [g.day0, g.car, g.volume]);
+  const typeAdj = benjaminiHochberg(typeTests.map((x) => (x.p === null ? NaN : x.p)));
+  t("event study: the by-type rows are corrected together as their own family", typeTests.every((x, i) => (x.p === null ? x.pAdj === null : near(x.pAdj, typeAdj[i], 1e-12))));
 }
 
 // ---- baseline excludes every event window
