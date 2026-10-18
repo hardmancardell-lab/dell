@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
 import { TRACK, VEHICLE, TRAILER, ECONOMY } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { LongHaulAudio } from "./long-haul-audio";
 import { advanceLoan, fuelAfter, NO_LOAN, shouldOfferLoan, stepSpeed, takeLoan, type LoanState } from "@/lib/agents/financial-literacy/skills/long-haul-rules";
 
 /**
@@ -77,12 +78,18 @@ export class LongHaulEngine {
   private readonly onKeyUp = (e: KeyboardEvent) => { if (this.setKey(e.code, false)) e.preventDefault(); };
   private readonly onBlur = () => { this.keys = { up: false, down: false, left: false, right: false }; };
   private readonly onResize = () => this.handleResize();
+  // The game's React wrapper keeps the container hidden (display: none) while the engine loads, so the container is 0 x 0 when
+  // this class is built. Without watching its size the canvas stayed 0 x 0 and the car never appeared; the observer resizes
+  // the canvas the moment the container becomes visible, and again on any later size change.
+  private resizeObserver: ResizeObserver | null = null;
+  private readonly audio = new LongHaulAudio();
+  private readonly onUserGesture = () => this.audio.unlock();
 
   constructor(private container: HTMLElement, private callbacks: LongHaulCallbacks) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
+    this.handleResize();
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0b0e12);
@@ -100,7 +107,27 @@ export class LongHaulEngine {
     container.addEventListener("keydown", this.onKeyDown);
     container.addEventListener("keyup", this.onKeyUp);
     container.addEventListener("blur", this.onBlur);
+    container.addEventListener("keydown", this.onUserGesture);
+    container.addEventListener("pointerdown", this.onUserGesture);
     window.addEventListener("resize", this.onResize);
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => this.handleResize());
+      this.resizeObserver.observe(container);
+    }
+  }
+
+  /** Sound on or off (the choice is remembered by the audio module). Turning it on counts as a user action, so it can start sound. */
+  setSoundEnabled(enabled: boolean) {
+    this.audio.setEnabled(enabled);
+  }
+
+  get soundEnabled(): boolean {
+    return this.audio.isEnabled;
+  }
+
+  /** Lets the page's on-screen controls and buttons start sound too (browsers need a click or key press first). */
+  unlockAudio() {
+    this.audio.unlock();
   }
 
   /** Async init (Rapier's WASM must load) — call once before the engine does anything. */
@@ -199,9 +226,12 @@ export class LongHaulEngine {
   }
 
   private handleResize() {
-    this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+    if (width <= 0 || height <= 0) return; // hidden or not laid out yet: keep the last good size until it is visible
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    this.renderer.setSize(width, height);
   }
 
   private currentTuning() {
@@ -231,6 +261,7 @@ export class LongHaulEngine {
     this.loan = takeLoan();
     this.fuel = 100;
     this.phase = "driving";
+    this.audio.refuel();
   }
 
   declineLoan() {
@@ -295,6 +326,7 @@ export class LongHaulEngine {
       if (!this.tollCharged && pos.z <= TRACK.tollZ && pos.x > 2) {
         this.tollCharged = true;
         this.tollPaid += ECONOMY.tollCost;
+        this.audio.tollChime();
       }
 
       if (!this.gasStationResolved && pos.z <= TRACK.gasStationZ) {
@@ -302,6 +334,7 @@ export class LongHaulEngine {
         if (shouldOfferLoan(this.fuel)) {
           this.pauseCar();
           this.phase = "modal";
+          this.audio.loanPrompt();
           this.callbacks.onLoanPrompt();
         }
       }
@@ -309,6 +342,7 @@ export class LongHaulEngine {
       if (pos.z <= TRACK.finishZ) {
         this.pauseCar();
         this.phase = "finished";
+        this.audio.finish();
         const elapsedSeconds = (now - this.startTime) / 1000;
         this.callbacks.onFinish({
           elapsedSeconds,
@@ -354,10 +388,19 @@ export class LongHaulEngine {
       this.trailerMesh.rotation.y = sample.heading;
     }
 
-    const camOffset = new THREE.Vector3(Math.sin(this.heading) * 9, 5.5, Math.cos(this.heading) * 9);
+    // Chase camera: BEHIND the car (opposite its forward direction), so the road ahead is in view and +X (the highway lane) is on the
+    // screen's right, matching the on-screen text. It was ahead of the car looking back, which hid the road and mirrored left and right.
+    const camOffset = new THREE.Vector3(-Math.sin(this.heading) * 9, 5.5, -Math.cos(this.heading) * 9);
     const desiredCamPos = new THREE.Vector3(t.x, 0, t.z).add(camOffset);
     this.camera.position.lerp(desiredCamPos, 0.12);
     this.camera.lookAt(t.x, 1, t.z);
+
+    this.audio.update(
+      this.phase === "driving" ? Math.min(1, Math.abs(this.speed) / this.currentTuning().maxSpeed) : 0,
+      this.phase === "driving" && this.keys.up,
+      this.fuel,
+      now / 1000,
+    );
 
     this.callbacks.onHud({
       speedMph: Math.round(Math.abs(this.speed) * 3.2),
@@ -377,6 +420,10 @@ export class LongHaulEngine {
     this.container.removeEventListener("keyup", this.onKeyUp);
     this.container.removeEventListener("blur", this.onBlur);
     window.removeEventListener("resize", this.onResize);
+    this.container.removeEventListener("keydown", this.onUserGesture);
+    this.container.removeEventListener("pointerdown", this.onUserGesture);
+    this.resizeObserver?.disconnect();
+    this.audio.dispose();
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement === this.container) {
       this.container.removeChild(this.renderer.domElement);

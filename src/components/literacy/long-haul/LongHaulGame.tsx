@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ECONOMY, XP } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import type { LongHaulHud, LongHaulSummary } from "./long-haul-engine";
+import { readSoundPreference } from "./long-haul-audio";
 
 // Three.js + Rapier touch window/WebGL/WASM at module-eval time — this
 // component is only ever mounted via a next/dynamic ssr:false import, same
@@ -19,6 +20,7 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [hud, setHud] = useState<LongHaulHud>({ speedMph: 0, fuel: 100, tollPaid: 0, trailerAttached: false, debt: 0 });
+  const [soundOn, setSoundOn] = useState(() => readSoundPreference());
   const [modalOpen, setModalOpen] = useState(false);
   const [summary, setSummary] = useState<LongHaulSummary | null>(null);
 
@@ -118,7 +120,7 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
             background: "rgba(10,12,16,0.5)", color: "var(--text-2)", fontSize: 11, pointerEvents: "none",
           }}
         >
-          Click or Tab to the game, then WASD / Arrows · left lane = Back Roads (free, rough) · right lane = Highway (toll, smooth)
+          Click or Tab to the game (this also turns the sound on), then WASD / Arrows · left lane = Back Roads (free, rough) · right lane = Highway (toll, smooth)
         </div>
 
         {modalOpen && (
@@ -204,7 +206,7 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
             aria-label={label}
             className="jv-btn-outline"
             style={{ touchAction: "none", userSelect: "none" }}
-            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); engineRef.current?.setControl(control, true); }}
+            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); engineRef.current?.unlockAudio(); engineRef.current?.setControl(control, true); }}
             onPointerUp={() => engineRef.current?.setControl(control, false)}
             onPointerCancel={() => engineRef.current?.setControl(control, false)}
             onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); engineRef.current?.setControl(control, true); } }}
@@ -214,6 +216,19 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
             {label}
           </button>
         ))}
+        <button
+          type="button"
+          className="jv-btn-outline"
+          aria-pressed={soundOn}
+          aria-label={soundOn ? "Sound is on. Press to mute." : "Sound is off. Press to turn on."}
+          onClick={() => {
+            const next = !soundOn;
+            engineRef.current?.setSoundEnabled(next);
+            setSoundOn(next);
+          }}
+        >
+          {soundOn ? "Sound: on" : "Sound: off"}
+        </button>
       </div>
 
     </div>
