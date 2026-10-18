@@ -47,7 +47,8 @@ for (const s of STUDIES.filter((x) => !x.location)) for (const c of (s.assetClas
 }
 t(`every study is addressable: canonical and short URLs agree and round-trip (${roundTrip} routes)`, rtBad.length === 0, rtBad.slice(0, 8).join("\n  "));
 
-t("planned hooks (news-hub, client-research) have no route yet and a study= link to them degrades to the Trading Agent", resolveStudyRoute("news-hub") === undefined && resolveStudyRoute("client-research") === undefined && q("?agent=trading&study=news-hub") === '{"primaryId":"trading"}', q("?agent=trading&study=news-hub"));
+t("planned hook (client-research) has no route yet and a study= link to it degrades to the Trading Agent", resolveStudyRoute("client-research") === undefined && q("?agent=trading&study=client-research") === '{"primaryId":"trading"}', q("?agent=trading&study=client-research"));
+t("News hub deep link opens the News tab", q("?agent=trading&study=news-hub") === '{"primaryId":"trading","secondaryId":"news-hub"}' && q("?agent=trading&section=news-hub") === '{"primaryId":"trading","secondaryId":"news-hub"}', q("?agent=trading&study=news-hub"));
 
 // ---------------------------------------------------------------- reducer: clicks, programmatic navigation, history
 let s0 = {};
@@ -125,7 +126,7 @@ t("Faye only navigates to ids this registry knows", [...fayeSrc.matchAll(/naviga
 // ---------------------------------------------------------------- command palette items
 const items = buildPaletteItems({ lastAssetClass: "forex", watchlist: [{ symbol: "aapl", assetClass: "equity" }, { symbol: "AAPL", assetClass: "equity" }, { symbol: "EUR/USD", assetClass: "forex" }] });
 t("palette lists every live study exactly once", STUDIES.filter((x) => x.status !== "planned").every((x) => items.filter((i) => i.key === "study:" + x.id).length === 1), "");
-t("palette does not list planned hooks", !items.some((i) => i.key === "study:news-hub" || i.key === "study:client-research"), "");
+t("palette lists the News hub but not the planned Client Research slot", items.some((i) => i.key === "study:news-hub") && !items.some((i) => i.key === "study:client-research"), "");
 t("palette lists every agent tab and every section", PRIMARY_TABS.every((p) => items.some((i) => i.key === "tab:" + p.id)) && Object.entries(SECONDARY_TABS).every(([a, list]) => list.every((x) => items.some((i) => i.key === "tab:" + a + "/" + x.id))), "");
 t("palette lists watchlist tickers once, upper-cased", items.filter((i) => i.key === "ticker:AAPL").length === 1 && items.some((i) => i.key === "ticker:EUR/USD"), "");
 t("palette study target uses the current asset-class context", items.find((i) => i.key === "study:backtest").target.secondaryId === "currency" && items.find((i) => i.key === "study:quad-witching").target.secondaryId === "equities", JSON.stringify(items.find((i) => i.key === "study:backtest").target));

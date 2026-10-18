@@ -15,4 +15,5 @@ function Loading() {
 }
 
 export const StudiesTab = dynamic(() => import("./StudiesTab").then((m) => m.StudiesTab), { loading: Loading });
+export const NewsHubTab = dynamic(() => import("@/components/NewsHubTab").then((m) => m.NewsHubTab), { loading: Loading });
 export const AssetGroupWorkspace = dynamic(() => import("./AssetGroupWorkspace").then((m) => m.AssetGroupWorkspace), { loading: Loading });

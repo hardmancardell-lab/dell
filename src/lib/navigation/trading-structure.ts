@@ -38,6 +38,7 @@ export const ASSET_GROUPS: AssetGroup[] = [
 /** Trading Agent secondary tabs that are not asset-class groups. Each is also a trading-wide registry entry (except "studies"). */
 export const TRADING_WIDE_TABS: Array<{ id: string; label: string }> = [
   { id: "guided-signals", label: "Guided Signals" },
+  { id: "news-hub", label: "News" },
   { id: "glossary", label: "Glossary" },
   { id: "alerts", label: "Alerts" },
   { id: "paper-trading", label: "Paper Trading" },
@@ -52,6 +53,7 @@ export const STUDIES_SECTION = { id: "studies", label: "Studies" };
 export const TRADING_SECTION_ORDER: string[] = [
   "guided-signals",
   STUDIES_SECTION.id,
+  "news-hub",
   ...ASSET_GROUPS.map((g) => g.id),
   "glossary",
   "alerts",

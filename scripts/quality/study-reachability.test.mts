@@ -94,7 +94,9 @@ for (const s of external) {
     if (!r || !primaryOk || !secondaryOk) hookProblems.push(`${s.id}: location ${JSON.stringify(s.location)} is not a tab in page.tsx / trading-structure.ts`);
   }
 }
-t("News hub and Client Research hooks exist, are planned or point at a real tab", ["news-hub", "client-research"].every((id) => external.some((e) => e.id === id)) && hookProblems.length === 0, hookProblems.join("; ") || "missing news-hub / client-research entry");
+t("Client Research slot exists and is planned or points at a real tab", external.some((e) => e.id === "client-research") && hookProblems.length === 0, hookProblems.join("; ") || "missing client-research entry");
+const news = STUDIES.find((s) => s.id === "news-hub");
+t("News hub is live: an in-place Trading Agent tab running NewsHubTab, routed to its own tab", !!news && news.component === "NewsHubTab" && !news.location && !news.status && resolveStudyRoute("news-hub")?.secondaryId === "news-hub" && tradingSections.has("news-hub"), JSON.stringify(news));
 
 const groupProblems: string[] = [];
 for (const g of ASSET_GROUPS) {
@@ -110,7 +112,7 @@ t("every asset class has exactly one group", ASSET_CLASSES.every((c) => ASSET_GR
 // ---------------------------------------------------------------- baseline coverage
 const leaves = baseline.filter((r) => !r.hasChildren);
 const legacy = new Map<string, { study: any; key: string; variant: any }>();
-for (const s of STUDIES) for (const [key, variant] of Object.entries(s.variants)) legacy.set(variant.legacyTab, { study: s, key, variant });
+for (const s of STUDIES) for (const [key, variant] of Object.entries(s.variants)) if (variant.legacyTab) legacy.set(variant.legacyTab, { study: s, key, variant });
 
 const sameComponents = (a: any[], b: any[]) => JSON.stringify(a.map((x) => x.component).sort()) === JSON.stringify(b.map((x) => x.component).sort());
 function coverage(byPath: Map<string, any>, registryLegacy: Map<string, any>) {

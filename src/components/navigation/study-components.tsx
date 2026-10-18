@@ -60,6 +60,7 @@ import {
   YieldCurveTab,
   RequiresPlacementTier,
 } from "@/app/page-tabs";
+import { NewsHubTab } from "./lazy";
 import { getStudy, resolveStudyRender, type StudyComponentKey } from "@/lib/navigation/study-registry";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,6 +92,7 @@ export const STUDY_COMPONENTS: Record<StudyComponentKey, ComponentType<any>> = {
   InternationalCentralBanksView,
   InternationalEconomicsTab,
   LowOfDayTimingTab,
+  NewsHubTab,
   OptionFlowTab,
   OptionsCalculatorTab,
   OptionsChainTradeTab,

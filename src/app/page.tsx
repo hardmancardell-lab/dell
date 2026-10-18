@@ -41,7 +41,7 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { HelpMenu } from "@/components/HelpMenu";
 import { FayeChatWidget } from "@/components/FayeChatWidget";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
-import { AssetGroupWorkspace, StudiesTab } from "@/components/navigation/lazy";
+import { AssetGroupWorkspace, NewsHubTab, StudiesTab } from "@/components/navigation/lazy";
 import { PaletteHost } from "@/components/navigation/PaletteHost";
 
 // The navigation surfaces (Study Library, group workspace) use the jarvis tokens, and the Trading Agent's page is not
@@ -531,6 +531,19 @@ export default async function Home() {
                           <NavScope>
                             <StudiesTab />
                           </NavScope>
+                        </div>
+                      ),
+                    },
+                    {
+                      id: "news-hub",
+                      label: "News",
+                      content: (
+                        <div>
+                          <div className="text-xs uppercase tracking-wide text-zinc-500 font-medium">
+                            Trading Agent &middot; News
+                          </div>
+                          <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">News</h1>
+                          <NewsHubTab />
                         </div>
                       ),
                     },

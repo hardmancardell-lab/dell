@@ -67,6 +67,7 @@ export type StudyComponentKey =
   | "InternationalCentralBanksView"
   | "InternationalEconomicsTab"
   | "LowOfDayTimingTab"
+  | "NewsHubTab"
   | "OptionFlowTab"
   | "OptionsCalculatorTab"
   | "OptionsChainTradeTab"
@@ -99,8 +100,11 @@ export interface StudyVariant {
   component?: StudyComponentKey;
   /** The props the old tab passed for this asset class, minus React's `key`. A `defaultTicker` here is the default ticker. */
   props: StudyProps;
-  /** The old tab path this variant replaces, for example "trading/equities/backtest". Used by the reachability test. */
-  legacyTab: string;
+  /**
+   * The old tab path this variant replaces, for example "trading/equities/backtest". Used by the reachability test.
+   * Omitted for entries added after the navigation rework (they have no old tab to preserve).
+   */
+  legacyTab?: string;
 }
 
 export interface StudyNeeds {
@@ -690,9 +694,8 @@ export const STUDIES: StudyEntry[] = [
     variants: { crypto: { props: {}, legacyTab: "trading/crypto/watchlist" } },
   },
 
-  // ---------------------------------------------------------------- Hooks for sections other teams are building.
-  // NewsHubTab and ClientResearchView do not exist yet, so these entries have no `component` and are "planned": the library
-  // shows them as "Coming soon". The primary tab ids below are placeholders; the owning team sets the real ones.
+  // ---------------------------------------------------------------- Sections other teams built.
+  // News Hub: live. NewsHubTab (commit 234070b) is a trading-wide tool with its own Trading Agent tab, "News".
   {
     id: "news-hub",
     title: "News Hub",
@@ -701,12 +704,13 @@ export const STUDIES: StudyEntry[] = [
     assetClasses: [],
     needs: NO_NEEDS,
     runTime: "A few seconds",
-    component: null,
-    status: "planned",
-    location: { primaryId: "news" },
-    keywords: "news headlines feed articles hub NewsHubTab",
-    variants: {},
+    component: "NewsHubTab",
+    keywords: "news headlines feed articles hub watchlist filings press releases",
+    variants: { all: { props: {} } },
   },
+  // Client Research: ClientResearchView takes a client `slug` and lives in the client portal (ClientDashboardView at
+  // /client/[slug]), so it has no tab in the advisor-facing app. The slot stays "planned" until an advisor-side entry point
+  // exists; then set `location` (a real tab id in page.tsx and trading-structure.ts) and delete `status`.
   {
     id: "client-research",
     title: "Client Research",
