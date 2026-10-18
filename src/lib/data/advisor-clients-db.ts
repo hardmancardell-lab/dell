@@ -1,7 +1,8 @@
-import { randomBytes, createHash } from "crypto";
+import { randomBytes } from "crypto";
 import { computeRealizedPnl } from "@/lib/agents/trading-agent/skills/realized-pnl";
 import type { AdvisorClient, PortfolioHolding, RealizedSale } from "@/lib/agents/trading-agent/types";
 import { pgId } from "@/lib/data/postgrest-safe";
+import { hashPasscodeSalted, legacySha256Passcode } from "@/lib/access/passcode";
 
 /**
  * Plain-fetch Supabase REST CRUD for advisor_clients/advisor_client_holdings
@@ -50,9 +51,13 @@ async function supabaseRequest<T>(
   return undefined as T;
 }
 
-/** A lightweight PIN gate for a client link, not a full auth system — sha256 is enough for this threat model (a leaked link, not a targeted attack on stored credentials). */
+/**
+ * LEGACY unsalted SHA-256. Kept only so older code and tests can still build or read an old-format row. Nothing stores
+ * it any more: new and changed passcodes go through hashPasscodeSalted (lib/access/passcode.ts, scrypt), and
+ * verification accepts both formats and upgrades an old one at the next successful sign-in.
+ */
 export function hashPasscode(passcode: string): string {
-  return createHash("sha256").update(passcode.trim()).digest("hex");
+  return legacySha256Passcode(passcode);
 }
 
 function generateSlug(): string {
@@ -94,7 +99,7 @@ export async function createAdvisorClient(
     body: {
       slug: generateSlug(),
       name,
-      passcode_hash: hashPasscode(passcode),
+      passcode_hash: await hashPasscodeSalted(passcode),
       cash_balance: cashBalance,
       linked_email: linkedEmail ? linkedEmail.trim().toLowerCase() : null,
     },
@@ -111,13 +116,27 @@ export async function updateAdvisorClient(
   if (updates.linkedEmail !== undefined) {
     body.linked_email = updates.linkedEmail ? updates.linkedEmail.trim().toLowerCase() : null;
   }
-  if (updates.passcode !== undefined) body.passcode_hash = hashPasscode(updates.passcode);
+  if (updates.passcode !== undefined) body.passcode_hash = await hashPasscodeSalted(updates.passcode);
   const rows = await supabaseRequest<ClientRow[]>("advisor_clients?slug=eq." + pgId(slug), {
     method: "PATCH",
     prefer: "return=representation",
     body,
   });
   return rowToClient(rows[0]);
+}
+
+/**
+ * Upgrades a stored passcode hash after a successful sign-in, but only if the stored hash is still the one that just
+ * verified (compare-and-set), so a passcode the advisor changed a moment ago is never overwritten. Returns true only
+ * when a row was changed. Any failure is the caller's to ignore: the old hash keeps working.
+ */
+export async function replacePasscodeHashIfUnchanged(slug: string, oldHash: string, newHash: string): Promise<boolean> {
+  const rows = await supabaseRequest<ClientRow[]>(`advisor_clients?slug=eq.${pgId(slug)}&passcode_hash=eq.${encodeURIComponent(oldHash)}`, {
+    method: "PATCH",
+    prefer: "return=representation",
+    body: { passcode_hash: newHash },
+  });
+  return Array.isArray(rows) && rows.length === 1;
 }
 
 /**

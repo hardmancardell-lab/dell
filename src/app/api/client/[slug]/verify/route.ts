@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { isValidId } from "@/lib/data/postgrest-safe";
-import { getAdvisorClientBySlug, hashPasscode } from "@/lib/data/advisor-clients-db";
+import { getAdvisorClientBySlug, replacePasscodeHashIfUnchanged } from "@/lib/data/advisor-clients-db";
+import { hashPasscodeSalted, verifyPasscode } from "@/lib/access/passcode";
 import { clientIp, LockoutLimiter, tooManyRequests } from "@/lib/access/rate-limit";
-import { ACCESS_TOKEN_TTL_SECONDS, issueClientCookie, timingSafeEqualStr } from "@/lib/access/tokens";
+import { ACCESS_TOKEN_TTL_SECONDS, issueClientCookie } from "@/lib/access/tokens";
 
 // Best-effort, per-instance: 5 wrong passcodes per 15 min per IP+slug, escalating lockout. A second limiter keyed by
 // slug alone slows a distributed guess against one client link (10 failures per 15 min across all IPs).
@@ -14,8 +15,11 @@ const perSlug = new LockoutLimiter(10, 15 * 60_000, 60_000, 30 * 60_000);
  * precedent as /api/admin/login. The cookie holds a signed, expiring token keyed on the stored passcode hash (so
  * changing the passcode revokes it) and no longer contains the hash itself.
  *
- * NOT FIXED HERE: passcodes are still stored as unsalted SHA-256 (advisor-clients-db hashPasscode). Moving to
- * scrypt with a per-client salt needs a data migration of existing advisor_clients rows; see fix-batch-A notes.
+ * Passcodes are stored as a salted scrypt hash (lib/access/passcode.ts). A row still holding the old unsalted SHA-256
+ * is accepted, and on that same successful sign-in it is replaced by a salted hash (compare-and-set, failure ignored),
+ * so no client is locked out and no data migration is needed. The cookie is bound to the stored hash, so when the hash
+ * changes every OTHER outstanding session for this client fails the cookie check and is asked for the passcode again
+ * (it never leaks anything); this sign-in gets a cookie for the new hash. Passcodes are never logged.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -35,18 +39,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: "Incorrect passcode." }, { status: 401 });
   }
   const client = await getAdvisorClientBySlug(slug);
-  // Hash even when the slug is unknown so timing does not reveal which slugs exist.
-  const candidate = hashPasscode(body.passcode);
-  const ok = client ? await timingSafeEqualStr(candidate, client.passcodeHash) : false;
-  if (!client || !ok) {
+  // The check runs against a dummy hash when the slug is unknown, so timing does not reveal which slugs exist.
+  const check = await verifyPasscode(body.passcode, client ? client.passcodeHash : null);
+  if (!client || !check.ok) {
     const a = perIp.fail(ipKey);
     perSlug.fail(slugKey);
     if (!a.allowed) return tooManyRequests(a);
     return NextResponse.json({ error: "Incorrect passcode." }, { status: 401 });
   }
   perIp.succeed(ipKey);
+  let effectiveHash = client.passcodeHash;
+  if (check.needsRehash) {
+    try {
+      const upgraded = await hashPasscodeSalted(body.passcode);
+      if (await replacePasscodeHashIfUnchanged(slug, client.passcodeHash, upgraded)) effectiveHash = upgraded;
+    } catch {
+      // The old hash still works; the upgrade is tried again at the next sign-in. Nothing is logged: the error text could carry row data.
+    }
+  }
   const res = NextResponse.json({ ok: true, name: client.name });
-  res.cookies.set(`client_session_${slug}`, await issueClientCookie(slug, client.passcodeHash), {
+  res.cookies.set(`client_session_${slug}`, await issueClientCookie(slug, effectiveHash), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
