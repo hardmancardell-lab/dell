@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TradingDashboardTab } from "./TradingDashboardTab";
 import { PriceChart } from "./PriceChart";
-import { TickerNewsPanel } from "./TickerNewsPanel";
+import { ChartNews } from "./navigation/ChartNews";
+import { useChartAlert } from "./navigation/use-chart-alert";
 import { TOP_TRADED_FUTURES_PROXIES } from "@/lib/agents/trading-agent/skills/top-traded-futures-proxies";
 import type { AssetRatesSummary } from "@/lib/agents/trading-agent/types";
 
 const POLL_INTERVAL_MS = 15_000;
 
 export function FuturesDashboardTab() {
+  const onCreateAlert = useChartAlert();
   const [rates, setRates] = useState<AssetRatesSummary | null>(null);
   const [ratesError, setRatesError] = useState<string | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
@@ -95,8 +97,8 @@ export function FuturesDashboardTab() {
         ))}
         {selectedSymbol && (
           <div className="mt-4">
-            <PriceChart symbol={selectedSymbol} assetClass="future" />
-            <TickerNewsPanel symbol={selectedSymbol} assetClass="future" />
+            <PriceChart onCreateAlert={onCreateAlert} symbol={selectedSymbol} assetClass="future" />
+            <ChartNews symbol={selectedSymbol} assetClass="future" />
           </div>
         )}
       </section>

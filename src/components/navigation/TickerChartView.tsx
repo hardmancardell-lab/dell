@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { useAppNavigation } from "@/lib/navigation/app-navigation";
 import type { AssetClass } from "@/lib/navigation/study-registry";
-import { TickerNewsPanel } from "@/components/TickerNewsPanel";
+import { ChartNews } from "./ChartNews";
+import { useChartAlert } from "./use-chart-alert";
 
 // The chart library is heavy; it loads only when a ticker chart is actually shown.
 const PriceChart = dynamic(() => import("@/components/PriceChart").then((m) => m.PriceChart), {
@@ -20,6 +21,7 @@ const PriceChart = dynamic(() => import("@/components/PriceChart").then((m) => m
  */
 export function TickerChartView({ symbol, assetClass }: { symbol: string; assetClass: AssetClass }) {
   const nav = useAppNavigation();
+  const onCreateAlert = useChartAlert();
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -30,8 +32,8 @@ export function TickerChartView({ symbol, assetClass }: { symbol: string; assetC
           {symbol}
         </h2>
       </div>
-      <PriceChart key={`${assetClass}:${symbol}`} symbol={symbol} assetClass={assetClass} />
-      {assetClass !== "crypto" && <TickerNewsPanel symbol={symbol} assetClass={assetClass} />}
+      <PriceChart key={`${assetClass}:${symbol}`} symbol={symbol} assetClass={assetClass} onCreateAlert={onCreateAlert} />
+      <ChartNews symbol={symbol} assetClass={assetClass} />
     </div>
   );
 }

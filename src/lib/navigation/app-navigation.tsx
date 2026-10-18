@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import { buildNavQuery, navReducer, parseNavQuery, type NavState } from "./nav-state";
 import { resolveStudyRoute, resolveTickerRoute } from "./study-routes";
 import { groupById } from "./trading-structure";
+import { formatAlertPrefill } from "./alert-prefill";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
 
 // Kept for existing imports: the Assistant and the onboarding wizard describe a target as a primary id plus an optional secondary id.
@@ -28,6 +29,8 @@ interface AppNavigationContextValue {
   openStudy: (studyId: string, opts?: { assetClass?: AssetClass; ticker?: string }) => boolean;
   /** Open a ticker's chart in its asset-class group. */
   openTicker: (symbol: string, assetClass?: AssetClass) => boolean;
+  /** Chart-to-alert: open the Alerts tab with a Price Threshold row pre-filled from a line drawn on a chart. Returns false for a bad price. */
+  createAlert: (a: { symbol: string; price: number; direction: "above" | "below" }) => boolean;
   /** Build a shareable same-page link (path plus query) for a state. */
   hrefFor: (next: NavState) => string;
 }
@@ -95,14 +98,20 @@ export function AppNavigationProvider({ children, syncUrl = true }: { children: 
     dispatch({ type: "navigate", state: route });
     return true;
   }, []);
+  const createAlert = useCallback((a: { symbol: string; price: number; direction: "above" | "below" }) => {
+    const alert = formatAlertPrefill(a);
+    if (!alert) return false;
+    dispatch({ type: "navigate", state: { primaryId: "trading", secondaryId: "alerts", alert } });
+    return true;
+  }, []);
   const hrefFor = useCallback((next: NavState) => {
     const q = buildNavQuery(next);
     return q ? `?${q}` : "?";
   }, []);
 
   const value = useMemo<AppNavigationContextValue>(
-    () => ({ state, lastAssetClass, navigateTo, navigate, patch, select, openStudy, openTicker, hrefFor }),
-    [state, lastAssetClass, navigateTo, navigate, patch, select, openStudy, openTicker, hrefFor]
+    () => ({ state, lastAssetClass, navigateTo, navigate, patch, select, openStudy, openTicker, createAlert, hrefFor }),
+    [state, lastAssetClass, navigateTo, navigate, patch, select, openStudy, openTicker, createAlert, hrefFor]
   );
 
   return <AppNavigationContext.Provider value={value}>{children}</AppNavigationContext.Provider>;

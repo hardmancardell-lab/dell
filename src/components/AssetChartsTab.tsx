@@ -5,7 +5,8 @@ import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { normalizeSymbolForClass } from "@/lib/agents/trading-agent/crypto-symbol";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { PriceChart } from "./PriceChart";
-import { TickerNewsPanel } from "./TickerNewsPanel";
+import { ChartNews } from "./navigation/ChartNews";
+import { useChartAlert } from "./navigation/use-chart-alert";
 import { WatchlistNewsPanel } from "./WatchlistNewsPanel";
 import { WatchlistSelector } from "./WatchlistSelector";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
@@ -32,6 +33,7 @@ export function AssetChartsTab({
   watchlistLabel: string;
   quickPicks?: string[];
 }) {
+  const onCreateAlert = useChartAlert();
   const { entries, hydrated, addEntry } = useWatchlist();
   const scopedEntries = entries.filter((e) => e.assetClass === assetClass);
   const [input, setInput] = useState("");
@@ -137,8 +139,8 @@ export function AssetChartsTab({
 
       {symbol ? (
         <div className="mt-3">
-          <PriceChart key={assetClass === "crypto" ? symbol : undefined} symbol={symbol} assetClass={assetClass} />
-          {assetClass !== "crypto" && <TickerNewsPanel symbol={symbol} assetClass={assetClass} />}
+          <PriceChart onCreateAlert={onCreateAlert} key={assetClass === "crypto" ? symbol : undefined} symbol={symbol} assetClass={assetClass} />
+          <ChartNews symbol={symbol} assetClass={assetClass} />
         </div>
       ) : (
         <p className="text-sm" style={{ color: "var(--text-2)" }}>

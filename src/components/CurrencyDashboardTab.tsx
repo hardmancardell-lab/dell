@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TradingDashboardTab } from "./TradingDashboardTab";
 import { PriceChart } from "./PriceChart";
-import { TickerNewsPanel } from "./TickerNewsPanel";
+import { ChartNews } from "./navigation/ChartNews";
+import { useChartAlert } from "./navigation/use-chart-alert";
 import { TOP_TRADED_PAIRS } from "@/lib/agents/trading-agent/skills/top-traded-pairs";
 import type { CurrencyExpertAnalysisResult, ForexRatesSummary, FxCoverageSpikeSignal } from "@/lib/agents/trading-agent/types";
 
 const POLL_INTERVAL_MS = 15_000;
 
 export function CurrencyDashboardTab() {
+  const onCreateAlert = useChartAlert();
   const [rates, setRates] = useState<ForexRatesSummary | null>(null);
   const [ratesError, setRatesError] = useState<string | null>(null);
   const [selectedPair, setSelectedPair] = useState<string | null>(null);
@@ -147,8 +149,8 @@ export function CurrencyDashboardTab() {
         ))}
         {selectedPair && (
           <div className="mt-4">
-            <PriceChart symbol={selectedPair} assetClass="forex" />
-            <TickerNewsPanel symbol={selectedPair} assetClass="forex" />
+            <PriceChart onCreateAlert={onCreateAlert} symbol={selectedPair} assetClass="forex" />
+            <ChartNews symbol={selectedPair} assetClass="forex" />
 
             <div className="mt-4 jv-card">
               <div className="jv-br-b" />

@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { PriceChart } from "./PriceChart";
-import { TickerNewsPanel } from "./TickerNewsPanel";
+import { ChartNews } from "./navigation/ChartNews";
+import { useChartAlert } from "./navigation/use-chart-alert";
 import { WatchlistNewsPanel } from "./WatchlistNewsPanel";
 import { WatchlistSelector } from "./WatchlistSelector";
 
 export function EquityChartsTab() {
+  const onCreateAlert = useChartAlert();
   const { entries, hydrated } = useWatchlist();
   const equityEntries = entries.filter((e) => e.assetClass === "equity");
   const [input, setInput] = useState("");
@@ -73,8 +75,8 @@ export function EquityChartsTab() {
 
       {symbol ? (
         <>
-          <PriceChart symbol={symbol} />
-          <TickerNewsPanel symbol={symbol} assetClass="equity" />
+          <PriceChart onCreateAlert={onCreateAlert} symbol={symbol} />
+          <ChartNews symbol={symbol} assetClass="equity" />
         </>
       ) : (
         <p className="text-sm" style={{ color: "var(--text-2)" }}>Enter a ticker above to load a chart.</p>

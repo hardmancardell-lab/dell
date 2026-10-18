@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useAppNavigationOptional } from "@/lib/navigation/app-navigation";
+import { parseAlertPrefill } from "@/lib/navigation/alert-prefill";
 import { getOrCreateSessionId, useTrackEvent } from "@/lib/analytics/use-track";
 import { normalizeCryptoSymbol } from "@/lib/agents/trading-agent/crypto-symbol";
 import type { AlertChannel, AlertConditionType, AlertRuleInput, AssetClass } from "@/lib/agents/trading-agent/types";
@@ -73,10 +75,16 @@ function toRuleInput(row: RuleRow): AlertRuleInput | { error: string } {
 }
 
 export function AlertsSubscribeTab() {
+  const nav = useAppNavigationOptional();
+  // Chart-to-alert: a horizontal line drawn on a chart opens this tab with a Price Threshold row already filled in
+  // (see src/lib/navigation/alert-prefill.ts). Nothing is saved until the person submits the form as usual.
+  const prefill = parseAlertPrefill(nav?.state.alert);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [channel, setChannel] = useState<AlertChannel>("email");
-  const [rows, setRows] = useState<RuleRow[]>([newRow()]);
+  const [rows, setRows] = useState<RuleRow[]>(() => [
+    prefill ? { ...newRow(), ticker: prefill.symbol, assetClass: prefill.assetClass, targetPrice: String(prefill.price), direction: prefill.direction } : newRow(),
+  ]);
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,6 +167,12 @@ export function AlertsSubscribeTab() {
         or a macro/geopolitical news coverage spike. Checked every 15 minutes during market hours
         (9:30am-4:00pm ET, weekdays).
       </p>
+      {prefill && (
+        <p role="status" className="jv-note" style={{ marginBottom: 16 }}>
+          Filled in from the line you drew on the {prefill.symbol} chart: alert when the price goes {prefill.direction} {prefill.price}.
+          Check it, add your contact details and consent below, and subscribe. Nothing is saved until you do.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-8 mt-6">
         <section>

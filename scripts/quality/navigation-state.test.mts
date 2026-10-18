@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { HELP_VIDEOS } from "../../src/lib/agents/help-videos.ts";
 import { PRIMARY_TABS, SECONDARY_TABS } from "../../src/lib/navigation/trading-structure.ts";
 import { buildPaletteItems, searchPalette, itemsForKeys, typedTickerItem } from "../../src/lib/navigation/palette-items.ts";
+import { formatAlertPrefill, parseAlertPrefill } from "../../src/lib/navigation/alert-prefill.ts";
 import { EMPTY_PREFS, parsePrefs, pushRecent, togglePin, serializePrefs, MAX_RECENTS, MAX_PINS } from "../../src/lib/navigation/study-prefs.ts";
 
 let bad = 0, passed = 0;
@@ -139,6 +140,21 @@ t("palette: a watchlist ticker is not offered twice", typedTickerItem("aapl", it
 const resolved = itemsForKeys(items, ["study:orb", "tab:trading", "study:nope", "ticker:GONE"]).map((i) => i.key);
 t("palette: pinned/recent keys resolve and unknown studies are dropped", resolved.includes("study:orb") && resolved.includes("tab:trading") && !resolved.includes("study:nope"), resolved.join());
 t("palette: a script-like query is not offered as a ticker", typedTickerItem("<img src=x>", items) === null, "");
+
+// ---------------------------------------------------------------- chart-to-alert prefill and news under every chart
+t("alert prefill round trip", formatAlertPrefill({ symbol: "aapl", direction: "above", price: 150.5 }) === "AAPL:above:150.5" && parseAlertPrefill("AAPL:above:150.5").price === 150.5 && parseAlertPrefill("AAPL:below:99").direction === "below", "");
+t("alert prefill carries the asset class of the symbol", parseAlertPrefill("BTC-USD:above:70000").assetClass === "crypto" && parseAlertPrefill("EUR/USD:below:1.0850").assetClass === "forex", "");
+t("alert prefill rejects bad prices and symbols", formatAlertPrefill({ symbol: "AAPL", direction: "above", price: -1 }) === undefined && formatAlertPrefill({ symbol: "AAPL", direction: "above", price: NaN }) === undefined && formatAlertPrefill({ symbol: "<x>", direction: "above", price: 5 }) === undefined && parseAlertPrefill("AAPL:sideways:5") === undefined && parseAlertPrefill("AAPL:above:1e9") === undefined, "");
+t("alert deep link opens the Alerts tab with the prefill", q("?agent=trading&section=alerts&alert=aapl:above:150.5") === '{"primaryId":"trading","secondaryId":"alerts","alert":"AAPL:above:150.5"}', q("?agent=trading&section=alerts&alert=aapl:above:150.5"));
+t("a malformed alert parameter is dropped, the Alerts tab still opens", q("?agent=trading&section=alerts&alert=junk") === '{"primaryId":"trading","secondaryId":"alerts"}', q("?agent=trading&section=alerts&alert=junk"));
+t("alert prefill is ignored outside the Alerts tab", q("?agent=trading&section=equities&alert=AAPL:above:5") === '{"primaryId":"trading","secondaryId":"equities"}', q("?agent=trading&section=equities&alert=AAPL:above:5"));
+const alertState = parseNavQuery("agent=trading&section=alerts&alert=AAPL:above:150.5");
+t("alert state survives the URL round trip", buildNavQuery(parseNavQuery(buildNavQuery(alertState))) === buildNavQuery(alertState), "");
+const chartPlaces = ["EquityChartsTab", "AssetChartsTab", "CurrencyDashboardTab", "FuturesDashboardTab", "CommoditiesDashboardTab", "navigation/TickerChartView"];
+const missingNews = chartPlaces.filter((f) => { const src = readFileSync(ROOT + "src/components/" + f + ".tsx", "utf8"); return !/<ChartNews /.test(src) || !/onCreateAlert=\{onCreateAlert\}/.test(src) || /<TickerNewsPanel /.test(src); });
+t("every ticker-lookup chart renders the shared ChartNews under it and passes the chart-to-alert handler", missingNews.length === 0, missingNews.join(", "));
+const chartNewsSrc = readFileSync(ROOT + "src/components/navigation/ChartNews.tsx", "utf8");
+t("ChartNews keys the news by asset class and symbol (follows the ticker, not the chart ticks)", /key=\{`\$\{assetClass\}:\$\{symbol\}`\}/.test(chartNewsSrc), "");
 
 console.log(`\n${passed} passed, ${bad} failed`);
 process.exit(bad ? 1 : 0);

@@ -17,6 +17,7 @@
 import { getStudy } from "./study-registry";
 import { PRIMARY_TABS, SECONDARY_TABS, STUDIES_SECTION, groupById } from "./trading-structure";
 import { isAssetClass, resolveStudyRoute, resolveTickerRoute } from "./study-routes";
+import { parseAlertPrefill } from "./alert-prefill";
 
 export interface NavState {
   primaryId?: string;
@@ -25,6 +26,8 @@ export interface NavState {
   studyId?: string;
   assetClass?: string;
   ticker?: string;
+  /** Chart-to-alert prefill for the Alerts tab: "SYMBOL:above|below:price" (see alert-prefill.ts). */
+  alert?: string;
 }
 
 export type NavAction =
@@ -42,6 +45,7 @@ const FIELD_ORDER: Array<[keyof NavState, string]> = [
   ["studyId", "study"],
   ["assetClass", "class"],
   ["ticker", "ticker"],
+  ["alert", "alert"],
 ];
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
@@ -105,6 +109,12 @@ export function parseNavQuery(search: string): NavState {
     if (nextTab) base.tab = nextTab;
     if (nextStudy) base.studyId = nextStudy;
     if (ticker && (nextStudy || (nextTab && nextTab !== "studies"))) base.ticker = ticker;
+    return base;
+  }
+
+  if (section === "alerts") {
+    const alert = parseAlertPrefill(p.get("alert"));
+    if (alert) base.alert = p.get("alert")!.replace(/^([^:]*):/, (_m, s: string) => `${s.toUpperCase()}:`);
     return base;
   }
 
