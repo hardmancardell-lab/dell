@@ -14,6 +14,7 @@ import { defaultScaleMode, effectiveScaleMode, parseScaleMode, loadScaleChoice, 
 import { equitySessionOf, filterExtendedHours, hasExtendedBars, extendedShadeRanges, countSessions } from "../../src/lib/chart/sessions.ts";
 import { finiteNumbers, niceStep, niceTicks, median, histogram, fmtPct, fmtPctCompact, fmtMoneyCompact, barPercent, zeroBasedY } from "../../src/lib/chart/svg-math.ts";
 import { withCashSlice } from "../../src/components/AllocationPieChart.tsx";
+import { IndicatorManager } from "../../src/components/chart/IndicatorManager.ts";
 import { withAlpha } from "../../src/lib/chart/colors.ts";
 import { TIMEFRAME_PRESETS } from "../../src/lib/agents/trading-agent/skills/timeframe-presets.ts";
 import { formatBarLabel, formatTick, zoneForProvider } from "../../src/lib/chart/timeformat.ts";
@@ -276,6 +277,53 @@ t("market-data timeframe passes all through", param(calls[0].url, "adjustment") 
   const slices = withCashSlice([{ label: "A", value: 600, percent: 0 }, { label: "B", value: 300, percent: 0 }] as any, 100, 1000);
   t("pie: slices with cash sum to 100%", Math.abs(slices.reduce((a: number, x: any) => a + x.percent, 0) - 100) < 1e-9 && slices.length === 3);
   t("pie: zero grand total gives 0% not NaN", withCashSlice([{ label: "A", value: 0, percent: 0 }] as any, 0, 0).every((x: any) => x.percent === 0));
+}
+
+// ---------------------------------------------------------------- 6. indicator toggles touch only the toggled series (WP2 item 5)
+{
+  // Fake chart: records series per pane; empty panes are dropped by removePane like the real chart.
+  const panes: { series: any[] }[] = [{ series: [] }];
+  const fakeChart: any = {
+    addSeries: (_def: any, _opts: any, paneIndex = 0) => {
+      while (panes.length <= paneIndex) panes.push({ series: [] });
+      const ser: any = { data: [], setData(d: any[]) { this.data = d; } };
+      panes[paneIndex].series.push(ser);
+      return ser;
+    },
+    removeSeries: (ser: any) => panes.forEach((p) => (p.series = p.series.filter((x) => x !== ser))),
+    panes: () => panes.map((p) => ({ getSeries: () => p.series })),
+    removePane: (i: number) => void panes.splice(i, 1),
+    applyOptions: () => {},
+  };
+  let lines = 0;
+  const fakeCandle: any = { createPriceLine: () => (lines++, {}), removePriceLine: () => void lines-- };
+  const mgr = new IndicatorManager(fakeChart, fakeCandle, { baseHeight: 420, paneHeight: 150 });
+  const daily = Array.from({ length: 150 }, (_, i) => {
+    const c = 100 + Math.sin(i / 6) * 8 + i * 0.05;
+    return { datetime: Date.UTC(2026, 0, 1) + i * 86_400_000, open: c - 0.4, high: c + 1, low: c - 1, close: c, volume: 1000 + (i % 9) * 100 };
+  });
+  mgr.sync(daily, new Set(["ema20", "rsi", "macd"]));
+  const ema0 = mgr.seriesOf("ema20"), rsi0 = mgr.seriesOf("rsi"), macd0 = mgr.seriesOf("macd");
+  const c0 = { ...mgr.stats };
+  mgr.sync(daily, new Set(["ema20", "rsi", "macd", "bollinger"]));
+  t("adding Bollinger creates exactly its 2 series, computes once, rebuilds nothing", mgr.stats.seriesCreated - c0.seriesCreated === 2 && mgr.stats.computed - c0.computed === 1 && mgr.stats.rebuilds === c0.rebuilds && mgr.stats.seriesRemoved === c0.seriesRemoved);
+  t("the other indicators keep the very same series objects", mgr.seriesOf("ema20")[0] === ema0[0] && mgr.seriesOf("rsi")[0] === rsi0[0] && mgr.seriesOf("macd").every((x, i) => x === macd0[i]));
+  const c1 = { ...mgr.stats };
+  mgr.sync(daily, new Set(["ema20", "macd", "bollinger"]));
+  t("removing RSI removes only its series and its now-empty pane", mgr.stats.seriesRemoved - c1.seriesRemoved === 1 && mgr.stats.seriesCreated === c1.seriesCreated && panes.length === 2 && mgr.seriesOf("macd")[0] === macd0[0]);
+  mgr.sync(daily, new Set(["ema20", "macd", "bollinger", "volumeProfile"]));
+  t("volume profile adds price lines, removing it takes them away", lines === 3);
+  mgr.sync(daily, new Set(["ema20", "macd", "bollinger"]));
+  t("price lines are removed with their indicator", lines === 0);
+  const c2 = { ...mgr.stats };
+  mgr.sync([...daily], new Set(["ema20", "macd", "bollinger"]));
+  t("new candles rebuild every enabled indicator once", mgr.stats.rebuilds === c2.rebuilds + 1 && mgr.stats.seriesRemoved - c2.seriesRemoved === 6 && mgr.stats.seriesCreated - c2.seriesCreated === 6);
+  mgr.sync(daily, new Set());
+  t("empty set clears everything and leaves no extra panes", mgr.active().length === 0 && panes.length === 1);
+  mgr.sync([], new Set(["ema20"]));
+  t("no candles draws nothing and does not throw", mgr.active().length === 0);
+  mgr.sync(daily, new Set(["nope"]));
+  t("unknown indicator ids are ignored", mgr.active().length === 0);
 }
 
 summary();

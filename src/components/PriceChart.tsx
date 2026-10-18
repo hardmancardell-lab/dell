@@ -31,35 +31,16 @@ import { CHART_CHROME } from "@/lib/chart/colors";
 import { SessionShade } from "./chart/SessionShade";
 import { ToggleGroup } from "./chart/ToggleGroup";
 import { ChartHeader } from "./chart/ChartHeader";
+import { IndicatorManager } from "./chart/IndicatorManager";
 import { ActiveLegend } from "./chart/ActiveLegend";
 import dynamic from "next/dynamic";
-import { JARVIS as TOKENS, INDICATOR_COLORS, SMA_COLORS, VOLUME_BAR, OSC_HIST } from "@/lib/design/tokens";
+import { JARVIS as TOKENS, SMA_COLORS, VOLUME_BAR } from "@/lib/design/tokens";
 // The floating trade panel is only opened on demand; loading these lazily keeps recharts (via OptionsChainTradeTab) and the
 // order form out of every chart consumer's first load.
 const PaperOrderForm = dynamic(() => import("./PaperOrderForm").then((m) => m.PaperOrderForm));
 const OptionsChainTradeTab = dynamic(() => import("./OptionsChainTradeTab").then((m) => m.OptionsChainTradeTab));
 import type { AssetClass, PaperAccountSummary } from "@/lib/agents/trading-agent/types";
-import {
-  atr,
-  bollingerBands,
-  cci,
-  cmf,
-  ema,
-  hma,
-  ichimoku,
-  keltnerChannels,
-  macd,
-  obv,
-  parabolicSar,
-  roc,
-  rsi,
-  sma,
-  stochastic,
-  volumeProfile,
-  vwapWithBands,
-  williamsR,
-  type VolumeProfileResult,
-} from "@/lib/agents/trading-agent/skills/technical-indicators";
+import { sma, type VolumeProfileResult } from "@/lib/agents/trading-agent/skills/technical-indicators";
 
 function toSeconds(ms: number): UTCTimestamp {
   return Math.floor(ms / 1000) as UTCTimestamp;
@@ -69,7 +50,6 @@ function toSeconds(ms: number): UTCTimestamp {
 const OVERLAY_INDICATORS = INDICATORS.filter((d) => d.group === "overlay");
 const OSCILLATOR_INDICATORS = INDICATORS.filter((d) => d.group === "oscillator");
 
-const COLORS = INDICATOR_COLORS;
 
 // Chart theme from the shared jarvis tokens (canvas cannot resolve var(--...)); drift is checked by
 // scripts/quality/check-design-tokens.cjs.
@@ -123,21 +103,25 @@ export function PriceChart({
   focusDate,
   assetClass = "equity",
   readOnly = false,
+  onManager,
 }: {
   symbol: string;
   focusDate?: string;
   assetClass?: AssetClass;
   /** Hides the click-to-trade button/panel — for read-only contexts like the client-facing dashboard. */
   readOnly?: boolean;
+  /** Test hook: receives the IndicatorManager when the chart is created (null on teardown is not reported). */
+  onManager?: (m: IndicatorManager) => void;
 }) {
+  const onManagerRef = useRef(onManager);
+  onManagerRef.current = onManager;
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const sma20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const sma50SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const extraSeriesRef = useRef<ISeriesApi<SeriesType>[]>([]);
-  const extraPriceLinesRef = useRef<IPriceLine[]>([]);
+  const managerRef = useRef<IndicatorManager | null>(null);
   const positionLineRef = useRef<IPriceLine | null>(null);
   const orderLinesRef = useRef<IPriceLine[]>([]);
   const sessionMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
@@ -307,6 +291,8 @@ export function PriceChart({
     const sma20Series = chart.addSeries(LineSeries, { color: SMA_COLORS.sma20, lineWidth: 1 });
     const sma50Series = chart.addSeries(LineSeries, { color: SMA_COLORS.sma50, lineWidth: 1 });
 
+    managerRef.current = new IndicatorManager(chart, candleSeries, { baseHeight: 420, paneHeight: 150, onProfile: setVolumeProfileSummary });
+    onManagerRef.current?.(managerRef.current);
     const shade = new SessionShade(CHART_CHROME.extendedShade);
     candleSeries.attachPrimitive(shade);
     shadeRef.current = shade;
@@ -357,8 +343,7 @@ export function PriceChart({
       resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
-      extraSeriesRef.current = [];
-      extraPriceLinesRef.current = [];
+      managerRef.current = null;
       positionLineRef.current = null;
       orderLinesRef.current = [];
       // Cleared so a StrictMode remount builds fresh plugins on the new chart instead of reusing ones bound to the removed one (audit F16).
@@ -501,170 +486,10 @@ export function PriceChart({
     plugin.setMarkers(markers);
   }, [candles, assetClass]);
 
-  // Rebuild every "extra" overlay/oscillator series from scratch whenever the
-  // data or the enabled-indicator sets change — simpler and less error-prone
-  // than incrementally diffing pane indices as toggles change.
+  // Indicators: one IndicatorManager owns the extra series. Toggling an indicator adds or removes only that indicator's
+  // series (the others keep their series objects); new candles rebuild the enabled ones. (Audit F3.)
   useEffect(() => {
-    const chart = chartRef.current;
-    const candleSeries = candleSeriesRef.current;
-    if (!chart || !candleSeries || candles.length === 0) return;
-
-    for (const s of extraSeriesRef.current) chart.removeSeries(s);
-    extraSeriesRef.current = [];
-    for (const line of extraPriceLinesRef.current) candleSeries.removePriceLine(line);
-    extraPriceLinesRef.current = [];
-    const paneCount = chart.panes().length;
-    for (let i = paneCount - 1; i >= 1; i--) chart.removePane(i);
-
-    const closes = candles.map((c) => c.close);
-    const times = candles.map((c) => toSeconds(c.datetime));
-
-    function addLine(
-      values: (number | null)[],
-      color: string,
-      paneIndex = 0,
-      extraOpts: Record<string, unknown> = {}
-    ) {
-      const series = chart!.addSeries(LineSeries, { color, lineWidth: 1, ...extraOpts }, paneIndex);
-      const points = values
-        .map((v, i) => (v !== null ? { time: times[i], value: v } : null))
-        .filter((p): p is { time: UTCTimestamp; value: number } => p !== null);
-      series.setData(points);
-      extraSeriesRef.current.push(series);
-      return series;
-    }
-
-    function addHistogram(values: (number | null)[], paneIndex: number) {
-      const series = chart!.addSeries(HistogramSeries, {}, paneIndex);
-      const points = values
-        .map((v, i) =>
-          v !== null
-            ? { time: times[i], value: v, color: v >= 0 ? OSC_HIST.up : OSC_HIST.down }
-            : null
-        )
-        .filter((p): p is { time: UTCTimestamp; value: number; color: string } => p !== null);
-      series.setData(points);
-      extraSeriesRef.current.push(series);
-    }
-
-    // --- Overlays (pane 0) ---
-    if (enabledOverlays.has("ema20")) addLine(ema(closes, 20), COLORS.ema20);
-    if (enabledOverlays.has("ema50")) addLine(ema(closes, 50), COLORS.ema50);
-    if (enabledOverlays.has("bollinger")) {
-      const bb = bollingerBands(closes);
-      addLine(bb.upper, COLORS.bollinger, 0, { lineStyle: LineStyle.Dashed });
-      addLine(bb.lower, COLORS.bollinger, 0, { lineStyle: LineStyle.Dashed });
-    }
-    if (enabledOverlays.has("keltner")) {
-      const kc = keltnerChannels(candles);
-      addLine(kc.upper, COLORS.keltner, 0, { lineStyle: LineStyle.Dashed });
-      addLine(kc.lower, COLORS.keltner, 0, { lineStyle: LineStyle.Dashed });
-    }
-    if (enabledOverlays.has("psar")) {
-      addLine(parabolicSar(candles), COLORS.psar, 0, { lineVisible: false, pointMarkersVisible: true });
-    }
-    if (enabledOverlays.has("hma")) addLine(hma(closes, 9), COLORS.hma);
-    if (enabledOverlays.has("ichimoku")) {
-      const ich = ichimoku(candles);
-      addLine(ich.tenkan, COLORS.ichimokuTenkan);
-      addLine(ich.kijun, COLORS.ichimokuKijun);
-      addLine(ich.spanA, COLORS.ichimokuSpanA, 0, { lineStyle: LineStyle.Dotted });
-      addLine(ich.spanB, COLORS.ichimokuSpanB, 0, { lineStyle: LineStyle.Dotted });
-      addLine(ich.chikou, COLORS.ichimokuChikou, 0, { lineStyle: LineStyle.Dashed });
-    }
-    if (enabledOverlays.has("vwap")) {
-      const vb = vwapWithBands(candles);
-      addLine(vb.vwap, COLORS.vwap);
-      addLine(vb.upper, COLORS.vwap, 0, { lineStyle: LineStyle.Dashed });
-      addLine(vb.lower, COLORS.vwap, 0, { lineStyle: LineStyle.Dashed });
-    }
-    if (enabledOverlays.has("volumeProfile")) {
-      const vp = volumeProfile(candles);
-      setVolumeProfileSummary(vp);
-      if (vp.poc !== null) {
-        extraPriceLinesRef.current.push(
-          candleSeries.createPriceLine({
-            price: vp.poc,
-            color: COLORS.volumeProfile,
-            lineWidth: 2,
-            lineStyle: LineStyle.Solid,
-            axisLabelVisible: true,
-            title: "POC (est.)",
-          })
-        );
-      }
-      if (vp.vah !== null) {
-        extraPriceLinesRef.current.push(
-          candleSeries.createPriceLine({
-            price: vp.vah,
-            color: COLORS.volumeProfile,
-            lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: "VAH (est.)",
-          })
-        );
-      }
-      if (vp.val !== null) {
-        extraPriceLinesRef.current.push(
-          candleSeries.createPriceLine({
-            price: vp.val,
-            color: COLORS.volumeProfile,
-            lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: "VAL (est.)",
-          })
-        );
-      }
-    } else {
-      setVolumeProfileSummary(null);
-    }
-
-    // --- Oscillators (own pane each, assigned in canonical order) ---
-    let nextPane = 1;
-    for (const osc of OSCILLATOR_INDICATORS) {
-      if (!enabledOscillators.has(osc.id)) continue;
-      const pane = nextPane++;
-      switch (osc.id) {
-        case "rsi":
-          addLine(rsi(closes), COLORS.rsi, pane);
-          break;
-        case "stochastic": {
-          const st = stochastic(candles);
-          addLine(st.k, COLORS.stochK, pane);
-          addLine(st.d, COLORS.stochD, pane);
-          break;
-        }
-        case "cci":
-          addLine(cci(candles), COLORS.cci, pane);
-          break;
-        case "roc":
-          addLine(roc(closes), COLORS.roc, pane);
-          break;
-        case "williamsR":
-          addLine(williamsR(candles), COLORS.williamsR, pane);
-          break;
-        case "macd": {
-          const m = macd(closes);
-          addHistogram(m.histogram, pane);
-          addLine(m.macd, COLORS.macdLine, pane);
-          addLine(m.signal, COLORS.macdSignal, pane);
-          break;
-        }
-        case "atr":
-          addLine(atr(candles), COLORS.atr, pane);
-          break;
-        case "obv":
-          addLine(obv(candles), COLORS.obv, pane);
-          break;
-        case "cmf":
-          addLine(cmf(candles), COLORS.cmf, pane);
-          break;
-      }
-    }
-
-    chart.applyOptions({ height: 420 + (nextPane - 1) * 150 });
+    managerRef.current?.sync(candles, new Set([...enabledOverlays, ...enabledOscillators]));
   }, [candles, enabledOverlays, enabledOscillators]);
 
   // Cost-basis + open-order price lines — the real mechanism behind

@@ -27,16 +27,15 @@ export class SessionShade implements ISeriesPrimitive<Time> {
 
   constructor(color: string) {
     this.color = color;
-    const self = this;
     const renderer: IPrimitivePaneRenderer = {
       // zOrder "bottom" layers are painted through draw(), behind the candles.
-      draw(target: CanvasRenderingTarget2D) {
-        const chart = self.chart;
-        if (!chart || self.ranges.length === 0) return;
+      draw: (target: CanvasRenderingTarget2D) => {
+        const chart = this.chart;
+        if (!chart || this.ranges.length === 0) return;
         const ts = chart.timeScale();
         target.useMediaCoordinateSpace(({ context, mediaSize }) => {
-          context.fillStyle = self.color;
-          for (const r of self.ranges) {
+          context.fillStyle = this.color;
+          for (const r of this.ranges) {
             const i0 = ts.timeToIndex(r.fromSec as unknown as Time, true);
             const i1 = ts.timeToIndex(r.toSec as unknown as Time, true);
             if (i0 === null || i1 === null) continue;
