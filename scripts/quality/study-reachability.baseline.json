@@ -1,0 +1,1562 @@
+{
+ "note": "Frozen from src/app/page.tsx at commit c8cb756 (before the navigation rework). Every leaf here must stay reachable.",
+ "tabs": [
+  {
+   "path": "top-down",
+   "label": "Research Agent",
+   "components": [
+    {
+     "component": "HelpMenu",
+     "props": {
+      "agentId": "top-down"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "top-down/macro",
+   "label": "Macro",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "top-down/macro/dashboard",
+   "label": "Dashboard",
+   "components": [
+    {
+     "component": "MacroDashboardTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/macro/stance",
+   "label": "Stance & Details",
+   "components": [
+    {
+     "component": "{macroStanceContent}",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/macro/industry",
+   "label": "Industry Impact",
+   "components": [
+    {
+     "component": "IndustryImpactTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/macro/global-news",
+   "label": "Global News",
+   "components": [
+    {
+     "component": "GlobalFinancialNewsTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/macro/economic-outlook",
+   "label": "Economic Outlook",
+   "components": [
+    {
+     "component": "EconomicOutlookTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/macro/fomc-reaction",
+   "label": "FOMC Reaction Study",
+   "components": [
+    {
+     "component": "FomcReactionStudyTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/macro/fomc-week-variance",
+   "label": "FOMC Week Variance",
+   "components": [
+    {
+     "component": "FomcWeekVarianceTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/macro/catalyst-calendar",
+   "label": "Catalyst Calendar",
+   "components": [
+    {
+     "component": "CatalystCalendarTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/sector",
+   "label": "Sector",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "top-down/sector/groups",
+   "label": "Industry Groups",
+   "components": [
+    {
+     "component": "{sectorGroupsContent}",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/sector/fundamentals",
+   "label": "Sector Fundamentals",
+   "components": [
+    {
+     "component": "SectorFundamentalsTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/sector/recommendations",
+   "label": "Sector Recommendations",
+   "components": [
+    {
+     "component": "SectorRecommendationsTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/sector/stock-picks",
+   "label": "Sector Stock Picks",
+   "components": [
+    {
+     "component": "SectorStockAnalysisTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/sector/sources",
+   "label": "Research Sources",
+   "components": [
+    {
+     "component": "ResearchSourcesTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/security",
+   "label": "Security Analysis",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "top-down/security/analyze",
+   "label": "Analyze Ticker",
+   "components": [
+    {
+     "component": "SecurityAnalystTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/security/phase",
+   "label": "Business Phase",
+   "components": [
+    {
+     "component": "BusinessPhaseTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/security/watchlist",
+   "label": "Watchlist",
+   "components": [
+    {
+     "component": "ResearchWatchlistTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "top-down/security/screener",
+   "label": "Screener",
+   "components": [
+    {
+     "component": "ScreenerTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading",
+   "label": "Trading Agent",
+   "components": [
+    {
+     "component": "HelpMenu",
+     "props": {
+      "agentId": "trading"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "trading/guided-signals",
+   "label": "Guided Signals",
+   "components": [
+    {
+     "component": "GuidedTradeSignalsTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities",
+   "label": "Equities",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "trading/equities/dashboard",
+   "label": "Dashboard",
+   "components": [
+    {
+     "component": "TradingDashboardTab",
+     "props": {
+      "filterAssetClass": "equity"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/charts",
+   "label": "Charts",
+   "components": [
+    {
+     "component": "EquityChartsTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/backtest",
+   "label": "Backtest",
+   "components": [
+    {
+     "component": "HistoricalBacktestTab",
+     "props": {
+      "defaultTicker": "AAPL",
+      "assetClass": "equity"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/calendar-effects",
+   "label": "Calendar Effects",
+   "components": [
+    {
+     "component": "CalendarEffectsTab",
+     "props": {
+      "defaultTicker": "AAPL",
+      "assetClass": "equity"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/vwap-reversion-backtest",
+   "label": "VWAP Reversion Backtest",
+   "components": [
+    {
+     "component": "VwapReversionBacktestTab",
+     "props": {
+      "defaultTicker": "AAPL"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/vwap-band-study",
+   "label": "VWAP Band Study",
+   "components": [
+    {
+     "component": "VwapBandStudyTab",
+     "props": {
+      "defaultTicker": "SPY"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/volume-profile",
+   "label": "Volume Profile",
+   "components": [
+    {
+     "component": "AnchoredVolumeProfileTab",
+     "props": {
+      "defaultTicker": "SPY"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/premarket-gaps",
+   "label": "Premarket Gaps",
+   "components": [
+    {
+     "component": "PremarketGapHodLodTab",
+     "props": {
+      "defaultTicker": "AAPL"
+     }
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/gap-calendar-study",
+   "label": "Gap & Calendar Study",
+   "components": [
+    {
+     "component": "GapCalendarStudyTab",
+     "props": {
+      "defaultTicker": "AAPL"
+     }
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/orb",
+   "label": "ORB Strategy",
+   "components": [
+    {
+     "component": "OrbStrategyTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/quad-witching",
+   "label": "Quad Witching Study",
+   "components": [
+    {
+     "component": "QuadWitchingStudyTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/witching-range-containment",
+   "label": "Witching Range Containment",
+   "components": [
+    {
+     "component": "WitchingRangeContainmentTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/week-start-momentum",
+   "label": "Week Start Momentum",
+   "components": [
+    {
+     "component": "WeekStartMomentumTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/overnight-intraday",
+   "label": "Overnight vs Intraday",
+   "components": [
+    {
+     "component": "OvernightIntradayPatternTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/post-big-day",
+   "label": "Post-Big-Day Study",
+   "components": [
+    {
+     "component": "PostBigDayStudyTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/low-of-day-timing",
+   "label": "Low-of-Day Timing",
+   "components": [
+    {
+     "component": "LowOfDayTimingTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/treasury-buyback-anomaly",
+   "label": "Treasury Buyback Anomaly",
+   "components": [
+    {
+     "component": "BuybackAnomalyTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/equities/corporate-buyback-offering",
+   "label": "Corporate Buybacks & Offerings",
+   "components": [
+    {
+     "component": "CorporateBuybackOfferingTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/bonds",
+   "label": "Bonds",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "trading/bonds/overview",
+   "label": "Overview",
+   "components": [
+    {
+     "component": "BondDashboardTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/bonds/charts",
+   "label": "Charts",
+   "components": [
+    {
+     "component": "AssetChartsTab",
+     "props": {
+      "assetClass": "bond",
+      "defaultTicker": "TLT",
+      "placeholder": "Ticker, e.g. TLT",
+      "watchlistLabel": "Bonds"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/bonds/yield-curve",
+   "label": "Yield Curve",
+   "components": [
+    {
+     "component": "YieldCurveTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/bonds/backtest",
+   "label": "Backtest",
+   "components": [
+    {
+     "component": "HistoricalBacktestTab",
+     "props": {
+      "defaultTicker": "TLT",
+      "assetClass": "bond"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/bonds/calendar-effects",
+   "label": "Calendar Effects",
+   "components": [
+    {
+     "component": "CalendarEffectsTab",
+     "props": {
+      "defaultTicker": "TLT",
+      "assetClass": "bond"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/bonds/vwap-reversion-backtest",
+   "label": "VWAP Reversion Backtest",
+   "components": [
+    {
+     "component": "VwapReversionBacktestTab",
+     "props": {
+      "defaultTicker": "TLT"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/bonds/vwap-band-study",
+   "label": "VWAP Band Study",
+   "components": [
+    {
+     "component": "VwapBandStudyTab",
+     "props": {
+      "defaultTicker": "TLT"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/bonds/rolling-move-stats",
+   "label": "Rolling Move Stats",
+   "components": [
+    {
+     "component": "RollingMoveStatsTab",
+     "props": {
+      "defaultTicker": "TLT",
+      "defaultAssetClass": "bond"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/bonds/yield-alert-threshold",
+   "label": "Yield Alert Threshold",
+   "components": [
+    {
+     "component": "YieldAlertThresholdTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/options",
+   "label": "Options",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "trading/options/dashboard",
+   "label": "Dashboard",
+   "components": [
+    {
+     "component": "OptionsDashboardTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/options/gamma-heat-map",
+   "label": "Gamma Heat Map",
+   "components": [
+    {
+     "component": "GammaHeatMapTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/options/intraday-put-call",
+   "label": "Intraday Put/Call",
+   "components": [
+    {
+     "component": "OptionFlowTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/options/strategy-guide",
+   "label": "Strategy Guide",
+   "components": [
+    {
+     "component": "OptionsStrategiesTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/options/calculator",
+   "label": "Calculator",
+   "components": [
+    {
+     "component": "OptionsCalculatorTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/options/paper-backtest",
+   "label": "Paper Backtest Log",
+   "components": [
+    {
+     "component": "PaperBacktestLogTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/options/trade-options",
+   "label": "Trade Options",
+   "components": [
+    {
+     "component": "OptionsChainTradeTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency",
+   "label": "Currency",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "trading/currency/dashboard",
+   "label": "Dashboard",
+   "components": [
+    {
+     "component": "CurrencyDashboardTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/reference",
+   "label": "Reference Guide",
+   "components": [
+    {
+     "component": "FxResearchSourcesTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/macro-drivers",
+   "label": "Macro Drivers",
+   "components": [
+    {
+     "component": "CurrencyDriversTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/central-banks",
+   "label": "Central Banks",
+   "components": [
+    {
+     "component": "InternationalCentralBanksView",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/pegs",
+   "label": "Currency Pegs",
+   "components": [
+    {
+     "component": "CurrencyPegsTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/charts",
+   "label": "Charts",
+   "components": [
+    {
+     "component": "AssetChartsTab",
+     "props": {
+      "assetClass": "forex",
+      "defaultTicker": "EUR/USD",
+      "placeholder": "Pair, e.g. EUR/USD",
+      "watchlistLabel": "Currency"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/backtest",
+   "label": "Backtest",
+   "components": [
+    {
+     "component": "BacktestSuiteTab",
+     "props": {
+      "defaultTicker": "EUR/USD",
+      "assetClass": "forex"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/vwap-band-study",
+   "label": "VWAP Band Study",
+   "components": [
+    {
+     "component": "VwapBandStudyTab",
+     "props": {
+      "defaultTicker": "GBP/JPY"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/gap-calendar-study",
+   "label": "Gap & Calendar Study",
+   "components": [
+    {
+     "component": "GapCalendarStudyTab",
+     "props": {
+      "defaultTicker": "EUR/USD"
+     }
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/orb",
+   "label": "ORB Strategy",
+   "components": [
+    {
+     "component": "OrbStrategyTab",
+     "props": {
+      "filterAssetClass": "forex",
+      "defaultTicker": "EUR/USD"
+     }
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/news",
+   "label": "News Search",
+   "components": [
+    {
+     "component": "InternationalEconomicsTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/shock-scan",
+   "label": "Supply/Demand Shock Scan",
+   "components": [
+    {
+     "component": "SupplyDemandShockScanTab",
+     "props": {
+      "assetClass": "forex",
+      "defaultTicker": "EUR/USD"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/currency/session-analysis",
+   "label": "Session Analysis",
+   "components": [
+    {
+     "component": "SessionAnalysisTab",
+     "props": {
+      "defaultTicker": "EUR/USD"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures",
+   "label": "Futures",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "trading/futures/dashboard",
+   "label": "Dashboard",
+   "components": [
+    {
+     "component": "FuturesDashboardTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/charts",
+   "label": "Charts",
+   "components": [
+    {
+     "component": "AssetChartsTab",
+     "props": {
+      "assetClass": "future",
+      "defaultTicker": "SPY",
+      "placeholder": "Ticker, e.g. SPY",
+      "watchlistLabel": "Futures"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/backtest",
+   "label": "Backtest",
+   "components": [
+    {
+     "component": "HistoricalBacktestTab",
+     "props": {
+      "defaultTicker": "SPY",
+      "assetClass": "future"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/calendar-effects",
+   "label": "Calendar Effects",
+   "components": [
+    {
+     "component": "CalendarEffectsTab",
+     "props": {
+      "defaultTicker": "SPY",
+      "assetClass": "future"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/vwap-reversion-backtest",
+   "label": "VWAP Reversion Backtest",
+   "components": [
+    {
+     "component": "VwapReversionBacktestTab",
+     "props": {
+      "defaultTicker": "SPY"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/vwap-band-study",
+   "label": "VWAP Band Study",
+   "components": [
+    {
+     "component": "VwapBandStudyTab",
+     "props": {
+      "defaultTicker": "SPY"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/gap-calendar-study",
+   "label": "Gap & Calendar Study",
+   "components": [
+    {
+     "component": "GapCalendarStudyTab",
+     "props": {
+      "defaultTicker": "SPY"
+     }
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/orb",
+   "label": "ORB Strategy",
+   "components": [
+    {
+     "component": "OrbStrategyTab",
+     "props": {
+      "filterAssetClass": "future",
+      "defaultTicker": "SPY"
+     }
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/rolling-move-stats",
+   "label": "Rolling Move Stats",
+   "components": [
+    {
+     "component": "RollingMoveStatsTab",
+     "props": {
+      "defaultTicker": "SPY",
+      "defaultAssetClass": "future"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/session-analysis",
+   "label": "Session Analysis",
+   "components": [
+    {
+     "component": "SessionAnalysisTab",
+     "props": {
+      "defaultTicker": "SPY"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/shock-scan",
+   "label": "Supply/Demand Shock Scan",
+   "components": [
+    {
+     "component": "SupplyDemandShockScanTab",
+     "props": {
+      "assetClass": "future",
+      "defaultTicker": "SPY"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/futures/sources",
+   "label": "Research Sources",
+   "components": [
+    {
+     "component": "FuturesCommoditiesResearchSourcesTab",
+     "props": {
+      "assetLabel": "futures"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities",
+   "label": "Commodities",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "trading/commodities/dashboard",
+   "label": "Dashboard",
+   "components": [
+    {
+     "component": "CommoditiesDashboardTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/charts",
+   "label": "Charts",
+   "components": [
+    {
+     "component": "AssetChartsTab",
+     "props": {
+      "assetClass": "commodity",
+      "defaultTicker": "GLD",
+      "placeholder": "Ticker, e.g. GLD",
+      "watchlistLabel": "Commodities"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/backtest",
+   "label": "Backtest",
+   "components": [
+    {
+     "component": "HistoricalBacktestTab",
+     "props": {
+      "defaultTicker": "GLD",
+      "assetClass": "commodity"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/calendar-effects",
+   "label": "Calendar Effects",
+   "components": [
+    {
+     "component": "CalendarEffectsTab",
+     "props": {
+      "defaultTicker": "GLD",
+      "assetClass": "commodity"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/vwap-reversion-backtest",
+   "label": "VWAP Reversion Backtest",
+   "components": [
+    {
+     "component": "VwapReversionBacktestTab",
+     "props": {
+      "defaultTicker": "GLD"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/vwap-band-study",
+   "label": "VWAP Band Study",
+   "components": [
+    {
+     "component": "VwapBandStudyTab",
+     "props": {
+      "defaultTicker": "GLD"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/gap-calendar-study",
+   "label": "Gap & Calendar Study",
+   "components": [
+    {
+     "component": "GapCalendarStudyTab",
+     "props": {
+      "defaultTicker": "GLD"
+     }
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/orb",
+   "label": "ORB Strategy",
+   "components": [
+    {
+     "component": "OrbStrategyTab",
+     "props": {
+      "filterAssetClass": "commodity",
+      "defaultTicker": "GLD"
+     }
+    }
+   ],
+   "wrappers": [
+    "RequiresPlacementTier:intermediate"
+   ],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/rolling-move-stats",
+   "label": "Rolling Move Stats",
+   "components": [
+    {
+     "component": "RollingMoveStatsTab",
+     "props": {
+      "defaultTicker": "GLD",
+      "defaultAssetClass": "commodity"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/shock-scan",
+   "label": "Supply/Demand Shock Scan",
+   "components": [
+    {
+     "component": "SupplyDemandShockScanTab",
+     "props": {
+      "assetClass": "commodity",
+      "defaultTicker": "GLD"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/commodities/sources",
+   "label": "Research Sources",
+   "components": [
+    {
+     "component": "FuturesCommoditiesResearchSourcesTab",
+     "props": {
+      "assetLabel": "commodities"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/crypto",
+   "label": "Crypto",
+   "components": [],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "trading/crypto/regime",
+   "label": "Regime",
+   "components": [
+    {
+     "component": "CryptoRegimeTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/crypto/watchlist",
+   "label": "Watchlist",
+   "components": [
+    {
+     "component": "CryptoWatchlistTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/crypto/charts",
+   "label": "Charts",
+   "components": [
+    {
+     "component": "CryptoChartsTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/crypto/backtest",
+   "label": "Backtest",
+   "components": [
+    {
+     "component": "HistoricalBacktestTab",
+     "props": {
+      "defaultTicker": "BTC-USD",
+      "crypto": true
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/glossary",
+   "label": "Glossary",
+   "components": [
+    {
+     "component": "GlossaryTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/alerts",
+   "label": "Alerts",
+   "components": [
+    {
+     "component": "AlertsSubscribeTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/paper-trading",
+   "label": "Paper Trading",
+   "components": [
+    {
+     "component": "PaperTradingTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/strategy-ledger",
+   "label": "Strategy Ledger",
+   "components": [
+    {
+     "component": "StrategyLedgerTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "trading/trade-journal",
+   "label": "Trade Journal",
+   "components": [
+    {
+     "component": "TradeJournalTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "portfolio",
+   "label": "Portfolio Tracking Agent",
+   "components": [
+    {
+     "component": "HelpMenu",
+     "props": {
+      "agentId": "portfolio"
+     }
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": true
+  },
+  {
+   "path": "portfolio/dashboard",
+   "label": "Dashboard",
+   "components": [
+    {
+     "component": "PortfolioDashboardTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "portfolio/traditional",
+   "label": "Traditional",
+   "components": [
+    {
+     "component": "TraditionalPortfolioTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "portfolio/modern",
+   "label": "Modern Portfolio Theory",
+   "components": [
+    {
+     "component": "ModernPortfolioTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "portfolio/correlation",
+   "label": "Correlation Finder",
+   "components": [
+    {
+     "component": "CorrelationFinderTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "portfolio/scenario",
+   "label": "Scenario Simulation",
+   "components": [
+    {
+     "component": "ScenarioSimulationTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "portfolio/rebalancing",
+   "label": "Risk & Rebalancing",
+   "components": [
+    {
+     "component": "RebalancingTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "portfolio/retirement",
+   "label": "401(k) Optimizer",
+   "components": [
+    {
+     "component": "RetirementPlanTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "portfolio/guide",
+   "label": "Methodology Guide",
+   "components": [
+    {
+     "component": "PortfolioMethodologyTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "literacy",
+   "label": "Financial Literacy",
+   "components": [
+    {
+     "component": "HelpMenu",
+     "props": {
+      "agentId": "literacy"
+     }
+    },
+    {
+     "component": "FinancialLiteracyTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  },
+  {
+   "path": "assistant",
+   "label": "Assistant",
+   "components": [
+    {
+     "component": "HelpMenu",
+     "props": {
+      "agentId": "assistant"
+     }
+    },
+    {
+     "component": "AssistantChatTab",
+     "props": {}
+    }
+   ],
+   "wrappers": [],
+   "hasChildren": false
+  }
+ ]
+}
