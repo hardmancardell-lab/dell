@@ -649,79 +649,9 @@ export default async function Home() {
                             Trading Agent &middot; Futures
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Futures</h1>
-                          <Tabs
-                            size="tertiary"
-                            tabs={[
-                              {
-                                id: "dashboard",
-                                label: "Dashboard",
-                                content: <FuturesDashboardTab />,
-                              },
-                              {
-                                id: "charts",
-                                label: "Charts",
-                                content: <AssetChartsTab assetClass="future" defaultTicker="SPY" placeholder="Ticker, e.g. SPY" watchlistLabel="Futures" />,
-                              },
-                              {
-                                id: "backtest",
-                                label: "Backtest",
-                                content: <HistoricalBacktestTab key="futures-backtest" defaultTicker="SPY" assetClass="future" />,
-                              },
-                              {
-                                id: "calendar-effects",
-                                label: "Calendar Effects",
-                                content: <CalendarEffectsTab key="futures-calendar-effects" defaultTicker="SPY" assetClass="future" />,
-                              },
-                              {
-                                id: "vwap-reversion-backtest",
-                                label: "VWAP Reversion Backtest",
-                                content: <VwapReversionBacktestTab key="futures-vwap-reversion-backtest" defaultTicker="SPY" />,
-                              },
-                              {
-                                id: "vwap-band-study",
-                                label: "VWAP Band Study",
-                                content: <VwapBandStudyTab key="futures-vwap-band-study" defaultTicker="SPY" />,
-                              },
-                              {
-                                id: "gap-calendar-study",
-                                label: "Gap & Calendar Study",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <GapCalendarStudyTab key="futures-gap-calendar-study" defaultTicker="SPY" />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "orb",
-                                label: "ORB Strategy",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <OrbStrategyTab filterAssetClass="future" defaultTicker="SPY" />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "rolling-move-stats",
-                                label: "Rolling Move Stats",
-                                content: <RollingMoveStatsTab defaultTicker="SPY" defaultAssetClass="future" />,
-                              },
-                              {
-                                id: "session-analysis",
-                                label: "Session Analysis",
-                                content: <SessionAnalysisTab defaultTicker="SPY" />,
-                              },
-                              {
-                                id: "shock-scan",
-                                label: "Supply/Demand Shock Scan",
-                                content: <SupplyDemandShockScanTab assetClass="future" defaultTicker="SPY" />,
-                              },
-                              {
-                                id: "sources",
-                                label: "Research Sources",
-                                content: <FuturesCommoditiesResearchSourcesTab assetLabel="futures" />,
-                              },
-                            ]}
-                          />
+                          <NavScope>
+                            <AssetGroupWorkspace groupId="futures" />
+                          </NavScope>
                         </div>
                       ),
                     },
