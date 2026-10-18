@@ -664,74 +664,9 @@ export default async function Home() {
                             Trading Agent &middot; Commodities
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">Commodities</h1>
-                          <Tabs
-                            size="tertiary"
-                            tabs={[
-                              {
-                                id: "dashboard",
-                                label: "Dashboard",
-                                content: <CommoditiesDashboardTab />,
-                              },
-                              {
-                                id: "charts",
-                                label: "Charts",
-                                content: <AssetChartsTab assetClass="commodity" defaultTicker="GLD" placeholder="Ticker, e.g. GLD" watchlistLabel="Commodities" />,
-                              },
-                              {
-                                id: "backtest",
-                                label: "Backtest",
-                                content: <HistoricalBacktestTab key="commodities-backtest" defaultTicker="GLD" assetClass="commodity" />,
-                              },
-                              {
-                                id: "calendar-effects",
-                                label: "Calendar Effects",
-                                content: <CalendarEffectsTab key="commodities-calendar-effects" defaultTicker="GLD" assetClass="commodity" />,
-                              },
-                              {
-                                id: "vwap-reversion-backtest",
-                                label: "VWAP Reversion Backtest",
-                                content: <VwapReversionBacktestTab key="commodities-vwap-reversion-backtest" defaultTicker="GLD" />,
-                              },
-                              {
-                                id: "vwap-band-study",
-                                label: "VWAP Band Study",
-                                content: <VwapBandStudyTab key="commodities-vwap-band-study" defaultTicker="GLD" />,
-                              },
-                              {
-                                id: "gap-calendar-study",
-                                label: "Gap & Calendar Study",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <GapCalendarStudyTab key="commodities-gap-calendar-study" defaultTicker="GLD" />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "orb",
-                                label: "ORB Strategy",
-                                content: (
-                                  <RequiresPlacementTier minTier="intermediate">
-                                    <OrbStrategyTab filterAssetClass="commodity" defaultTicker="GLD" />
-                                  </RequiresPlacementTier>
-                                ),
-                              },
-                              {
-                                id: "rolling-move-stats",
-                                label: "Rolling Move Stats",
-                                content: <RollingMoveStatsTab defaultTicker="GLD" defaultAssetClass="commodity" />,
-                              },
-                              {
-                                id: "shock-scan",
-                                label: "Supply/Demand Shock Scan",
-                                content: <SupplyDemandShockScanTab assetClass="commodity" defaultTicker="GLD" />,
-                              },
-                              {
-                                id: "sources",
-                                label: "Research Sources",
-                                content: <FuturesCommoditiesResearchSourcesTab assetLabel="commodities" />,
-                              },
-                            ]}
-                          />
+                          <NavScope>
+                            <AssetGroupWorkspace groupId="commodities" />
+                          </NavScope>
                         </div>
                       ),
                     },
