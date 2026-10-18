@@ -29,7 +29,7 @@ export function isDrawingColor(hex: unknown): hex is string {
 
 /** Palette for the chart chrome (extended-session shading, event markers, compare line). */
 export const CHART_CHROME = {
-  extendedShade: withAlpha(JARVIS.text2, 0.1),
+  extendedShade: withAlpha(JARVIS.text2, 0.16),
   selection: JARVIS.text0,
   split: JARVIS.verdict,
   dividend: JARVIS.signal,

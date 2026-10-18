@@ -10,6 +10,10 @@ import * as alpaca from "../../src/lib/data/alpaca.ts";
 import * as md from "../../src/lib/data/market-data.ts";
 import { parseBarAdjustment, DEFAULT_BAR_ADJUSTMENT } from "../../src/lib/data/market-data-types.ts";
 import { getChartBars } from "../../src/lib/agents/trading-agent/skills/chart-bars.ts";
+import { defaultScaleMode, effectiveScaleMode, parseScaleMode, loadScaleChoice, saveScaleChoice, SCALE_MODES, SCALE_LABELS, SCALE_DESCRIPTIONS } from "../../src/lib/chart/scale.ts";
+import { equitySessionOf, filterExtendedHours, hasExtendedBars, extendedShadeRanges, countSessions } from "../../src/lib/chart/sessions.ts";
+import { withAlpha } from "../../src/lib/chart/colors.ts";
+import { TIMEFRAME_PRESETS } from "../../src/lib/agents/trading-agent/skills/timeframe-presets.ts";
 import { formatBarLabel, formatTick, zoneForProvider } from "../../src/lib/chart/timeformat.ts";
 import { INDICATORS, computeIndicator, indicatorDef } from "../../src/lib/chart/indicators.ts";
 import { deriveChartMeta, describeFeed, describeAdjustment, volumeLegendLabel, formatAge, barMsFromTimeframe, isLikelyLiveEquitySession } from "../../src/lib/chart/meta.ts";
@@ -173,6 +177,42 @@ t("market-data timeframe passes all through", param(calls[0].url, "adjustment") 
   t("plain price averages are not tagged as estimates", !indicatorDef("ema20")?.estimate && !indicatorDef("rsi")?.estimate);
   t("unknown indicator id gives an empty output", computeIndicator("nope", candles).series.length === 0);
   t("ids are unique", new Set(INDICATORS.map((d) => d.id)).size === INDICATORS.length);
+}
+
+// ---------------------------------------------------------------- 4. scale mode and sessions (WP1 item 3)
+{
+  const DAYMS = 86_400_000;
+  t("defaultScaleMode: 5yr is log, 1yr is linear, exactly 2 years is log", defaultScaleMode(5 * 365 * DAYMS) === "log" && defaultScaleMode(365 * DAYMS) === "linear" && defaultScaleMode(2 * 365 * DAYMS) === "log" && defaultScaleMode(0) === "linear");
+  t("every shipped timeframe preset maps to a sensible default (only 5yr is log)", TIMEFRAME_PRESETS.filter((p) => defaultScaleMode(p.lookbackMs) === "log").map((p) => p.id).join() === "5yr");
+  t("effectiveScaleMode: user choice wins over the default", effectiveScaleMode("linear", 5 * 365 * DAYMS, 10) === "linear" && effectiveScaleMode("percent", 30 * DAYMS, 10) === "percent" && effectiveScaleMode(null, 5 * 365 * DAYMS, 10) === "log");
+  t("effectiveScaleMode: log falls back to linear when a price is not above zero or unknown", effectiveScaleMode("log", DAYMS, 0) === "linear" && effectiveScaleMode("log", DAYMS, -1) === "linear" && effectiveScaleMode(null, 5 * 365 * DAYMS, null) === "linear");
+  t("parseScaleMode rejects junk", parseScaleMode("log") === "log" && parseScaleMode("LOG") === null && parseScaleMode(undefined) === null && parseScaleMode(3) === null);
+  const mem: Record<string, string> = {};
+  const store = { getItem: (k: string) => mem[k] ?? null, setItem: (k: string, v: string) => void (mem[k] = v) };
+  saveScaleChoice("percent", store);
+  t("scale choice round-trips through session storage", loadScaleChoice(store) === "percent");
+  const broken = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
+  t("blocked storage never throws", loadScaleChoice(broken as any) === null && (saveScaleChoice("log", broken as any), true));
+  t("scale labels exist for every mode and say what the axis is", SCALE_MODES.every((m) => SCALE_LABELS[m] && SCALE_DESCRIPTIONS[m].length > 10) && /percent/i.test(SCALE_DESCRIPTIONS.log));
+
+  // 2026-10-14 (Wednesday, EDT = UTC-4): 04:00 pre, 09:30 regular, 16:00 post, 20:00 closed
+  const at = (h: number, m: number) => Date.UTC(2026, 9, 14, h + 4, m, 0);
+  t("equitySessionOf boundaries", equitySessionOf(at(3, 59)) === "closed" && equitySessionOf(at(4, 0)) === "pre" && equitySessionOf(at(9, 29)) === "pre" && equitySessionOf(at(9, 30)) === "regular" && equitySessionOf(at(15, 59)) === "regular" && equitySessionOf(at(16, 0)) === "post" && equitySessionOf(at(19, 59)) === "post" && equitySessionOf(at(20, 0)) === "closed");
+  t("equitySessionOf: Saturday is closed all day", equitySessionOf(Date.UTC(2026, 9, 17, 15, 0, 0)) === "closed");
+  // DST: Tuesday 2026-11-03 is EST (UTC-5): 14:30Z is 09:30 ET
+  t("equitySessionOf follows daylight saving (EST in November)", equitySessionOf(Date.UTC(2026, 10, 3, 14, 30, 0)) === "regular" && equitySessionOf(Date.UTC(2026, 10, 3, 14, 29, 0)) === "pre");
+  const day = [at(4, 0), at(8, 0), at(9, 25), at(9, 30), at(12, 0), at(15, 55), at(16, 0), at(19, 55)].map((datetime) => ({ datetime, v: 1 }));
+  t("filterExtendedHours(false) keeps only regular bars and preserves order", filterExtendedHours(day, false).map((b) => b.datetime).join() === [at(9, 30), at(12, 0), at(15, 55)].join());
+  t("filterExtendedHours(true) keeps everything (copy)", filterExtendedHours(day, true).length === 8 && filterExtendedHours(day, true) !== day);
+  t("filterExtendedHours on empty input", filterExtendedHours([], false).length === 0);
+  t("hasExtendedBars", hasExtendedBars(day.map((b) => b.datetime)) && !hasExtendedBars([at(10, 0), at(11, 0)]) && !hasExtendedBars([]));
+  const runs = extendedShadeRanges(day);
+  t("extendedShadeRanges: pre-market run and after-hours run", runs.length === 2 && runs[0].fromMs === at(4, 0) && runs[0].toMs === at(9, 25) && runs[1].fromMs === at(16, 0) && runs[1].toMs === at(19, 55), JSON.stringify(runs));
+  const joined = extendedShadeRanges([at(18, 0), at(19, 55), Date.UTC(2026, 9, 15, 8, 5, 0)].map((datetime) => ({ datetime })));
+  t("a post-market run continues into the next pre-market when no regular bar sits between", joined.length === 1);
+  const counts = countSessions(day.map((b) => b.datetime));
+  t("countSessions", counts.pre === 3 && counts.regular === 3 && counts.post === 2 && counts.closed === 0, JSON.stringify(counts));
+  t("withAlpha builds rgba and rejects bad input", withAlpha("#4fe8d0", 0.5) === "rgba(79, 232, 208, 0.5)" && withAlpha("nope", 0.5) === "nope" && withAlpha("#000000", 5) === "rgba(0, 0, 0, 1)");
 }
 
 summary();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CandlestickSeries,
   ColorType,
@@ -9,6 +9,7 @@ import {
   HistogramSeries,
   LineSeries,
   LineStyle,
+  PriceScaleMode,
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
@@ -24,6 +25,11 @@ import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import type { BarAdjustment } from "@/lib/data/market-data-types";
 import { INDICATORS } from "@/lib/chart/indicators";
 import { formatBarLabel, formatTick, zoneForProvider, type ChartZone } from "@/lib/chart/timeformat";
+import { effectiveScaleMode, loadScaleChoice, saveScaleChoice, SCALE_DESCRIPTIONS, SCALE_LABELS, SCALE_MODES, type ScaleMode } from "@/lib/chart/scale";
+import { extendedShadeRanges, filterExtendedHours, hasExtendedBars } from "@/lib/chart/sessions";
+import { CHART_CHROME } from "@/lib/chart/colors";
+import { SessionShade } from "./chart/SessionShade";
+import { ToggleGroup } from "./chart/ToggleGroup";
 import { ChartHeader } from "./chart/ChartHeader";
 import { ActiveLegend } from "./chart/ActiveLegend";
 import dynamic from "next/dynamic";
@@ -135,6 +141,7 @@ export function PriceChart({
   const positionLineRef = useRef<IPriceLine | null>(null);
   const orderLinesRef = useRef<IPriceLine[]>([]);
   const sessionMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const shadeRef = useRef<SessionShade | null>(null);
   const assetClassRef = useRef<AssetClass>(assetClass);
   assetClassRef.current = assetClass;
   const readOnlyRef = useRef(readOnly);
@@ -169,6 +176,35 @@ export function PriceChart({
   const intraday = (data?.meta?.barMs ?? 86_400_000) < 86_400_000;
   const intradayRef = useRef(intraday);
   intradayRef.current = intraday;
+
+  // Extended hours: only intraday US equity bars have a pre-market and after-hours session. The toggle filters those bars
+  // out of everything (candles, volume, indicators); the shading marks them while they are shown.
+  const [includeExtended, setIncludeExtended] = useState(true);
+  const extendedApplicable = Boolean(data?.meta && data.meta.provider === "Alpaca" && intraday);
+  const extendedPresent = useMemo(
+    () => (extendedApplicable && data ? hasExtendedBars(data.candles.map((c) => c.datetime)) : false),
+    [extendedApplicable, data]
+  );
+  // The bars everything below draws. Same array identity until the data or the toggle changes.
+  const candles = useMemo(
+    () => (data ? (extendedApplicable ? filterExtendedHours(data.candles, includeExtended) : data.candles) : []),
+    [data, extendedApplicable, includeExtended]
+  );
+  const candlesRef = useRef(candles);
+  candlesRef.current = candles;
+
+  // Price-scale mode: the user's choice (remembered for the browser session) or the default for the range (log from 2 years).
+  const [scaleChoice, setScaleChoice] = useState<ScaleMode | null>(null);
+  useEffect(() => {
+    setScaleChoice(loadScaleChoice());
+  }, []);
+  const lookbackMs = TIMEFRAME_PRESETS.find((p) => p.id === timeframe)?.lookbackMs ?? 0;
+  const minLow = useMemo(() => {
+    let m: number | null = null;
+    for (const c of candles) if (m === null || c.low < m) m = c.low;
+    return m;
+  }, [candles]);
+  const scaleMode = effectiveScaleMode(scaleChoice, lookbackMs, minLow);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -185,20 +221,20 @@ export function PriceChart({
   // cursor is over a candle.
   useEffect(() => {
     const map = new Map<number, number>();
-    data?.candles.forEach((c, i) => map.set(toSeconds(c.datetime), i));
+    candles.forEach((c, i) => map.set(toSeconds(c.datetime), i));
     indexByTimeRef.current = map;
     hoverSecondsRef.current = null;
-    writeLegend(legendRef.current, data?.candles ?? [], data?.candles.length ? data.candles.length - 1 : -1, timeframe, fmtPx, zone);
+    writeLegend(legendRef.current, candles, candles.length ? candles.length - 1 : -1, timeframe, fmtPx, zone);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, timeframe, assetClass, zone]);
+  }, [candles, timeframe, assetClass, zone]);
 
   useEffect(() => {
     const series = candleSeriesRef.current;
-    const last = data?.candles[data.candles.length - 1];
+    const last = candles[candles.length - 1];
     if (!series || assetClass !== "crypto" || !last) return;
     const precision = last.close >= 1 ? 2 : last.close >= 0.01 ? 4 : 8;
     series.applyOptions({ priceFormat: { type: "price", precision, minMove: 1 / 10 ** precision } });
-  }, [data, assetClass]);
+  }, [candles, assetClass]);
 
   useEffect(() => {
     setSessionId(getOrCreateSessionId());
@@ -271,6 +307,10 @@ export function PriceChart({
     const sma20Series = chart.addSeries(LineSeries, { color: SMA_COLORS.sma20, lineWidth: 1 });
     const sma50Series = chart.addSeries(LineSeries, { color: SMA_COLORS.sma50, lineWidth: 1 });
 
+    const shade = new SessionShade(CHART_CHROME.extendedShade);
+    candleSeries.attachPrimitive(shade);
+    shadeRef.current = shade;
+
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
     volumeSeriesRef.current = volumeSeries;
@@ -296,8 +336,8 @@ export function PriceChart({
     // seriesData snapshot exposes, since that doesn't include volume or a
     // prior-close-based change%).
     chart.subscribeCrosshairMove((param) => {
-      const candles = dataRef.current?.candles;
-      if (!candles || candles.length === 0) return;
+      const candles = candlesRef.current;
+      if (candles.length === 0) return;
       const seconds = param.time ? (param.time as number) : null;
       // Skip work while the cursor stays on the same candle.
       if (seconds === hoverSecondsRef.current) return;
@@ -321,8 +361,23 @@ export function PriceChart({
       extraPriceLinesRef.current = [];
       positionLineRef.current = null;
       orderLinesRef.current = [];
+      // Cleared so a StrictMode remount builds fresh plugins on the new chart instead of reusing ones bound to the removed one (audit F16).
+      sessionMarkersRef.current = null;
+      shadeRef.current = null;
     };
   }, []);
+
+  // Price-scale mode on the main (right) scale. Volume and the oscillator panes keep their own scales.
+  useEffect(() => {
+    const mode = scaleMode === "log" ? PriceScaleMode.Logarithmic : scaleMode === "percent" ? PriceScaleMode.Percentage : PriceScaleMode.Normal;
+    chartRef.current?.priceScale("right").applyOptions({ mode });
+  }, [scaleMode]);
+
+  // Shade the pre-market and after-hours bars while they are shown.
+  useEffect(() => {
+    const ranges = extendedApplicable && includeExtended ? extendedShadeRanges(candles) : [];
+    shadeRef.current?.setRanges(ranges.map((r) => ({ fromSec: toSeconds(r.fromMs), toSec: toSeconds(r.toMs) })));
+  }, [candles, extendedApplicable, includeExtended]);
 
   // Fetch on symbol/timeframe change.
   useEffect(() => {
@@ -356,9 +411,8 @@ export function PriceChart({
   // Push candles/volume/SMA20/SMA50 when the data changes. The SMA toggles only show or hide a series (next effect), so
   // clicking one no longer resends all the data or resets the user's zoom (audit F5).
   useEffect(() => {
-    if (!data || !candleSeriesRef.current || !volumeSeriesRef.current) return;
+    if (!candleSeriesRef.current || !volumeSeriesRef.current) return;
 
-    const candles = data.candles;
     candleSeriesRef.current.setData(
       candles.map((c) => ({
         time: toSeconds(c.datetime),
@@ -393,12 +447,12 @@ export function PriceChart({
 
     chartRef.current?.timeScale().fitContent();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [candles]);
 
   useEffect(() => {
     sma20SeriesRef.current?.applyOptions({ visible: showSma20 });
     sma50SeriesRef.current?.applyOptions({ visible: showSma50 });
-  }, [data, showSma20, showSma50]);
+  }, [candles, showSma20, showSma50]);
 
 
   // Real session-boundary markers (Asian/London/New York, UTC — see
@@ -414,7 +468,6 @@ export function PriceChart({
     const plugin = sessionMarkersRef.current ?? createSeriesMarkers(candleSeries, []);
     sessionMarkersRef.current = plugin;
 
-    const candles = data?.candles ?? [];
     if (candles.length < 2 || (assetClass !== "forex" && assetClass !== "future")) {
       plugin.setMarkers([]);
       return;
@@ -446,7 +499,7 @@ export function PriceChart({
       prevMinutes = minutesSinceMidnight;
     }
     plugin.setMarkers(markers);
-  }, [data, assetClass]);
+  }, [candles, assetClass]);
 
   // Rebuild every "extra" overlay/oscillator series from scratch whenever the
   // data or the enabled-indicator sets change — simpler and less error-prone
@@ -454,7 +507,7 @@ export function PriceChart({
   useEffect(() => {
     const chart = chartRef.current;
     const candleSeries = candleSeriesRef.current;
-    if (!chart || !candleSeries || !data) return;
+    if (!chart || !candleSeries || candles.length === 0) return;
 
     for (const s of extraSeriesRef.current) chart.removeSeries(s);
     extraSeriesRef.current = [];
@@ -463,7 +516,6 @@ export function PriceChart({
     const paneCount = chart.panes().length;
     for (let i = paneCount - 1; i >= 1; i--) chart.removePane(i);
 
-    const candles = data.candles;
     const closes = candles.map((c) => c.close);
     const times = candles.map((c) => toSeconds(c.datetime));
 
@@ -613,7 +665,7 @@ export function PriceChart({
     }
 
     chart.applyOptions({ height: 420 + (nextPane - 1) * 150 });
-  }, [data, enabledOverlays, enabledOscillators]);
+  }, [candles, enabledOverlays, enabledOscillators]);
 
   // Cost-basis + open-order price lines — the real mechanism behind
   // Webull's "trade on the chart" (confirmed live: it draws lines for held
@@ -676,7 +728,7 @@ export function PriceChart({
     return () => {
       cancelled = true;
     };
-  }, [sessionId, symbol, assetClass, data, positionRefreshKey]);
+  }, [sessionId, symbol, assetClass, candles, positionRefreshKey]);
 
   return (
     <div className="jarvis">
@@ -720,6 +772,32 @@ export function PriceChart({
         </label>
         {loading && <span style={{ color: "var(--text-2)" }}>Loading…</span>}
         {focusDate && <span style={{ color: "var(--text-2)" }}>Centered on {focusDate}</span>}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3 text-xs" style={{ color: "var(--text-1)" }}>
+        <ToggleGroup
+          label="Scale"
+          name="scale"
+          value={scaleMode}
+          options={SCALE_MODES.map((m) => ({ value: m, label: SCALE_LABELS[m], title: SCALE_DESCRIPTIONS[m], disabled: m === "log" && !(minLow !== null && minLow > 0) }))}
+          onChange={(m) => {
+            setScaleChoice(m);
+            saveScaleChoice(m);
+          }}
+        />
+        {data?.meta?.provider === "Alpaca" && (
+          <label className="flex items-center gap-1.5" title={!intraday ? "Daily and weekly bars have no extended-hours session" : undefined}>
+            <input
+              type="checkbox"
+              data-testid="extended-hours"
+              checked={includeExtended}
+              disabled={!extendedApplicable || !extendedPresent}
+              onChange={(e) => setIncludeExtended(e.target.checked)}
+            />
+            Extended hours (pre-market 4:00-9:30, after-hours 16:00-20:00 ET)
+            {extendedApplicable && !extendedPresent && <span style={{ color: "var(--text-2)" }}> none in this window</span>}
+          </label>
+        )}
       </div>
 
       <details className="mb-3">
@@ -776,7 +854,7 @@ export function PriceChart({
             top: 12,
             left: 12,
             zIndex: 5,
-            background: "rgba(8, 11, 16, 0.75)",
+            background: CHART_CHROME.legendBg,
             border: "1px solid var(--line)",
             borderRadius: 4,
             padding: "6px 10px",
@@ -788,6 +866,27 @@ export function PriceChart({
             display: "none",
           }}
         />
+
+        {scaleMode !== "linear" && (
+          <div
+            data-testid="scale-tag"
+            style={{
+              position: "absolute",
+              left: 12,
+              bottom: 36,
+              zIndex: 5,
+              background: CHART_CHROME.legendBg,
+              border: "1px solid var(--line)",
+              padding: "2px 8px",
+              fontSize: 10.5,
+              fontFamily: "monospace",
+              color: "var(--text-1)",
+              pointerEvents: "none",
+            }}
+          >
+            {scaleMode === "log" ? "LOG SCALE: equal steps are equal percent moves" : "PERCENT SCALE: change from the first visible bar"}
+          </div>
+        )}
 
         {assetClass !== "option" && !readOnly && (
           <div style={{ position: "absolute", top: 12, right: 12, zIndex: 5 }}>
