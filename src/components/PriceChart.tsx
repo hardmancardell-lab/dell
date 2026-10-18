@@ -32,6 +32,9 @@ import { SessionShade } from "./chart/SessionShade";
 import { ToggleGroup } from "./chart/ToggleGroup";
 import { ChartHeader } from "./chart/ChartHeader";
 import { IndicatorManager } from "./chart/IndicatorManager";
+import { DrawingController, type DrawingUiState } from "./chart/DrawingController";
+import { DrawingToolbar } from "./chart/DrawingToolbar";
+import { drawingsStorageKey, loadDrawings, saveDrawings } from "@/lib/chart/drawings";
 import { eventsToMarkers } from "@/lib/chart/events";
 import { formatDay } from "@/lib/chart/timeformat";
 import { ActiveLegend } from "./chart/ActiveLegend";
@@ -127,6 +130,9 @@ export function PriceChart({
   const sma20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const sma50SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const managerRef = useRef<IndicatorManager | null>(null);
+  const drawingRef = useRef<DrawingController | null>(null);
+  const drawKeyRef = useRef("");
+  const timesRef = useRef<number[]>([]);
   const positionLineRef = useRef<IPriceLine | null>(null);
   const orderLinesRef = useRef<IPriceLine[]>([]);
   const sessionMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
@@ -168,6 +174,7 @@ export function PriceChart({
 
   // Extended hours: only intraday US equity bars have a pre-market and after-hours session. The toggle filters those bars
   // out of everything (candles, volume, indicators); the shading marks them while they are shown.
+  const [drawUi, setDrawUi] = useState<DrawingUiState>({ tool: "select", selectedId: null, count: 0, color: "", hint: "" });
   const [includeExtended, setIncludeExtended] = useState(true);
   // Splits and dividends from the provider (equities only). `eventsNote` says why there are none when the source is unavailable.
   const [events, setEvents] = useState<CorporateEvent[]>([]);
@@ -185,6 +192,7 @@ export function PriceChart({
   );
   const candlesRef = useRef(candles);
   candlesRef.current = candles;
+  timesRef.current = useMemo(() => candles.map((c) => Math.floor(c.datetime / 1000)), [candles]);
 
   // Price-scale mode: the user's choice (remembered for the browser session) or the default for the range (log from 2 years).
   const [scaleChoice, setScaleChoice] = useState<ScaleMode | null>(null);
@@ -302,6 +310,16 @@ export function PriceChart({
 
     managerRef.current = new IndicatorManager(chart, candleSeries, { baseHeight: 420, paneHeight: 150, onProfile: setVolumeProfileSummary });
     onManagerRef.current?.(managerRef.current);
+    drawingRef.current = new DrawingController({
+      chart,
+      series: candleSeries,
+      container: containerRef.current,
+      getTimes: () => timesRef.current,
+      fmtPrice: (v) => fmtPxRef.current(v),
+      onPersist: (list) => void saveDrawings(drawKeyRef.current, list),
+      onState: setDrawUi,
+    });
+    drawingRef.current.setDrawings(loadDrawings(drawKeyRef.current));
     const shade = new SessionShade(CHART_CHROME.extendedShade);
     candleSeries.attachPrimitive(shade);
     shadeRef.current = shade;
@@ -342,9 +360,14 @@ export function PriceChart({
       writeLegend(legendRef.current, candles, index === -1 ? candles.length - 1 : index, timeframeRef.current, fmtPxRef.current, zoneRef.current);
     });
 
+    let lastWidth = containerRef.current.clientWidth;
     const resizeObserver = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width;
-      if (width) chart.applyOptions({ width });
+      if (!width) return;
+      chart.applyOptions({ width });
+      // A chart created while hidden (zero or tiny width) fitted its bars into almost nothing: fit again once it has room.
+      if (lastWidth < 120 && width >= 120) chart.timeScale().fitContent();
+      lastWidth = width;
     });
     resizeObserver.observe(containerRef.current);
 
@@ -353,6 +376,8 @@ export function PriceChart({
       chart.remove();
       chartRef.current = null;
       managerRef.current = null;
+      drawingRef.current?.dispose();
+      drawingRef.current = null;
       positionLineRef.current = null;
       orderLinesRef.current = [];
       // Cleared so a StrictMode remount builds fresh plugins on the new chart instead of reusing ones bound to the removed one (audit F16).
@@ -360,6 +385,17 @@ export function PriceChart({
       shadeRef.current = null;
     };
   }, []);
+
+  // Drawings belong to a symbol and timeframe: swap the list when either changes (and once at mount).
+  useEffect(() => {
+    drawKeyRef.current = drawingsStorageKey(symbol, timeframe);
+    drawingRef.current?.setDrawings(loadDrawings(drawKeyRef.current));
+  }, [symbol, timeframe]);
+
+  // New bars: re-anchor the drawings on them.
+  useEffect(() => {
+    drawingRef.current?.redraw();
+  }, [candles]);
 
   // Price-scale mode on the main (right) scale. Volume and the oscillator panes keep their own scales.
   useEffect(() => {
@@ -669,6 +705,18 @@ export function PriceChart({
         )}
       </div>
 
+      <DrawingToolbar
+        state={drawUi}
+        onTool={(t) => drawingRef.current?.setTool(t)}
+        onColor={(hex) => drawingRef.current?.setColor(hex)}
+        onDelete={() => drawingRef.current?.deleteSelected()}
+        onClear={() => drawingRef.current?.clearAll()}
+        onAddHLineAtLast={() => {
+          const last = candlesRef.current[candlesRef.current.length - 1];
+          if (last) drawingRef.current?.addHLine(last.close);
+        }}
+      />
+
       <details className="mb-3">
         <summary className="text-xs font-medium cursor-pointer select-none" style={{ color: "var(--text-1)" }}>
           Overlays ({enabledOverlays.size} active)
@@ -712,7 +760,27 @@ export function PriceChart({
         </p>
       )}
 
-      <div style={{ position: "relative" }}>
+      <div
+        style={{ position: "relative" }}
+        tabIndex={0}
+        role="group"
+        aria-label="Price chart. Keys: Delete removes the selected drawing, Escape cancels, arrow keys nudge it, [ and ] select the previous or next drawing."
+        onKeyDown={(e) => {
+          const dc = drawingRef.current;
+          if (!dc || e.target !== e.currentTarget) return;
+          if (e.key === "Delete" || e.key === "Backspace") {
+            dc.deleteSelected();
+            e.preventDefault();
+          } else if (e.key === "Escape") {
+            dc.cancel();
+          } else if (e.key === "[" || e.key === "]") {
+            dc.selectNext(e.key === "]" ? 1 : -1);
+          } else if (e.key.startsWith("Arrow") && drawUi.selectedId) {
+            dc.nudge(e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0, e.key === "ArrowUp" ? 1 : e.key === "ArrowDown" ? -1 : 0);
+            e.preventDefault();
+          }
+        }}
+      >
         <div ref={containerRef} style={{ border: "1px solid var(--line)", background: "var(--ink-900)", minHeight: 420 }} />
 
         <div

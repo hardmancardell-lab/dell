@@ -17,6 +17,8 @@ import { withCashSlice } from "../../src/components/AllocationPieChart.tsx";
 import { IndicatorManager } from "../../src/components/chart/IndicatorManager.ts";
 import { normalizeAlpacaActions, eventsToMarkers } from "../../src/lib/chart/events.ts";
 import { setProviderSleep } from "../../src/lib/data/provider-http.ts";
+import { validateDrawing, validateDrawings, drawingsStorageKey, loadDrawings, saveDrawings, newDrawingId, translateDrawing, moveEndpoint, distToSegment, hitGeometry, barSpacingSec, timeToBarIndex, barIndexToTime, snapToBar, keyboardPriceStep, MAX_DRAWINGS } from "../../src/lib/chart/drawings.ts";
+import { DEFAULT_DRAWING_COLOR, DRAWING_COLORS, isDrawingColor } from "../../src/lib/chart/colors.ts";
 import { withAlpha } from "../../src/lib/chart/colors.ts";
 import { TIMEFRAME_PRESETS } from "../../src/lib/agents/trading-agent/skills/timeframe-presets.ts";
 import { formatBarLabel, formatTick, zoneForProvider } from "../../src/lib/chart/timeformat.ts";
@@ -386,6 +388,49 @@ t("market-data timeframe passes all through", param(calls[0].url, "adjustment") 
   const mock = await md.fetchCorporateEvents("AAPL", Date.UTC(2020, 0, 1), Date.UTC(2026, 9, 1));
   t("mock mode: no events, says why", mock.available === false && /Synthetic/.test(mock.reason ?? ""));
   setFakeEnv();
+}
+
+// ---------------------------------------------------------------- 8. drawings model (WP2 item 7)
+{
+  const good = { id: "a1", kind: "trend", color: "#4fe8d0", p1: { time: 1000, price: 10 }, p2: { time: 2000, price: 12 } };
+  t("validateDrawing accepts a well-formed trend line", validateDrawing(good)?.kind === "trend");
+  t("validateDrawing rejects junk: no id, bad kind, NaN price, missing p2, non-object", [null, 5, { ...good, id: "" }, { ...good, kind: "circle" }, { ...good, p1: { time: 1, price: NaN } }, { ...good, p2: undefined }, { ...good, p1: { time: Infinity, price: 1 } }].every((x) => validateDrawing(x) === null));
+  t("an hline needs only p1 and drops a stray p2", (() => { const h = validateDrawing({ id: "h", kind: "hline", color: "#4fe8d0", p1: { time: 0, price: 5 }, p2: { time: 1, price: 9 } }); return h !== null && h.p2 === undefined && h.p1.price === 5; })());
+  t("an unknown colour falls back to the default drawing colour", validateDrawing({ ...good, color: "red" })?.color === DEFAULT_DRAWING_COLOR && validateDrawing({ ...good, color: "<script>" })?.color === DEFAULT_DRAWING_COLOR);
+  t("validateDrawings drops invalid and duplicate ids and caps the count", validateDrawings([good, good, { nope: 1 }]).length === 1 && validateDrawings(Array.from({ length: 300 }, (_, i) => ({ ...good, id: "x" + i }))).length === MAX_DRAWINGS && validateDrawings("x").length === 0);
+  t("storage key is per symbol (upper-cased) and timeframe", drawingsStorageKey(" dell ", "5min") === "dellegate.chart.drawings.v1:DELL:5min" && drawingsStorageKey("DELL", "1yr") !== drawingsStorageKey("DELL", "5min") && drawingsStorageKey("DELL", "1yr") !== drawingsStorageKey("AAPL", "1yr"));
+  const mem: Record<string, string> = {};
+  const store = { getItem: (k: string) => mem[k] ?? null, setItem: (k: string, v: string) => void (mem[k] = v), removeItem: (k: string) => void delete mem[k] };
+  const key = drawingsStorageKey("DELL", "1yr");
+  t("save then load round-trips", saveDrawings(key, [good as any], store) && loadDrawings(key, store).length === 1 && loadDrawings(key, store)[0].p2?.price === 12);
+  t("saving an empty list removes the key", saveDrawings(key, [], store) && !(key in mem));
+  mem[key] = "{not json";
+  t("corrupt storage loads as empty and never throws", loadDrawings(key, store).length === 0);
+  const blocked = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("quota"); }, removeItem: () => { throw new Error("blocked"); } };
+  t("blocked storage never throws (load [] / save false)", loadDrawings(key, blocked as any).length === 0 && saveDrawings(key, [good as any], blocked as any) === false);
+  t("ids are unique", new Set(Array.from({ length: 500 }, () => newDrawingId())).size === 500);
+
+  const tr = translateDrawing(good as any, 50, -2);
+  t("translateDrawing moves both points", tr.p1.time === 1050 && tr.p1.price === 8 && tr.p2!.time === 2050 && tr.p2!.price === 10);
+  const hl = translateDrawing({ id: "h", kind: "hline", color: "#4fe8d0", p1: { time: 7, price: 5 } }, 999, 1);
+  t("an hline only moves in price", hl.p1.time === 7 && hl.p1.price === 6);
+  t("moveEndpoint changes one end only", (() => { const m = moveEndpoint(good as any, 2, { time: 3000, price: 20 }); return m.p1.price === 10 && m.p2!.price === 20 && m.p2!.time === 3000; })());
+
+  t("distToSegment: on the segment, past an end, degenerate", distToSegment(5, 0, 0, 0, 10, 0) === 0 && distToSegment(15, 0, 0, 0, 10, 0) === 5 && distToSegment(3, 4, 0, 0, 0, 0) === 5 && Math.abs(distToSegment(5, 5, 0, 0, 10, 0) - 5) < 1e-9);
+  const g = (kind: any, x1: number, y1: number, x2: number, y2: number) => ({ kind, x1, y1, x2, y2, width: 500 });
+  t("hit: hline within tolerance only", hitGeometry(g("hline", 0, 100, 500, 100), 250, 104) === "body" && hitGeometry(g("hline", 0, 100, 500, 100), 250, 120) === null);
+  t("hit: trend endpoint beats body, body along the line, miss away from it", hitGeometry(g("trend", 10, 10, 110, 110), 11, 11) === "p1" && hitGeometry(g("trend", 10, 10, 110, 110), 109, 111) === "p2" && hitGeometry(g("trend", 10, 10, 110, 110), 60, 61) === "body" && hitGeometry(g("trend", 10, 10, 110, 110), 60, 90) === null);
+  t("hit: rectangle edges and corners hit, the inside does not (so a big box never blocks panning)", hitGeometry(g("rect", 100, 100, 300, 200), 200, 100) === "body" && hitGeometry(g("rect", 100, 100, 300, 200), 300, 150) === "body" && hitGeometry(g("rect", 100, 100, 300, 200), 100, 100) === "p1" && hitGeometry(g("rect", 100, 100, 300, 200), 200, 150) === null);
+  t("hit: a rectangle drawn right-to-left still hits its edges", hitGeometry(g("rect", 300, 200, 100, 100), 200, 200) === "body");
+
+  const times = [1000, 2000, 3000, 4000, 5000];
+  t("barSpacingSec ignores an overnight gap", barSpacingSec([0, 300, 600, 90000, 90300]) === 300 && barSpacingSec([]) === 86400 && barSpacingSec([5]) === 86400);
+  t("timeToBarIndex: exact, between bars, before and after the data", timeToBarIndex(times, 3000) === 2 && timeToBarIndex(times, 3500) === 2.5 && timeToBarIndex(times, 0) === -1 && timeToBarIndex(times, 7000) === 6 && timeToBarIndex([], 5) === null && timeToBarIndex(times, NaN) === null);
+  t("barIndexToTime inverts timeToBarIndex inside and outside the data", [3000, 3500, 0, 7000, 1000, 5000].every((s) => barIndexToTime(times, timeToBarIndex(times, s)!) === s) && barIndexToTime([], 1) === null);
+  t("snapToBar snaps inside the data and leaves the future alone", snapToBar(times, 3400) === 3000 && snapToBar(times, 3600) === 4000 && snapToBar(times, 9000) === 9000 && snapToBar(times, 500) === 500);
+  t("keyboardPriceStep is 0.25% with a floor", keyboardPriceStep(400) === 1 && keyboardPriceStep(1) === 0.01 && keyboardPriceStep(-400) === 1);
+  t("every drawing colour is from the shared palette and named", DRAWING_COLORS.every((c) => /^#[0-9a-f]{6}$/i.test(c.hex) && c.label.length > 0) && isDrawingColor(DEFAULT_DRAWING_COLOR) && !isDrawingColor("#123456"));
+  t("the drawing code adds no colour literals (all from tokens)", ["DrawingsPrimitive.ts", "DrawingController.ts", "DrawingToolbar.tsx"].every((f) => !/["'`]#[0-9a-fA-F]{3,8}["'`]/.test(read(`src/components/chart/${f}`)) && !/rgba?\(/.test(read(`src/components/chart/${f}`))));
 }
 
 summary();
