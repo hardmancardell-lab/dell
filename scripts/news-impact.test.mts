@@ -16,6 +16,11 @@ import { factorPlanFor, sectorEtfFor } from "../src/lib/news-impact/factors.ts";
 import { analyzeNewsImpact } from "../src/lib/news-impact/analyze.ts";
 import { businessVerdict, systematicVerdict, macroVerdict } from "../src/lib/news-impact/verdict.ts";
 import { dailyHeadlineStats, mergeDayCounts, headlineHash, evaluateCountsVsMoves } from "../src/lib/news-impact/headline-log.ts";
+import { readingStats } from "./quality/reading-level.mts";
+import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { NewsImpactView } from "../src/components/NewsImpactPanel.tsx";
 
 const { t, summary } = makeT();
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
@@ -367,6 +372,49 @@ const evs = (s: Synth, type = "earnings") => s.eventIdx.map((i) => ({ date: s.da
   t("evaluation: counts that track the move show a positive rank correlation with an interval above zero", ev1.status === "ok" && ev1.rho > 0.3 && ev1.lo > 0, JSON.stringify(ev1));
   t("evaluation: unrelated counts show an interval that includes zero", ev2.status === "ok" && ev2.lo <= 0 && ev2.hi >= 0, JSON.stringify(ev2));
   t("evaluation: under 60 days it refuses", evaluateCountsVsMoves(dates.slice(0, 30), tracking.slice(0, 30), sarAbs.slice(0, 30)).status === "not-enough");
+}
+
+// ---- reading level of the plain-language text (grade 8 or lower), and the panel as rendered
+{
+  const s = synth(91, 1100, { boost: 3, nEvents: 60 });
+  const study = runEventStudy(toSeries(s), evs(s, "earnings").slice(0, 30).concat(evs(s, "other").slice(30)), FILING_TYPES);
+  const nul = synth(92, 1100, { boost: 0, nEvents: 60 });
+  const nulStudy = runEventStudy(toSeries(nul), evs(nul), FILING_TYPES);
+  const decomp = decomposeVariance(s.dates, s.r, [s.f], [{ symbol: "SPY", label: "the US stock market", short: "M" }]);
+  const macro = runMacroStudy(s.dates, s.r, evs(s, "fomc"));
+  const samples = [
+    businessVerdict("ABC", study, null).text,
+    businessVerdict("ABC", nulStudy, null).text,
+    businessVerdict("ABC", null, "No dated company-type events exist for crypto in this app, so this test does not run.").text,
+    systematicVerdict("ABC", decomp, "company-specific", null).text,
+    macroVerdict("ABC", macro, null).text,
+  ];
+  const grade = readingStats(samples.join(" ")).fk;
+  t(`reading level: the verdict sentences read at grade 8 or lower (got ${grade.toFixed(1)})`, grade <= 8.0, String(grade));
+  const src = readFileSync(new URL("../src/components/NewsImpactPanel.tsx", import.meta.url), "utf8");
+  const intro = /Two questions:([\s\S]*?)causes a move\./.exec(src);
+  t("reading level: the panel's own introduction is grade 8 or lower", !!intro && readingStats(("Two questions:" + intro[1] + "causes a move.").replace(/\s+/g, " ").replace(/\{"[^}]*"\}/g, "")).fk <= 8.0);
+  t("panel source: shows the research notice, never calls a price chart, never claims cause", /ResearchNotice/.test(src) && !/PriceChart/.test(src) && !/causes a (price )?move(?!\.)/.test(src.replace("does not show that news causes a move", "")));
+
+  const data = {
+    symbol: "ABC", assetClass: "equity", asOf: "2026-10-18T12:00:00.000Z", dataThrough: "2026-10-16", sample: { from: "2021-09-27", to: "2026-10-16", returns: 1100 },
+    plan: { factors: [{ symbol: "SPY", label: "the US stock market", short: "Stock market", loaded: true }], ownLabel: "company-specific", notes: ["Compared with the US stock market first."] },
+    business: { study, verdict: businessVerdict("ABC", study, null), filingsFound: 60, acceptanceTimeShare: 1 },
+    systematic: { decomposition: decomp, text: systematicVerdict("ABC", decomp, "company-specific", null).text, stability: null },
+    macro: { study: macro, kind: "x", text: macroVerdict("ABC", macro, null).text, missingKinds: [] },
+    notes: ["A note."],
+  };
+  const html = renderToStaticMarkup(createElement(NewsImpactView, { data }));
+  t("panel render: every bar row shows its n", (html.match(/\(n = \d+\)/g) ?? []).length >= 6, String((html.match(/\(n = \d+\)/g) ?? []).length));
+  t("panel render: a type with too few events says so instead of drawing a bar", /Not enough events to say \(need 10\)/.test(html));
+  t("panel render: the split bar is labelled with shares that add to 100%", (() => { const m = /Share of ABC&#x27;s daily variance: ([^"]*)\./.exec(html); if (!m) return false; const nums = [...m[1].matchAll(/(\d+)%/g)].map((x) => Number(x[1])); return Math.abs(nums.reduce((a, b) => a + b, 0) - 100) <= 2; })());
+  t("panel render: units and the 1x reference are stated, as-of and interval wording present", /dashed line, 1x/.test(html) && /95% range/.test(html) && /1100 daily returns/.test(html) && /Oct 16, 2026/.test(html));
+  const thin = { ...data, business: { ...data.business, study: runEventStudy(toSeries(synth(93, 1100, { boost: 3, nEvents: 8 })), evs(synth(93, 1100, { boost: 3, nEvents: 8 })), FILING_TYPES) } };
+  thin.business.verdict = businessVerdict("ABC", thin.business.study, null);
+  const htmlThin = renderToStaticMarkup(createElement(NewsImpactView, { data: thin }));
+  t("panel render: with too few filings the headline row says 'Not enough events to say (need 20)' and no verdict word appears", /Not enough events to say \(need 20\)/.test(htmlThin) && !/much more|somewhat more|No clear difference\. On/.test(htmlThin.split("2. How much")[0]));
+  const un = { ...data, business: { study: null, verdict: businessVerdict("ABC", null, "No dated company-type events exist for crypto in this app, so this test does not run."), filingsFound: 0, acceptanceTimeShare: null } };
+  t("panel render: when the company test does not run, the reason is shown and no chart is drawn for it", /does not run/.test(renderToStaticMarkup(createElement(NewsImpactView, { data: un })).split("2. How much")[0]) && !/dashed line/.test(renderToStaticMarkup(createElement(NewsImpactView, { data: un })).split("2. How much")[0]));
 }
 
 summary();

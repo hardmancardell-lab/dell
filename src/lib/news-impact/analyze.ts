@@ -90,7 +90,7 @@ export function analyzeNewsImpact(input: AnalyzeInput): NewsImpactResult {
     businessReason =
       input.assetClass === "equity"
         ? "This is a fund, not one company, so there are no company filings to test. See the market-wide and macro-day results below."
-        : `No dated company-type events exist for ${input.assetClass} in this app, so this test does not run. A daily headline log can fill that gap in a few months.`;
+        : `No dated company-type events exist for ${input.assetClass} in this app, so this test does not run. A daily headline log can fill that gap once it has run for a few months.`;
   } else if (input.filings === null) {
     businessReason = "SEC filings could not be loaded right now, so the company-event test did not run. Try again later.";
   } else if (loaded.length === 0) {
