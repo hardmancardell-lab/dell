@@ -41,7 +41,8 @@ export function fuzzyRank<T>(query: string, items: T[], fields: (item: T) => str
     const a = fuzzyScore(query, primary ?? "");
     const b = fuzzyScore(query, [primary, ...rest].join(" "));
     if (a === null && b === null) return;
-    scored.push({ item, score: (a ?? 0) * 2 + (b ?? 0), order });
+    // Shorter titles win ties: "Signal Backtest" is a better answer to "backtest" than "Paper Backtest Log".
+    scored.push({ item, score: (a ?? 0) * 2 + (b ?? 0) - (primary ?? "").length, order });
   });
   scored.sort((x, y) => y.score - x.score || x.order - y.order);
   return scored.map((s) => s.item);

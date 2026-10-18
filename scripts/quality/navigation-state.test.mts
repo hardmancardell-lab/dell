@@ -5,6 +5,11 @@ import { buildNavQuery, parseNavQuery, navReducer, sameNav } from "../../src/lib
 import { resolveStudyRoute, resolveTickerRoute, resolveGlobalStudyRoute, inferAssetClass } from "../../src/lib/navigation/study-routes.ts";
 import { STUDIES, getStudy, resolveStudyRender } from "../../src/lib/navigation/study-registry.ts";
 import { fuzzyScore, fuzzyRank } from "../../src/lib/navigation/fuzzy.ts";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { HELP_VIDEOS } from "../../src/lib/agents/help-videos.ts";
+import { PRIMARY_TABS, SECONDARY_TABS } from "../../src/lib/navigation/trading-structure.ts";
+import { buildPaletteItems, searchPalette, itemsForKeys, typedTickerItem } from "../../src/lib/navigation/palette-items.ts";
 import { EMPTY_PREFS, parsePrefs, pushRecent, togglePin, serializePrefs, MAX_RECENTS, MAX_PINS } from "../../src/lib/navigation/study-prefs.ts";
 
 let bad = 0, passed = 0;
@@ -100,6 +105,37 @@ t(`pins are capped at ${MAX_PINS}`, many.pins.length === MAX_PINS, String(many.p
 t("garbage in storage is ignored, valid parts kept", parsePrefs("{nope").pins.length === 0 && parsePrefs(JSON.stringify({ pins: ["study:ok", "<script>", 5, "study:ok"], recents: "x" })).pins.join() === "study:ok", "");
 t("storage round trip", parsePrefs(serializePrefs(p)).recents.join() === p.recents.join(), "");
 t("invalid keys are not stored", togglePin(EMPTY_PREFS, "evil key").pins.length === 0 && pushRecent(EMPTY_PREFS, "x:y").recents.length === 0, "");
+
+// ---------------------------------------------------------------- existing links keep working (wizard, Help menu, Assistant, Faye)
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const wizardSrc = readFileSync(ROOT + "src/components/OnboardingWizard.tsx", "utf8");
+const wizardPrimaries = [...wizardSrc.matchAll(/primaryId: "([a-z-]+)"/g)].map((m) => m[1]);
+t("onboarding wizard goals point at real primary tabs", wizardPrimaries.length >= 4 && wizardPrimaries.every((id) => PRIMARY_TABS.some((p) => p.id === id)), wizardPrimaries.join());
+t("every wizard target survives a URL round trip", wizardPrimaries.every((id) => buildNavQuery(parseNavQuery(buildNavQuery({ primaryId: id }))) === "agent=" + id), "");
+t("every Help menu agent id is a primary tab", HELP_VIDEOS.every((v) => PRIMARY_TABS.some((p) => p.id === v.agentId)), HELP_VIDEOS.map((v) => v.agentId).join());
+const toolsSrc = readFileSync(ROOT + "src/lib/agents/assistant/tools.ts", "utf8");
+const assistantTargets = [...toolsSrc.matchAll(/target: \{ primaryId: "([a-z-]+)", secondaryId: "([a-z-]+)" \}/g)].map((m) => [m[1], m[2]]);
+t("Assistant navigation targets are real tabs", assistantTargets.length >= 1 && assistantTargets.every(([a, b]) => (SECONDARY_TABS[a] ?? []).some((x) => x.id === b)), JSON.stringify(assistantTargets));
+t("Assistant target (trading, paper-trading) is stable through the URL", assistantTargets.every(([a, b]) => buildNavQuery(parseNavQuery("agent=" + a + "&section=" + b)) === "agent=" + a + "&section=" + b), "");
+const fayeSrc = readFileSync(ROOT + "src/components/FayeChatWidget.tsx", "utf8");
+t("Faye only navigates to ids this registry knows", [...fayeSrc.matchAll(/navigateTo\("([a-z-]+)"/g)].every((m) => PRIMARY_TABS.some((p) => p.id === m[1])), "");
+
+// ---------------------------------------------------------------- command palette items
+const items = buildPaletteItems({ lastAssetClass: "forex", watchlist: [{ symbol: "aapl", assetClass: "equity" }, { symbol: "AAPL", assetClass: "equity" }, { symbol: "EUR/USD", assetClass: "forex" }] });
+t("palette lists every live study exactly once", STUDIES.filter((x) => x.status !== "planned").every((x) => items.filter((i) => i.key === "study:" + x.id).length === 1), "");
+t("palette does not list planned hooks", !items.some((i) => i.key === "study:news-hub" || i.key === "study:client-research"), "");
+t("palette lists every agent tab and every section", PRIMARY_TABS.every((p) => items.some((i) => i.key === "tab:" + p.id)) && Object.entries(SECONDARY_TABS).every(([a, list]) => list.every((x) => items.some((i) => i.key === "tab:" + a + "/" + x.id))), "");
+t("palette lists watchlist tickers once, upper-cased", items.filter((i) => i.key === "ticker:AAPL").length === 1 && items.some((i) => i.key === "ticker:EUR/USD"), "");
+t("palette study target uses the current asset-class context", items.find((i) => i.key === "study:backtest").target.secondaryId === "currency" && items.find((i) => i.key === "study:quad-witching").target.secondaryId === "equities", JSON.stringify(items.find((i) => i.key === "study:backtest").target));
+const badTargets = items.filter((i) => buildNavQuery(parseNavQuery(buildNavQuery(i.target))) !== buildNavQuery(i.target)).map((i) => i.key);
+t("every palette target is a valid, stable URL state", badTargets.length === 0, badTargets.join());
+t("palette search: 'backtest' puts Signal Backtest first", searchPalette(items, "backtest")[0].key === "study:backtest", searchPalette(items, "backtest").slice(0, 3).map((i) => i.key).join());
+const msft = searchPalette(items, "msft").at(-1);
+t("palette search: a typed unknown ticker is offered as Open chart", msft.key === "ticker:MSFT" && msft.target.secondaryId === "equities", JSON.stringify(msft));
+t("palette: a watchlist ticker is not offered twice", typedTickerItem("aapl", items) === null, "");
+const resolved = itemsForKeys(items, ["study:orb", "tab:trading", "study:nope", "ticker:GONE"]).map((i) => i.key);
+t("palette: pinned/recent keys resolve and unknown studies are dropped", resolved.includes("study:orb") && resolved.includes("tab:trading") && !resolved.includes("study:nope"), resolved.join());
+t("palette: a script-like query is not offered as a ticker", typedTickerItem("<img src=x>", items) === null, "");
 
 console.log(`\n${passed} passed, ${bad} failed`);
 process.exit(bad ? 1 : 0);

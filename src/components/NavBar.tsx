@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LogoutButton } from "./LogoutButton";
+import { PaletteButton } from "./navigation/PaletteButton";
 import { createClient } from "@/lib/supabase/server";
 
 export async function NavBar() {
@@ -36,7 +37,10 @@ export async function NavBar() {
             Delegate the research. Own the decision.
           </span>
         </Link>
-        {user && <LogoutButton />}
+        <div className="flex items-center gap-2">
+          <PaletteButton />
+          {user && <LogoutButton />}
+        </div>
       </div>
     </header>
   );

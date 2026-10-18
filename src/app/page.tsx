@@ -88,6 +88,7 @@ import { HelpMenu } from "@/components/HelpMenu";
 import { FayeChatWidget } from "@/components/FayeChatWidget";
 import { MacroDashboardTab } from "@/components/MacroDashboardTab";
 import { StudiesTab } from "@/components/navigation/lazy";
+import { PaletteHost } from "@/components/navigation/PaletteHost";
 
 // The navigation surfaces (Study Library, group workspace) use the jarvis tokens, and the Trading Agent's page is not
 // inside a jarvis island, so they render inside this transparent one. It lives in page.tsx, which already opens islands.
@@ -417,6 +418,9 @@ export default async function Home() {
 
   return (
     <AppNavigationProvider>
+    <NavScope>
+      <PaletteHost />
+    </NavScope>
     <OnboardingWizard />
     <FayeChatWidget />
     <div className="min-h-screen">
