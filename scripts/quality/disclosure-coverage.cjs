@@ -139,6 +139,42 @@ function findTopTabs(n) {
 }
 findTopTabs(sf);
 
+// The Trading Agent's asset-class groups and its Studies tab render the study registry instead of listing each study as a
+// page.tsx tab (src/lib/navigation/study-registry.ts). Expand them back into one leaf per study and asset class, with the same
+// component, props and placement-tier gate the old tab had, so every study is still checked. Trading-wide tools stay direct
+// page.tsx tabs and are walked above.
+{
+  const loadTs = (rel) => {
+    const js = ts.transpileModule(read(path.join(repo, rel)), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+    const m = { exports: {} };
+    new Function("module", "exports", "require", js)(m, m.exports, () => ({}));
+    return m.exports;
+  };
+  const registryPath = "src/lib/navigation/study-registry.ts";
+  const structurePath = "src/lib/navigation/trading-structure.ts";
+  const HOSTS = new Set(["AssetGroupWorkspace", "StudiesTab"]);
+  if (fs.existsSync(path.join(repo, registryPath)) && fs.existsSync(path.join(repo, structurePath)) && leaves.some((l) => l.comps.some((c) => HOSTS.has(c.name)))) {
+    const { STUDIES } = loadTs(registryPath);
+    const { ASSET_GROUPS } = loadTs(structurePath);
+    for (let i = leaves.length - 1; i >= 0; i--) if (leaves[i].comps.some((c) => HOSTS.has(c.name))) leaves.splice(i, 1);
+    for (const g of ASSET_GROUPS) {
+      for (const s of STUDIES) {
+        const v = s.variants[g.assetClass];
+        if (!v || s.assetClasses.length === 0) continue;
+        const name = v.component || s.component;
+        leaves.push({
+          trail: [{ id: "trading", label: "Trading Agent" }, { id: g.id, label: g.label }, { id: s.id, label: s.title }],
+          line: 0,
+          comps: [{ name, attrs: JSON.stringify(v.props).slice(0, 160), line: 0 }],
+          gated: s.tier === "intermediate",
+          gateAttrs: s.tier ? 'minTier="' + s.tier + '"' : null,
+        });
+        if (!importMap[name]) importMap[name] = "./page-tabs";
+      }
+    }
+  }
+}
+
 // ---------- visible-text extraction ----------
 const SKIP_ATTR = new Set(["className","style","key","id","type","href","src","value","name","htmlFor","d","viewBox","fill","stroke","role","target","rel","size","theme","navLevel","navParentId","defaultTicker","assetClass","filterAssetClass","minTier","term","agentId","defaultAssetClass","tone","mobileDropdown","crypto","assetLabel","label"]);
 const fileCache = {};
@@ -199,16 +235,20 @@ const OWNED = new Set(["PaperOrderForm","PaperTradingTab","GuidedTradeSignalsTab
 // page.tsx now imports the tab bodies from ./page-tabs, where each is a lazy dynamic(() => import("@/components/File")).
 // Map each exported name to its component file so the closure is still resolved.
 const dynMap = {};
-const pageTabsPath = path.join(repo, "src/app/page-tabs.tsx");
-if (fs.existsSync(pageTabsPath)) {
+// The navigation folder has its own lazy wrappers (for example NewsHubTab), same pattern.
+for (const rel of ["src/app/page-tabs.tsx", "src/components/navigation/lazy.tsx"]) {
+  const lazyPath = path.join(repo, rel);
+  if (!fs.existsSync(lazyPath)) continue;
   const re = /export const (\w+) = dynamic\(\(\) => import\("@\/components\/(\w+)"\)/g;
-  const txt = read(pageTabsPath);
+  const txt = read(lazyPath);
   let m;
   while ((m = re.exec(txt))) {
     const f = path.join(compDir, m[2] + ".tsx");
     if (fs.existsSync(f)) dynMap[m[1]] = f;
   }
 }
+// NewsHubTab (and any other page.tsx tab imported from the navigation lazy module) resolves through dynMap too.
+for (const name of Object.keys(dynMap)) if (!importMap[name]) importMap[name] = "./page-tabs";
 const rows = [];
 for (const lf of leaves) {
   const names = lf.comps.map((c) => c.name);
