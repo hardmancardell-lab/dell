@@ -89,6 +89,7 @@ const animate = engine.slice(engine.indexOf("private animate = ()"), engine.inde
 t("the render loop allocates no vectors, colours or objects", !/new THREE\./.test(animate), (animate.match(/new THREE\.\w+/g) ?? []).join(","));
 t("dispose is idempotent and frees the scene, the bin and the reflection bake", /if \(this\.disposed\) return;\s*this\.disposed = true;/.test(engine) && /disposeObject3D\(this\.scene\)/.test(engine) && /this\.bin\.disposeAll\(\)/.test(engine) && /envTarget\?\.dispose\(\)/.test(engine));
 t("dispose releases the physics world and the GL context", /this\.world\?\.free\(\)/.test(engine) && /forceContextLoss\(\)/.test(engine));
+t("the car settles at rest when coasting (no creeping jitter from stepSpeed overshoot)", /throttle === 0 && Math\.abs\(this\.speed\) < VEHICLE\.coastDecel \* dt \* 1\.5\) this\.speed = 0/.test(engine));
 t("pixel ratio is capped at 2", /Math\.min\(window\.devicePixelRatio, 2\)/.test(engine));
 t("reduced motion is respected (query, change listener, FOV and shake gates)", /prefers-reduced-motion/.test(readFileSync("src/components/literacy/long-haul/long-haul-feel.ts", "utf8")) && /onMotionChange/.test(engine) && /reducedMotion/.test(engine));
 t("the low-quality fallback is wired to the frame budget", /frameBudget\.push\(rawMs\)\) this\.applyLowQuality\(\)/.test(engine) && /setLowQuality\(true\)/.test(engine));
