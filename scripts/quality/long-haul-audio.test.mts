@@ -70,7 +70,7 @@ t("not unlocked without a browser audio context", a.isUnlocked === false);
 const engine = readFileSync("src/components/literacy/long-haul/long-haul-engine.ts", "utf8");
 t("engine watches its container size", /new ResizeObserver\(/.test(engine) && /resizeObserver\?\.disconnect\(\)/.test(engine));
 t("engine ignores a 0 x 0 container", /width <= 0 \|\| height <= 0\) return/.test(engine));
-t("chase camera is behind the car", /camOffset = new THREE\.Vector3\(-Math\.sin\(this\.heading\) \* 9, 5\.5, -Math\.cos\(this\.heading\) \* 9\)/.test(engine));
+t("chase camera is behind the car (offset is minus the heading's forward vector, with positive distance and height)", /const CAM_BACK = [0-9.]+;/.test(engine) && Number(/const CAM_BACK = ([0-9.]+);/.exec(engine)?.[1]) > 0 && Number(/const CAM_UP = ([0-9.]+);/.exec(engine)?.[1]) > 0 && /this\.camTarget\.set\(t\.x - Math\.sin\(this\.heading\) \* CAM_BACK, CAM_UP, t\.z - Math\.cos\(this\.heading\) \* CAM_BACK\)/.test(engine));
 t("audio is stopped on dispose", /this\.audio\.dispose\(\)/.test(engine));
 const game = readFileSync("src/components/literacy/long-haul/LongHaulGame.tsx", "utf8");
 t("game has a visible sound button", /aria-pressed=\{soundOn\}/.test(game) && /Sound: on/.test(game));

@@ -3,6 +3,13 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { TRACK, VEHICLE, TRAILER, ECONOMY } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import { LongHaulAudio } from "./long-haul-audio";
 import { advanceLoan, fuelAfter, NO_LOAN, shouldOfferLoan, stepSpeed, takeLoan, type LoanState } from "@/lib/agents/financial-literacy/skills/long-haul-rules";
+import { PAL } from "./long-haul-palette";
+import { ResourceBin, disposeObject3D } from "./long-haul-geometry";
+import { makeBlobShadowTexture, makeGlowTexture, makeHeadlightPoolTexture } from "./long-haul-textures";
+import { LongHaulWorld, FOG_NEAR, FOG_FAR } from "./long-haul-world";
+import { LongHaulCar } from "./long-haul-car";
+import { DriveEffects } from "./long-haul-effects";
+import { FEEL, FrameBudget, approach, fovForSpeed, prefersReducedMotion, roughNoise, shakeAmplitude } from "./long-haul-feel";
 
 /**
  * Three.js + Rapier engine for "The Long Haul", framework-agnostic on
@@ -18,6 +25,9 @@ import { advanceLoan, fuelAfter, NO_LOAN, shouldOfferLoan, stepSpeed, takeLoan, 
  * walls that don't stop the car because this velocity-override controller
  * overwrites the rigid body's velocity every frame regardless of what the
  * collision solver just computed. All three fixes are preserved below.
+ *
+ * The look (car, road, city, effects) lives in long-haul-car.ts, long-haul-world.ts and
+ * long-haul-effects.ts; none of it changes the rules or the physics.
  */
 
 export interface LongHaulHud {
@@ -45,15 +55,26 @@ export interface LongHaulCallbacks {
 
 type Phase = "driving" | "modal" | "finished";
 
+/** Chase camera: this far BEHIND the car (opposite its heading) and this high, looking this far ahead of it. */
+const CAM_BACK = 8;
+const CAM_UP = 4.2;
+const CAM_LOOK_AHEAD = 14;
+const HIST = 64; // ring buffer length for the trailer's lagged heading (power of two)
+
 export class LongHaulEngine {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private world!: RAPIER.World;
   private carRigid!: RAPIER.RigidBody;
-  private carGroup: THREE.Group;
-  private trailerMesh: THREE.Mesh;
-  private trailerHistory: { x: number; z: number; heading: number }[] = [];
+  private readonly bin = new ResourceBin();
+  private visuals!: LongHaulWorld;
+  private car!: LongHaulCar;
+  private effects!: DriveEffects;
+  private envTarget: THREE.WebGLRenderTarget | null = null;
+  private readonly headingHistory = new Float32Array(HIST);
+  private historyHead = 0;
+  private historyCount = 0;
 
   private phase: Phase = "driving";
   private heading = Math.PI;
@@ -70,6 +91,23 @@ export class LongHaulEngine {
   private lastT = performance.now();
   private rafId: number | null = null;
   private disposed = false;
+
+  // Look and feel state (all scalars and preallocated vectors: nothing is allocated per frame).
+  private reducedMotion = prefersReducedMotion();
+  private motionQuery: MediaQueryList | null = null;
+  private readonly onMotionChange = () => {
+    this.reducedMotion = prefersReducedMotion();
+    this.effects?.setEnabled(!this.reducedMotion && !this.lowQuality);
+  };
+  private fov: number = FEEL.baseFov;
+  private readonly camBase = new THREE.Vector3();
+  private readonly camTarget = new THREE.Vector3();
+  private readonly camLook = new THREE.Vector3();
+  private cameraSnap = true;
+  private readonly frameBudget = new FrameBudget(25, 2000);
+  private lowQuality = false;
+  private lastHud: LongHaulHud | null = null;
+  private prevSpeed = 0;
 
   // Key handling lives on the (focusable) game container, not on window: arrow keys no longer
   // scroll the page or fire while the player types in another field, and handled keys call
@@ -89,20 +127,14 @@ export class LongHaulEngine {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
-    this.handleResize();
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0b0e12);
-    this.scene.fog = new THREE.Fog(0x0b0e12, 60, 220);
+    // The fog colour is the sky's horizon colour, so distant buildings dissolve into the sky.
+    this.scene.background = new THREE.Color(PAL.horizon);
+    this.scene.fog = new THREE.Fog(PAL.horizon, FOG_NEAR, FOG_FAR);
 
-    this.camera = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 500);
-
-    this.carGroup = new THREE.Group();
-    this.trailerMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(1.6, 1.2, 2.2),
-      new THREE.MeshStandardMaterial({ color: 0xe8724f })
-    );
-    this.trailerMesh.visible = false;
+    this.camera = new THREE.PerspectiveCamera(FEEL.baseFov, container.clientWidth / container.clientHeight || 1.6, 0.1, 700);
+    this.handleResize();
 
     container.addEventListener("keydown", this.onKeyDown);
     container.addEventListener("keyup", this.onKeyUp);
@@ -113,6 +145,12 @@ export class LongHaulEngine {
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.handleResize());
       this.resizeObserver.observe(container);
+    }
+    try {
+      this.motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+      this.motionQuery.addEventListener("change", this.onMotionChange);
+    } catch {
+      this.motionQuery = null;
     }
   }
 
@@ -137,77 +175,45 @@ export class LongHaulEngine {
 
     this.world = new RAPIER.World({ x: 0, y: -20, z: 0 });
 
-    const hemi = new THREE.HemisphereLight(0xaeb8c2, 0x1a1d22, 1.1);
-    this.scene.add(hemi);
-    const dir = new THREE.DirectionalLight(0xffffff, 1.1);
-    dir.position.set(30, 50, 10);
-    this.scene.add(dir);
+    // Dusk lighting: a cool sky/ground fill and one moon-like directional light. No shadow maps (the car has a blob shadow).
+    this.scene.add(new THREE.HemisphereLight(0x8fb2dc, 0x1b2230, 1.5));
+    const moon = new THREE.DirectionalLight(0xb9d0f0, 1.4);
+    moon.position.set(-30, 60, 40);
+    this.scene.add(moon);
 
-    this.buildTrack();
-    this.buildCar();
+    const anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+    this.visuals = new LongHaulWorld(this.bin, anisotropy);
+    this.scene.add(this.visuals.group);
 
-    this.scene.add(this.carGroup);
-    this.scene.add(this.trailerMesh);
+    // Reflections for the car's clear coat and glass come from the sky texture (one-off PMREM bake, freed on dispose).
+    let envMap: THREE.Texture | null = null;
+    try {
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      this.envTarget = pmrem.fromEquirectangular(this.visuals.skyTexture);
+      envMap = this.envTarget.texture;
+      pmrem.dispose();
+    } catch {
+      envMap = null; // the car still renders, just without sky reflections
+    }
 
-    this.lastT = performance.now();
-    this.animate();
-  }
-
-  private buildTrack() {
-    const trackLen = Math.abs(TRACK.finishZ) + 20;
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.95 });
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(TRACK.halfWidth * 2, trackLen), groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(0, 0, -trackLen / 2 + 20);
-    this.scene.add(ground);
-
-    const roughMat = new THREE.MeshStandardMaterial({ color: 0x4a3f2c, roughness: 1 });
-    const roughLen = Math.abs(TRACK.laneSplitEndZ - TRACK.laneSplitStartZ);
-    const rough = new THREE.Mesh(new THREE.PlaneGeometry(TRACK.halfWidth - 2, roughLen), roughMat);
-    rough.rotation.x = -Math.PI / 2;
-    rough.position.set(-TRACK.halfWidth / 2 - 1, 0.01, (TRACK.laneSplitStartZ + TRACK.laneSplitEndZ) / 2);
-    this.scene.add(rough);
-
-    const curbMat = new THREE.MeshStandardMaterial({ color: 0xd6d0c0 });
-    const curb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, roughLen), curbMat);
-    curb.position.set(0, 0.2, (TRACK.laneSplitStartZ + TRACK.laneSplitEndZ) / 2);
-    this.scene.add(curb);
-
-    const tollMat = new THREE.MeshStandardMaterial({ color: 0xe8724f, emissive: 0x331100 });
-    const tollGate = new THREE.Mesh(new THREE.BoxGeometry(TRACK.halfWidth, 6, 0.6), tollMat);
-    tollGate.position.set(TRACK.halfWidth / 4 + 2, 3, TRACK.tollZ);
-    this.scene.add(tollGate);
-
-    const stationMat = new THREE.MeshStandardMaterial({ color: 0xf0c419 });
-    const station = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 6), stationMat);
-    station.position.set(TRACK.halfWidth - 8, 2.5, TRACK.gasStationZ);
-    this.scene.add(station);
-
-    const finishMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-    const finishLine = new THREE.Mesh(new THREE.BoxGeometry(TRACK.halfWidth * 2, 0.2, 1), finishMat);
-    finishLine.position.set(0, 0.1, TRACK.finishZ);
-    this.scene.add(finishLine);
-
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x3a3f47 });
-    [-TRACK.halfWidth, TRACK.halfWidth].forEach((x) => {
-      const wallMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 3, trackLen), wallMat);
-      wallMesh.position.set(x, 1.5, -trackLen / 2 + 20);
-      this.scene.add(wallMesh);
+    const glow = this.bin.add(makeGlowTexture(2));
+    this.car = new LongHaulCar(this.bin, {
+      shadow: this.bin.add(makeBlobShadowTexture()),
+      headlightPool: this.bin.add(makeHeadlightPoolTexture()),
+      glow,
+      envMap,
     });
-  }
-
-  private buildCar() {
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4fe8d0 });
-    const carBody = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.9, 3.4), bodyMat);
-    carBody.position.y = 0.55;
-    this.carGroup.add(carBody);
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.6, 1.6), new THREE.MeshStandardMaterial({ color: 0x1e222a }));
-    cabin.position.set(0, 1.1, -0.2);
-    this.carGroup.add(cabin);
+    this.scene.add(this.car.group);
+    this.scene.add(this.car.trailer);
+    this.effects = new DriveEffects(this.bin, this.scene, this.car.group, glow);
+    this.effects.setEnabled(!this.reducedMotion);
 
     const carRigidDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 1, 0).lockRotations();
     this.carRigid = this.world.createRigidBody(carRigidDesc);
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.9, 0.5, 1.7).setMass(1), this.carRigid);
+
+    this.lastT = performance.now();
+    this.animate();
   }
 
   /** Returns true when the key is one the game uses. */
@@ -270,10 +276,12 @@ export class LongHaulEngine {
   }
 
   reset() {
+    if (this.disposed || !this.carRigid) return;
     this.carRigid.setTranslation({ x: 0, y: 1, z: 0 }, true);
     this.carRigid.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.heading = Math.PI;
     this.speed = 0;
+    this.prevSpeed = 0;
     this.phase = "driving";
     this.fuel = 100;
     this.tollPaid = 0;
@@ -282,26 +290,54 @@ export class LongHaulEngine {
     this.gasStationResolved = false;
     this.tollCharged = false;
     this.startTime = performance.now();
-    this.trailerMesh.visible = false;
-    this.trailerHistory = [];
+    this.historyHead = 0;
+    this.historyCount = 0;
+    this.lastHud = null;
+    this.cameraSnap = true;
+    this.car.reset();
+    this.effects.reset();
+  }
+
+  /** Slow machine fallback: fewer buildings and trees, no particles, pixel ratio 1. The player sees the same road, car and rules. */
+  private applyLowQuality() {
+    if (this.lowQuality) return;
+    this.lowQuality = true;
+    this.visuals.setLowQuality(true);
+    this.effects.setEnabled(false);
+    this.renderer.setPixelRatio(1);
+    this.handleResize();
+  }
+
+  /** Live quality tier, for tests and the report. */
+  get qualityTier(): "high" | "low" {
+    return this.lowQuality ? "low" : "high";
+  }
+
+  /** Renderer statistics (draw calls, triangles, live GPU objects). Used by the verification harness; harmless otherwise. */
+  get stats() {
+    const i = this.renderer.info;
+    return { calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0 };
   }
 
   private animate = () => {
     if (this.disposed) return;
     this.rafId = requestAnimationFrame(this.animate);
     const now = performance.now();
-    const dt = Math.min(0.05, (now - this.lastT) / 1000);
+    const rawMs = now - this.lastT;
+    const dt = Math.min(0.05, rawMs / 1000);
     this.lastT = now;
+    if (this.frameBudget.push(rawMs)) this.applyLowQuality();
 
+    let throttle = 0;
+    let steer = 0;
     if (this.phase === "driving") {
       const tuning = this.currentTuning();
-      let throttle = 0;
-      let steer = 0;
       if (this.keys.up) throttle = 1;
       else if (this.keys.down) throttle = -1;
       if (this.keys.left) steer = -1;
       else if (this.keys.right) steer = 1;
 
+      this.prevSpeed = this.speed;
       this.speed = stepSpeed(this.speed, throttle as -1 | 0 | 1, tuning, dt);
 
       const speedFrac = Math.abs(this.speed) / tuning.maxSpeed;
@@ -311,9 +347,10 @@ export class LongHaulEngine {
       // Caught by driving the prototype toward +X and watching it go -X.
       this.heading -= Math.sign(this.speed || 1) * turnAmount;
 
-      const forward = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
+      const fwdX = Math.sin(this.heading);
+      const fwdZ = Math.cos(this.heading);
       this.carRigid.setLinvel(
-        { x: forward.x * this.speed, y: this.carRigid.linvel().y, z: forward.z * this.speed },
+        { x: fwdX * this.speed, y: this.carRigid.linvel().y, z: fwdZ * this.speed },
         true
       );
 
@@ -327,6 +364,7 @@ export class LongHaulEngine {
         this.tollCharged = true;
         this.tollPaid += ECONOMY.tollCost;
         this.audio.tollChime();
+        this.visuals.flashToll();
       }
 
       if (!this.gasStationResolved && pos.z <= TRACK.gasStationZ) {
@@ -375,47 +413,87 @@ export class LongHaulEngine {
     }
 
     const t = this.carRigid.translation();
-    this.carGroup.position.set(t.x, 0, t.z);
-    this.carGroup.rotation.y = this.heading;
+    const maxSpeed = this.currentTuning().maxSpeed;
+    const speedFrac = this.phase === "driving" ? Math.min(1, Math.abs(this.speed) / maxSpeed) : 0;
+    const onDirt = t.z < TRACK.laneSplitStartZ && t.z > TRACK.laneSplitEndZ && t.x < -2;
+    const braking = this.phase === "driving" && this.keys.down && this.speed > 0.3;
+    const seconds = now / 1000;
+
+    this.car.group.position.set(t.x, 0, t.z);
+    this.car.group.rotation.y = this.heading;
+    this.car.update(dt, {
+      speed: this.phase === "driving" ? this.speed : 0,
+      speedFraction: speedFrac,
+      steer,
+      accel: this.phase === "driving" ? Math.max(-1, Math.min(1, (this.speed - this.prevSpeed) / Math.max(dt, 1e-3) / VEHICLE.baseAccel)) : 0,
+      braking,
+      onDirt: onDirt && this.phase === "driving",
+      time: seconds,
+      reducedMotion: this.reducedMotion,
+    });
 
     if (this.trailerAttached) {
-      this.trailerMesh.visible = true;
-      this.trailerHistory.push({ x: t.x, z: t.z, heading: this.heading });
-      if (this.trailerHistory.length > 60) this.trailerHistory.shift();
-      const sampleIdx = Math.max(0, this.trailerHistory.length - TRAILER.lagFrames);
-      const sample = this.trailerHistory[sampleIdx];
-      this.trailerMesh.position.set(sample.x, 0.6, sample.z);
-      this.trailerMesh.rotation.y = sample.heading;
+      this.car.setTrailerVisible(true);
+      // The trailer follows the car's heading a few frames late (TRAILER.lagFrames), hinged at the hitch behind the car.
+      this.headingHistory[this.historyHead] = this.heading;
+      this.historyHead = (this.historyHead + 1) & (HIST - 1);
+      this.historyCount = Math.min(HIST, this.historyCount + 1);
+      const back = Math.min(TRAILER.lagFrames, this.historyCount - 1);
+      const lagged = this.headingHistory[(this.historyHead - 1 - back + HIST * 2) & (HIST - 1)];
+      this.car.placeTrailer(t.x, t.z, this.heading, lagged);
+    } else {
+      this.car.setTrailerVisible(false);
     }
 
     // Chase camera: BEHIND the car (opposite its forward direction), so the road ahead is in view and +X (the highway lane) is on the
     // screen's right, matching the on-screen text. It was ahead of the car looking back, which hid the road and mirrored left and right.
-    const camOffset = new THREE.Vector3(-Math.sin(this.heading) * 9, 5.5, -Math.cos(this.heading) * 9);
-    const desiredCamPos = new THREE.Vector3(t.x, 0, t.z).add(camOffset);
-    this.camera.position.lerp(desiredCamPos, 0.12);
-    this.camera.lookAt(t.x, 1, t.z);
+    this.camTarget.set(t.x - Math.sin(this.heading) * CAM_BACK, CAM_UP, t.z - Math.cos(this.heading) * CAM_BACK);
+    if (this.cameraSnap) {
+      this.camBase.copy(this.camTarget);
+      this.cameraSnap = false;
+    } else {
+      this.camBase.lerp(this.camTarget, 1 - Math.exp(-dt * 8));
+    }
+    this.camera.position.copy(this.camBase);
+    const shake = shakeAmplitude(speedFrac, onDirt && this.phase === "driving", this.reducedMotion);
+    if (shake > 0) {
+      this.camera.position.x += roughNoise(seconds, 0.4) * shake;
+      this.camera.position.y += roughNoise(seconds, 2.9) * shake * 0.8;
+    }
+    this.camLook.set(t.x + Math.sin(this.heading) * CAM_LOOK_AHEAD, 0.9, t.z + Math.cos(this.heading) * CAM_LOOK_AHEAD);
+    this.camera.lookAt(this.camLook);
+    this.fov = approach(this.fov, fovForSpeed(speedFrac, this.reducedMotion), 4, dt);
+    if (Math.abs(this.camera.fov - this.fov) > 0.02) {
+      this.camera.fov = this.fov;
+      this.camera.updateProjectionMatrix();
+    }
+
+    this.visuals.update(dt, seconds, this.camera);
+    this.effects.update(dt, this.phase === "driving" ? this.speed : 0, speedFrac, onDirt && this.phase === "driving", t.x, t.z, this.heading);
 
     this.audio.update(
-      this.phase === "driving" ? Math.min(1, Math.abs(this.speed) / this.currentTuning().maxSpeed) : 0,
+      speedFrac,
       this.phase === "driving" && this.keys.up,
       this.fuel,
-      now / 1000,
-      this.phase === "driving" && this.keys.down && this.speed > 0.3,
-      t.z < TRACK.laneSplitStartZ && t.z > TRACK.laneSplitEndZ && t.x < -2,
+      seconds,
+      braking,
+      onDirt && this.phase === "driving",
     );
 
-    this.callbacks.onHud({
-      speedMph: Math.round(Math.abs(this.speed) * 3.2),
-      fuel: Math.round(this.fuel),
-      tollPaid: this.tollPaid,
-      trailerAttached: this.trailerAttached,
-      debt: this.loan.debt,
-    });
+    // Only tell React when a displayed number changes (it was re-rendering every frame).
+    const speedMph = Math.round(Math.abs(this.speed) * 3.2);
+    const fuelShown = Math.round(this.fuel);
+    const last = this.lastHud;
+    if (!last || last.speedMph !== speedMph || last.fuel !== fuelShown || last.tollPaid !== this.tollPaid || last.trailerAttached !== this.trailerAttached || last.debt !== this.loan.debt) {
+      this.lastHud = { speedMph, fuel: fuelShown, tollPaid: this.tollPaid, trailerAttached: this.trailerAttached, debt: this.loan.debt };
+      this.callbacks.onHud(this.lastHud);
+    }
 
     this.renderer.render(this.scene, this.camera);
   };
 
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.container.removeEventListener("keydown", this.onKeyDown);
@@ -425,8 +503,20 @@ export class LongHaulEngine {
     this.container.removeEventListener("keydown", this.onUserGesture);
     this.container.removeEventListener("pointerdown", this.onUserGesture);
     this.resizeObserver?.disconnect();
+    this.motionQuery?.removeEventListener("change", this.onMotionChange);
     this.audio.dispose();
+    // Free every GPU object: scene geometry and materials (and the textures they hold), the registered extras, the reflection bake.
+    disposeObject3D(this.scene);
+    this.bin.disposeAll();
+    this.envTarget?.dispose();
+    this.envTarget = null;
+    try {
+      this.world?.free();
+    } catch {
+      /* already freed */
+    }
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
     if (this.renderer.domElement.parentElement === this.container) {
       this.container.removeChild(this.renderer.domElement);
     }
