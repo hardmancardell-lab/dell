@@ -103,16 +103,29 @@ test("the audit's injectable shape would leak every row in the fake (proves the 
   assert.equal(hit.length, 3, "unvalidated, unquoted id exposes rows of every session");
 });
 
-test("legit session sees its own rows plus legacy NULL rows, never another session's", async () => {
+test("legit session sees only its own rows: never another session's and never the old NULL-session rows", async () => {
   seed();
   const rowsA = await JDB.getJournalPositions(A);
-  assert.deepEqual(rowsA.map((p: any) => p.ticker).sort(), ["AAA", "LEGACY"]);
+  assert.deepEqual(rowsA.map((p: any) => p.ticker).sort(), ["AAA"]);
   const rowsB = await JDB.getJournalPositions(B);
-  assert.deepEqual(rowsB.map((p: any) => p.ticker).sort(), ["BBB", "LEGACY"]);
+  assert.deepEqual(rowsB.map((p: any) => p.ticker).sort(), ["BBB"]);
 });
 
-test("legacy NULL-session visibility is an explicit named constant, currently true (owner decision)", () => {
-  assert.equal(SAFE.LEGACY_NULL_SESSION_ROWS_VISIBLE_TO_EVERYONE, true);
+test("old NULL-session rows are hidden from everyone, by id too, and cannot be edited or deleted through the app", async () => {
+  seed();
+  assert.equal(await JDB.getJournalPositionById("p3", A), null);
+  assert.equal(await JDB.getJournalPositionById("p3", B), null);
+  await assert.rejects(() => JDB.updateJournalPosition("p3", A, { notes: "x" }), /not found/i);
+  await JDB.deleteJournalPosition("p3", A);
+  assert.equal(db.journal_positions.length, 3, "nothing is deleted: the old row is still in the database");
+  assert.ok(db.journal_positions.some((r: any) => r.session_id == null));
+});
+
+test("legacy NULL-session visibility is an explicit named constant, now false (owner decision 2026-10-19)", () => {
+  assert.equal(SAFE.LEGACY_NULL_SESSION_ROWS_VISIBLE_TO_EVERYONE, false);
+  const f = SAFE.sessionOwnershipFilter(A);
+  assert.ok(!/is\.null/.test(decodeURIComponent(f)), "the filter must not mention NULL rows");
+  assert.equal(f, `session_id=eq.${A}`);
 });
 
 for (const bad of HOSTILE) {
@@ -174,7 +187,7 @@ test("routes answer 400 for hostile session ids (no database call)", async () =>
   }
   const res = await route.GET(new Request(`http://x/api/journal?sessionId=${A}`));
   assert.equal(res.status, 200);
-  assert.equal((await res.json()).positions.length, 2);
+  assert.equal((await res.json()).positions.length, 1, "own row only: the old NULL-session row is hidden");
   const idRoute = await imp("app/api/journal/[id]/route.ts");
   const res2 = await idRoute.DELETE(new Request(`http://x/api/journal/x?sessionId=${A}`), { params: Promise.resolve({ id: "1&select=*" }) });
   assert.equal(res2.status, 400);

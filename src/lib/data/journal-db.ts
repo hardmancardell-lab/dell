@@ -130,7 +130,8 @@ const POSITION_SELECT = "*,fills:journal_fills(*)";
 
 // Every journal_positions row is scoped to the anonymous session_id that created it (no login system exists; a
 // browser-local session id is the only identity concept). The filter itself, the strict session-id pattern, and the
-// explicit LEGACY_NULL_SESSION_ROWS_VISIBLE_TO_EVERYONE decision for old NULL-session rows live in postgrest-safe.ts.
+// explicit LEGACY_NULL_SESSION_ROWS_VISIBLE_TO_EVERYONE decision (now false: old NULL-session rows are hidden from everyone,
+// nothing deleted) live in postgrest-safe.ts.
 const ownershipFilter = sessionOwnershipFilter;
 
 export async function createJournalPosition(input: {

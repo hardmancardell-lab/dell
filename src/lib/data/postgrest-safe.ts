@@ -22,13 +22,15 @@ const PHONE_PATTERN = /^\+?[0-9]{6,20}$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{8,200}$/;
 
 /**
- * DECISION FOR THE OWNER: journal_positions rows created before the session_id column existed have
- * session_id IS NULL. Today every session can see them ("grandfathered": there was one real beta user then, so
- * hiding them would hide the owner's own old data). This constant makes that explicit. Set it to false after the
- * old rows are assigned to their real owner (UPDATE journal_positions SET session_id = '<owner session>' WHERE
- * session_id IS NULL) and every session will then see only its own rows.
+ * OWNER DECISION (2026-10-19, privacy first): journal_positions rows created before the session_id column existed
+ * have session_id IS NULL. They used to be visible to every visitor ("grandfathered", because there was one real beta
+ * user then). That meant a stranger could read someone's old trade notes, so they are now hidden from everyone.
+ * Nothing is deleted: the rows stay in the database and can be exported (see
+ * Dellegate/team_audits/2026-10-19/journal-legacy-rows.md and setup/10-count-legacy-journal-rows.sql).
+ * Set this back to true only to show them again to every visitor; to give them to one owner, UPDATE them with that
+ * owner's session id instead.
  */
-export const LEGACY_NULL_SESSION_ROWS_VISIBLE_TO_EVERYONE = true;
+export const LEGACY_NULL_SESSION_ROWS_VISIBLE_TO_EVERYONE = false;
 
 export class InvalidFilterValueError extends Error {
   constructor(label: string) {
