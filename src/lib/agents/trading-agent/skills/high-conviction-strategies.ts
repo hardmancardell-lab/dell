@@ -1,6 +1,7 @@
 import { getHighWinRateHypotheses } from "@/lib/data/hypothesis-ledger-db";
 import { getOptionStructureForHypothesis } from "./strategy-suggestion";
 import { toEasternParts } from "./time-windows";
+import { isLegacyRuleHypothesis } from "./hypothesis-rule";
 import type { HighConvictionStrategy, StrategyHypothesis } from "../types";
 
 // Same long/short convention as strategy-suggestion.ts's directionFor —
@@ -72,7 +73,8 @@ export async function getHighConvictionStrategies(minWinRatePct = 84): Promise<H
       winRatePct: h.winRatePct,
       sampleSize: h.sampleSize,
       profitFactor: h.profitFactor,
-      passesThreeBars: h.passesThreeBars,
+      // A pass recorded under the old, weaker rule is not a pass under the current one.
+      passesThreeBars: h.passesThreeBars && !isLegacyRuleHypothesis(h),
       entryRule: h.entryRule,
       exitType: h.exitType,
       exitRule: h.exitRule,

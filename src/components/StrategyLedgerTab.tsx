@@ -5,6 +5,11 @@ import { GlossaryTerm } from "./GlossaryTerm";
 import { classifyEntropyRegime } from "@/lib/agents/trading-agent/skills/entropy-analyzer";
 import type { StrategyHypothesis } from "@/lib/agents/trading-agent/types";
 import { ResearchNotice } from "./ResearchNotice";
+import { effectiveFdrFamilySize, isLegacyRuleHypothesis, LEGACY_VALIDATED_LABEL } from "@/lib/agents/trading-agent/skills/hypothesis-rule";
+
+const FAMILY_SIZE_HELP = "How many ideas were tested together. The more, the stricter the bar.";
+const LEGACY_HELP =
+  "This row was judged before the test got stricter. The old test let more luck through, so do not rely on it.";
 
 function fmtPct(n: number | null): string {
   if (n === null || !Number.isFinite(n)) return "N/A";
@@ -71,10 +76,14 @@ export function StrategyLedgerTab() {
           <table className="jv-table">
             <thead>
               <tr>
-                {["Ticker", "Strategy", "Horizon", "Entry Rule", "Exit", "Win Rate", "Entropy", "Sample", "Status"].map((h) => (
+                {["Ticker", "Strategy", "Horizon", "Entry Rule", "Exit", "Win Rate", "Entropy", "Sample", "Family size", "Status"].map((h) => (
                   <th key={h}>
                     {h === "Entropy" ? (
                       <GlossaryTerm term="entropyScore">{h}</GlossaryTerm>
+                    ) : h === "Family size" ? (
+                      <span title={FAMILY_SIZE_HELP} aria-label={`Family size. ${FAMILY_SIZE_HELP}`} tabIndex={0} style={{ cursor: "help", borderBottom: "1px dotted currentColor" }}>
+                        {h}
+                      </span>
                     ) : (
                       h
                     )}
@@ -112,8 +121,18 @@ export function StrategyLedgerTab() {
                     })()}
                   </td>
                   <td className="jv-num">{h.sampleSize}</td>
+                  <td className="jv-num" title={FAMILY_SIZE_HELP}>
+                    {effectiveFdrFamilySize(h) ?? "N/A"}
+                  </td>
                   <td>
-                    {h.status === "validated" ? (
+                    {h.status === "validated" && isLegacyRuleHypothesis(h) ? (
+                      <div>
+                        <span className="jv-badge c-neutral">{LEGACY_VALIDATED_LABEL}</span>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-2)", whiteSpace: "normal" }}>
+                          {LEGACY_HELP}
+                        </div>
+                      </div>
+                    ) : h.status === "validated" ? (
                       <span className="jv-badge c-signal">Validated</span>
                     ) : (
                       <div>

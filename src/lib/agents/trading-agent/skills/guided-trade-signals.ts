@@ -1,5 +1,6 @@
 import { getRecentHypotheses } from "@/lib/data/hypothesis-ledger-db";
 import { getDailyBars } from "./daily-bars";
+import { isValidatedUnderCurrentRule } from "./hypothesis-rule";
 import { computeMomentum, computeVolumeDisplacement } from "./scan-signals";
 import { computeMeanReversion } from "./mean-reversion";
 import { fetchQuote } from "@/lib/data/market-data";
@@ -63,8 +64,10 @@ function isLiveTriggering(strategyType: string, bars: DailyBar[]): boolean {
 export async function getGuidedTradeSignals(ownedSymbols: string[] = []): Promise<GuidedTradeSignal[]> {
   // 1200 rows = about three full sweeps of 368 hypotheses. The old limit of 200 cut a single sweep in half BEFORE the validated filter.
   const hypotheses = await getRecentHypotheses(1200);
+  // Rows judged under the old, weaker statistics rule (no family size anywhere) are left out: their "validated" label
+  // came from a test that let noise through, and a live signal card is the one place it would be acted on.
   const validated = hypotheses.filter(
-    (h) => h.status === "validated" && LIVE_CHECKABLE_STRATEGY_TYPES.has(h.strategyType)
+    (h) => isValidatedUnderCurrentRule(h) && LIVE_CHECKABLE_STRATEGY_TYPES.has(h.strategyType)
   );
 
   // One card per ticker+strategyType+horizon — the most recently-swept

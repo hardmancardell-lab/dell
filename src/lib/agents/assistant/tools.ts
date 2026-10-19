@@ -18,6 +18,7 @@ import { classifyPutCallSkew, computeChainWideUnusualActivity } from "../trading
 import { findCorrelations, DEFAULT_CORRELATION_CANDIDATES } from "../trading-agent/skills/correlation-finder";
 import { getRollingMoveStats } from "../trading-agent/skills/rolling-move-stats";
 import { getRecentHypotheses, isHypothesisLedgerConfigured } from "@/lib/data/hypothesis-ledger-db";
+import { isLegacyRuleHypothesis } from "@/lib/agents/trading-agent/skills/hypothesis-rule";
 import { fetchQuote } from "@/lib/data/market-data";
 import { submitFeedback, type FeedbackCategory } from "@/lib/analytics/feedback";
 import type { LlmToolSchema } from "./llm-client";
@@ -154,7 +155,7 @@ export const ASSISTANT_TOOLS: LlmToolSchema[] = [
   {
     name: "get_strategy_hypotheses",
     description:
-      "Real, already-backtested strategy results from this app's own weekly automated sweep — each one validated (passed real BH-FDR significance + bootstrap CI + out-of-sample sign check) or rejected (with the real reason), across a fixed ticker universe. Call this before answering any 'any good strategies right now' or 'what's working' question — never invent a strategy or its stats from scratch.",
+      "Real, already-backtested strategy results from this app's own weekly automated sweep — each one validated (passed real BH-FDR significance + bootstrap CI + out-of-sample sign check) or rejected (with the real reason), across a fixed ticker universe. Call this before answering any 'any good strategies right now' or 'what's working' question — never invent a strategy or its stats from scratch. A status of validated_under_older_weaker_test means an older, weaker test judged it: never call such a row validated.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -307,7 +308,13 @@ export async function runTool(
         if (!isHypothesisLedgerConfigured()) {
           return { result: { error: "Strategy hypothesis ledger is not configured yet." }, isError: true };
         }
-        return ok(truncate(await getRecentHypotheses(50)));
+        // Rows judged under the old, weaker rule must not be described as validated.
+        const rows = (await getRecentHypotheses(50)).map((h) =>
+          h.status === "validated" && isLegacyRuleHypothesis(h)
+            ? { ...h, status: "validated_under_older_weaker_test" as const }
+            : h
+        );
+        return ok(truncate(rows));
       }
       case "open_paper_trading_ticket": {
         return ok({
