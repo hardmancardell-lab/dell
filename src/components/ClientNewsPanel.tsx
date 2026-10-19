@@ -7,7 +7,8 @@ import { EmptyOrError, NewsList, NotAdviceNote, readNewsError, SectionFooter, So
 /**
  * Headlines for the symbols one client holds, shown in the client portal.
  *
- * Mount it inside the signed-in client view: <ClientNewsPanel slug={slug} />. It calls /api/client/[slug]/news, which checks
+ * Mount it inside the signed-in client view: <ClientNewsPanel slug={slug} />. It does not open its own .jarvis island; the client
+ * view it sits in already is one. It calls /api/client/[slug]/news, which checks
  * the client's passcode cookie itself. It shows symbols, headlines and links only, with no quantities or values.
  *
  * Imported by the Client Research agent's ClientDashboardView (that file is not edited here).
@@ -48,7 +49,7 @@ export function ClientNewsPanel({ slug }: { slug: string }) {
   }, [load]);
 
   return (
-    <div className="jarvis">
+    <div>
       <div className="jv-card">
         <div className="jv-br-b" />
         <div className="flex items-center justify-between gap-2 mb-1">

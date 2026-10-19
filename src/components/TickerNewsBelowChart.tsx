@@ -12,6 +12,7 @@ import { EmptyOrError, NotAdviceNote, readNewsError, TickerNewsGroupsView } from
  *   <TickerNewsBelowChart symbol={symbol} assetClass={assetClass} />
  * It fetches once when the symbol or the asset class changes and never on a chart tick, a timeframe change or a re-render.
  * It calls /api/news-hub?section=ticker, which needs the same signed-in session as the rest of the app.
+ * It does not open its own .jarvis island: every chart it sits under is already inside one.
  *
  * News impact slot: the News impact panel (src/components/NewsImpactPanel.tsx) is built by another agent. When it exists,
  * pass it in through the impactSlot prop (for example impactSlot={<NewsImpactPanel symbol={symbol} assetClass={assetClass} />})
@@ -52,7 +53,7 @@ export function TickerNewsBelowChart({ symbol, assetClass, impactSlot, limit = 5
   const empty = state.status === "done" && state.data.about.items.length === 0 && state.data.macro.items.length === 0;
 
   return (
-    <div className="jarvis mt-4" data-testid="ticker-news-below-chart">
+    <div className="mt-4" data-testid="ticker-news-below-chart">
       <h2 className="text-sm font-semibold mb-2" style={{ color: "var(--text-0)" }}>
         News for {clean}
         {state.status === "done" && <span className="text-xs font-normal ml-2" style={{ color: "var(--text-2)" }}>{state.data.topic}</span>}

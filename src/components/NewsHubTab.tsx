@@ -12,7 +12,8 @@ import { EmptyOrError, NewsList, NotAdviceNote, readNewsError, SectionFooter, So
  * The News hub: market headlines, news for one ticker, and news for the watchlist, in one place.
  *
  * Register it as a tab (agent E owns the navigation files): import { NewsHubTab } from "@/components/NewsHubTab" and
- * render <NewsHubTab />. It needs the WatchlistProvider that src/app/layout.tsx already supplies.
+ * render <NewsHubTab />. It needs the WatchlistProvider that src/app/layout.tsx already supplies, and it must render inside a
+ * .jarvis scope (page.tsx wraps it in NavScope) because it no longer opens its own island.
  *
  * Every line shows the outlet, a time that says what it means, and a link to the original page. Only headlines and links
  * are shown, never article text.
@@ -369,7 +370,7 @@ function WatchlistView() {
 export function NewsHubTab() {
   const [view, setView] = useState<View>("market");
   return (
-    <div className="jarvis">
+    <div>
       <p className="jv-lede">
         News in one place. Each line shows who published it, when, and a link to the original page. We show only the headline and the
         link, never the article. Headlines are information, not advice. Some outlets write opinion or promotional headlines, and we show each one as written.

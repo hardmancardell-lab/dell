@@ -545,7 +545,9 @@ export default async function Home() {
                             Trading Agent &middot; News
                           </div>
                           <h1 className="text-2xl font-semibold tracking-tight mt-1 mb-6">News</h1>
-                          <NewsHubTab />
+                          <NavScope>
+                            <NewsHubTab />
+                          </NavScope>
                         </div>
                       ),
                     },
