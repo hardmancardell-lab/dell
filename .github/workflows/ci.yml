@@ -25,7 +25,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 24, like local development: the test loader (scripts/ts-loader) runs the .mts test files directly, which
+          # fails on Node 20 with "Unknown file extension .mts". Node 20 is also deprecated on GitHub-hosted runners.
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
