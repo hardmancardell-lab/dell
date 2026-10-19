@@ -33,6 +33,12 @@ globalThis.fetch = async (input: any, init: any = {}) => {
   httpCalls++;
   await sleep(1 + Math.random() * 5);
   const table = url.pathname.split("/").pop()!;
+  // This file exercises the engine against a database where the atomic-fill migration has NOT been run: PostgREST
+  // answers 404 / PGRST202 for the unknown function and the engine must fall back to the older path. The RPC-present
+  // path is covered by scripts/paper-fill-rpc.test.mts.
+  if (url.pathname.includes("/rpc/")) {
+    return new Response(JSON.stringify({ code: "PGRST202", details: "Searched for the function public.paper_apply_fill in the schema cache", hint: null, message: "Could not find the function public.paper_apply_fill(p_order_id) in the schema cache" }), { status: 404, headers: { "Content-Type": "application/json" } });
+  }
   const rows = (db[table] ??= []);
   const method = init.method ?? "GET";
   const filters = [...url.searchParams.entries()].filter(([k]) => !["order", "limit", "select", "on_conflict"].includes(k));
@@ -171,7 +177,7 @@ test("a cancel that loses the race to a fill does not overwrite the fill; a fill
   const cancelled = db.paper_orders[0].status === "cancelled";
   assert.ok(filled !== cancelled, "exactly one terminal state");
   if (filled) assert.equal(cancelRes.status, "rejected", "cancel must report failure when the fill won");
-  assert.equal(db.paper_fills.length, filled ? 1 : 0);
+  assert.equal((db.paper_fills ?? []).length, filled ? 1 : 0); // the table is only created by the first fill, so it is undefined when the cancel won
 });
 
 test("R4: concurrent first requests for one session create one account", async () => {

@@ -52,6 +52,10 @@ const matches = (row: any, filters: [string, string][]) =>
 globalThis.fetch = async (input: any, init: any = {}) => {
   const url = new URL(String(input));
   const table = url.pathname.split("/").pop()!;
+  // The atomic-fill migration has not been run in this fake database: PostgREST answers 404 / PGRST202 and the engine falls back to the older path.
+  if (url.pathname.includes("/rpc/")) {
+    return new Response(JSON.stringify({ code: "PGRST202", details: null, hint: null, message: "Could not find the function public.paper_apply_fill(p_order_id) in the schema cache" }), { status: 404, headers: { "Content-Type": "application/json" } });
+  }
   const rows = (db[table] ??= []);
   const method = init.method ?? "GET";
   const filters = [...url.searchParams.entries()].filter(([k]) => !["order", "limit", "select", "on_conflict"].includes(k));
