@@ -339,6 +339,9 @@ export class LongHaulEngine {
 
       this.prevSpeed = this.speed;
       this.speed = stepSpeed(this.speed, throttle as -1 | 0 | 1, tuning, dt);
+      // Coasting to a stop: stepSpeed subtracts a fixed amount each frame, so just above zero it can overshoot to the other side and the
+      // car would jitter forward and back at about 0.1 m/s forever (visible wheel twitch, and a faint noise floor). Settle it at rest.
+      if (throttle === 0 && Math.abs(this.speed) < VEHICLE.coastDecel * dt * 1.5) this.speed = 0;
 
       const speedFrac = Math.abs(this.speed) / tuning.maxSpeed;
       const turnAmount = steer * tuning.turnRate * Math.max(0.2, Math.min(1, speedFrac + 0.2)) * dt;
