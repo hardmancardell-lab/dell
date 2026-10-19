@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ECONOMY, XP } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { ECONOMY, VEHICLE, XP } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import type { LongHaulHud, LongHaulSummary } from "./long-haul-engine";
 import { readSoundPreference } from "./long-haul-audio";
 
@@ -11,6 +11,10 @@ import { readSoundPreference } from "./long-haul-audio";
 
 const CANVAS_WIDTH = 640;
 const CANVAS_HEIGHT = 400;
+const SPEED_SEGMENTS = 24;
+const FUEL_SEGMENTS = 20;
+/** The top of the speedometer, in the HUD's own unit (top speed in m/s times 3.2). */
+const TOP_MPH = Math.round(VEHICLE.baseMaxSpeed * 3.2);
 
 export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, tookLoan: boolean) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -96,28 +100,55 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
           style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, maxWidth: "100%", borderRadius: 8, overflow: "hidden", border: "1px solid var(--line-control)" }}
         />
 
-        {/* HUD overlay */}
+        {/* HUD overlay: a small dashboard. The numbers shown are exactly the engine's HUD values. */}
         <div
           style={{
-            position: "absolute", top: 10, left: 10, padding: "8px 12px", borderRadius: 8,
-            background: "rgba(10,12,16,0.6)", color: "var(--text-0)", fontSize: 12, minWidth: 170, pointerEvents: "none",
+            position: "absolute", top: 10, left: 10, padding: "8px 12px 9px", borderRadius: 10, minWidth: 176,
+            background: "rgba(14,19,27,0.78)", border: "1px solid var(--line)", color: "var(--text-0)", fontSize: 11,
+            pointerEvents: "none", backdropFilter: "blur(4px)", fontVariantNumeric: "tabular-nums",
           }}
         >
-          <div className="flex justify-between"><span>Speed</span><span>{hud.speedMph}</span></div>
-          <div className="flex justify-between"><span>Fuel</span><span>{hud.fuel}</span></div>
-          <div style={{ height: 6, borderRadius: 3, background: "var(--ink-700)", overflow: "hidden", margin: "4px 0 6px" }}>
-            <div style={{ height: "100%", width: `${hud.fuel}%`, background: hud.fuel < 40 ? "var(--verdict)" : "var(--signal)" }} />
+          <div className="flex items-baseline justify-between" style={{ color: "var(--text-2)", letterSpacing: 0.4 }}>
+            <span>Speed</span>
+            <span style={{ color: "var(--text-0)", fontSize: 26, fontWeight: 600, lineHeight: 1, letterSpacing: 0 }}>{hud.speedMph}</span>
           </div>
-          <div className="flex justify-between"><span>Tolls</span><span>${hud.tollPaid}</span></div>
+          <div style={{ display: "flex", gap: 2, margin: "5px 0 8px" }} aria-hidden="true">
+            {Array.from({ length: SPEED_SEGMENTS }, (_, i) => (
+              <span
+                key={i}
+                style={{
+                  flex: 1, height: 4, borderRadius: 1,
+                  background: i < Math.round((Math.min(hud.speedMph, TOP_MPH) / TOP_MPH) * SPEED_SEGMENTS) ? "var(--signal)" : "var(--ink-700)",
+                }}
+              />
+            ))}
+          </div>
+          <div className="flex items-baseline justify-between" style={{ color: "var(--text-2)", letterSpacing: 0.4 }}>
+            <span>Fuel</span>
+            <span style={{ color: hud.fuel < 25 ? "var(--danger)" : hud.fuel < 40 ? "var(--verdict)" : "var(--text-0)", fontSize: 15, fontWeight: 600 }}>{hud.fuel}</span>
+          </div>
+          <div style={{ display: "flex", gap: 2, margin: "4px 0 8px" }} aria-hidden="true">
+            {Array.from({ length: FUEL_SEGMENTS }, (_, i) => (
+              <span
+                key={i}
+                style={{
+                  flex: 1, height: 6, borderRadius: 1,
+                  background: i < Math.ceil((hud.fuel / 100) * FUEL_SEGMENTS) ? (hud.fuel < 25 ? "var(--danger)" : hud.fuel < 40 ? "var(--verdict)" : "var(--signal)") : "var(--ink-700)",
+                }}
+              />
+            ))}
+          </div>
+          <div className="flex justify-between" style={{ color: "var(--text-2)" }}><span>Tolls</span><span style={{ color: "var(--text-0)" }}>${hud.tollPaid}</span></div>
           {hud.trailerAttached && (
-            <div className="flex justify-between" style={{ color: "var(--verdict)" }}><span>Loan owed</span><span>${hud.debt.toFixed(2)}</span></div>
+            <div className="flex justify-between" style={{ color: "var(--verdict)", marginTop: 2 }}><span>Loan owed</span><span>${hud.debt.toFixed(2)}</span></div>
           )}
         </div>
 
         <div
           style={{
-            position: "absolute", bottom: 10, left: 10, padding: "6px 10px", borderRadius: 8,
-            background: "rgba(10,12,16,0.5)", color: "var(--text-2)", fontSize: 11, pointerEvents: "none",
+            position: "absolute", bottom: 8, left: 8, right: 8, padding: "5px 9px", borderRadius: 8,
+            background: "rgba(14,19,27,0.62)", color: "var(--text-1)", fontSize: 10.5, lineHeight: 1.35, pointerEvents: "none",
+            opacity: hud.speedMph > 0 ? 0.55 : 1, transition: "opacity 0.6s",
           }}
         >
           Click or Tab to the game (this also turns the sound on), then WASD / Arrows · left lane = Back Roads (free, rough) · right lane = Highway (toll, smooth)
