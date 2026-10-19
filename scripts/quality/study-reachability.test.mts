@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parsePageFile } from "./study-reachability-parse.mts";
 import { STUDIES, STUDY_CATEGORIES, ASSET_CLASSES, getVariant } from "../../src/lib/navigation/study-registry.ts";
-import { ASSET_GROUPS, DEFAULT_SECONDARY, PRIMARY_TABS, SECONDARY_TABS, TRADING_SECTION_ORDER, groupForAssetClass } from "../../src/lib/navigation/trading-structure.ts";
+import { ASSET_GROUPS, DEFAULT_SECONDARY, PRIMARY_TABS, RESEARCH_TERTIARY_TABS, SECONDARY_TABS, TRADING_SECTION_ORDER, groupForAssetClass } from "../../src/lib/navigation/trading-structure.ts";
 import { resolveStudyRoute, resolveGlobalStudyRoute } from "../../src/lib/navigation/study-routes.ts";
 import { buildNavQuery, parseNavQuery } from "../../src/lib/navigation/nav-state.ts";
 
@@ -168,6 +168,17 @@ for (const agent of Object.keys(SECONDARY_TABS)) {
   t(`${agent}: secondary tabs in structure match page.tsx`, JSON.stringify(inPage) === JSON.stringify(expected), `page: ${inPage.join(",")}\n  structure: ${expected.join(",")}`);
   t(`${agent}: default secondary tab is the first one in page.tsx`, inPage[0] === DEFAULT_SECONDARY[agent], `${inPage[0]} vs ${DEFAULT_SECONDARY[agent]}`);
 }
+// Research Agent third-row tabs that have a deep link: the structure list must match page.tsx, and every registry entry that
+// points at one must point at a tab that exists.
+for (const section of Object.keys(RESEARCH_TERTIARY_TABS)) {
+  const prefix = `top-down/${section}/`;
+  const inPage = current.filter((r) => r.path.startsWith(prefix) && r.path.split("/").length === 3).map((r) => r.path.split("/")[2]);
+  const expected = RESEARCH_TERTIARY_TABS[section].map((x) => x.id);
+  t(`top-down/${section}: addressable third-row tabs in structure match page.tsx`, JSON.stringify(inPage) === JSON.stringify(expected), `page: ${inPage.join(",")}
+  structure: ${expected.join(",")}`);
+}
+const badTabTargets = STUDIES.filter((s) => s.location?.tab && s.status !== "planned").filter((s) => !currentByPath.has([s.location.primaryId, s.location.secondaryId, s.location.tab].join("/"))).map((s) => s.id);
+t("every registry entry with a location tab points at a real tab in page.tsx (FOMC studies, Catalyst Calendar)", badTabTargets.length === 0 && ["fomc-reaction", "fomc-week-variance", "catalyst-calendar"].every((id) => STUDIES.some((s) => s.id === id && s.location?.tab === id)), badTabTargets.join(", "));
 t("trading section order lists exactly the Trading secondary tabs", JSON.stringify(TRADING_SECTION_ORDER) === JSON.stringify(SECONDARY_TABS.trading.map((s) => s.id)), "");
 
 console.log(`\n${passed} passed, ${bad} failed`);

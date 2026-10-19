@@ -36,6 +36,12 @@ t("a study that does not apply to the group is dropped", q("?agent=trading&secti
 t("script and odd characters in parameters are rejected", q("?agent=trading&ticker=%3Cscript%3E") === '{"primaryId":"trading"}' && q("?agent=trading&section=equities&tab=../../x") === '{"primaryId":"trading","secondaryId":"equities"}', q("?agent=trading&ticker=%3Cscript%3E"));
 t("over-long ticker is rejected", q("?agent=trading&ticker=" + "A".repeat(40)) === '{"primaryId":"trading"}', "");
 
+t("Research Agent deep link: section + tab opens the Catalyst Calendar", q("?agent=top-down&section=macro&tab=catalyst-calendar") === '{"primaryId":"top-down","secondaryId":"macro","tab":"catalyst-calendar"}', q("?agent=top-down&section=macro&tab=catalyst-calendar"));
+t("Research Agent short form: study=fomc-reaction and study=fomc-week-variance resolve to their tab", q("?agent=top-down&study=fomc-reaction") === '{"primaryId":"top-down","secondaryId":"macro","tab":"fomc-reaction"}' && q("?agent=top-down&study=fomc-week-variance") === '{"primaryId":"top-down","secondaryId":"macro","tab":"fomc-week-variance"}', q("?agent=top-down&study=fomc-reaction"));
+t("Research Agent: the Trading short form also resolves the study (no agent guess needed)", q("?agent=trading&study=catalyst-calendar") === '{"primaryId":"top-down","secondaryId":"macro","tab":"catalyst-calendar"}', q("?agent=trading&study=catalyst-calendar"));
+t("Research Agent: an unknown tab is dropped, the section is kept", q("?agent=top-down&section=macro&tab=nope") === '{"primaryId":"top-down","secondaryId":"macro"}' && q("?agent=top-down&section=sector&tab=dashboard") === '{"primaryId":"top-down","secondaryId":"sector"}', q("?agent=top-down&section=macro&tab=nope"));
+t("the three Research Agent entries have routes and round-trip", ["fomc-reaction", "fomc-week-variance", "catalyst-calendar"].every((id) => { const r = resolveStudyRoute(id); return r && buildNavQuery(parseNavQuery(buildNavQuery(r))) === buildNavQuery(r); }), "");
+
 // Every study round-trips through its own URL in every class it applies to.
 let roundTrip = 0; const rtBad: string[] = [];
 for (const s of STUDIES.filter((x) => !x.location)) for (const c of (s.assetClasses.length ? s.assetClasses : [undefined])) for (const ticker of [undefined, "AAPL"]) {
@@ -61,6 +67,7 @@ s0 = navReducer(s0, { type: "patch", patch: { studyId: "orb" } });
 t("open a study inside a group", buildNavQuery(s0) === "agent=trading&section=equities&tab=studies&study=orb", buildNavQuery(s0));
 const afterClose = navReducer(s0, { type: "patch", patch: { studyId: undefined, ticker: undefined } });
 t("closing the study keeps the tab", buildNavQuery(afterClose) === "agent=trading&section=equities&tab=studies", buildNavQuery(afterClose));
+t("a third-row click inside the Research Agent keeps the Research Agent (not Trading)", buildNavQuery(navReducer({}, { type: "select", level: "tertiary", id: "catalyst-calendar", parentId: "macro" })) === "agent=top-down&section=macro&tab=catalyst-calendar", buildNavQuery(navReducer({}, { type: "select", level: "tertiary", id: "catalyst-calendar", parentId: "macro" })));
 t("switching secondary tab clears the group state", buildNavQuery(navReducer(s0, { type: "select", level: "secondary", id: "bonds", parentId: "trading" })) === "agent=trading&section=bonds", "");
 t("switching primary tab clears everything below", buildNavQuery(navReducer(s0, { type: "select", level: "primary", id: "portfolio" })) === "agent=portfolio", "");
 t("re-selecting the active tab is a no-op (same object, no history entry)", navReducer(s0, { type: "select", level: "secondary", id: "equities", parentId: "trading" }) === s0, "");

@@ -414,6 +414,8 @@ export default async function Home() {
                           <Tabs
                             size="tertiary"
                             theme="jarvis"
+                            navLevel="tertiary"
+                            navParentId="macro"
                             tabs={[
                               { id: "dashboard", label: "Dashboard", content: <MacroDashboardTab /> },
                               { id: "stance", label: "Stance & Details", content: macroStanceContent },

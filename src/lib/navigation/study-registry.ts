@@ -133,7 +133,7 @@ export interface StudyEntry {
    * Research): where "Open" goes. The target must be a real tab in page.tsx and in trading-structure.ts (the reachability
    * test checks it once the entry is no longer "planned").
    */
-  location?: { primaryId: string; secondaryId?: string };
+  location?: { primaryId: string; secondaryId?: string; tab?: string };
   /**
    * "planned": the destination is being built by another team. The Study Library lists the card with a disabled
    * "Coming soon" button. To go live: add the tab to page.tsx and trading-structure.ts, set `location`, delete `status`.
@@ -692,6 +692,49 @@ export const STUDIES: StudyEntry[] = [
     component: "CryptoWatchlistTab",
     keywords: "coins watchlist bitcoin ethereum",
     variants: { crypto: { props: {}, legacyTab: "trading/crypto/watchlist" } },
+  },
+
+  // ---------------------------------------------------------------- Research Agent studies (Macro, third row of tabs)
+  // These live in the Research Agent, not the Trading Agent, so they are `location` entries: the library and the palette
+  // open them where they are, and ?agent=top-down&study=<id> (or &section=macro&tab=<id>) is the stable deep link.
+  {
+    id: "fomc-reaction",
+    title: "FOMC Reaction Study",
+    question: "How has the market usually moved on and just after a Federal Reserve rate decision, and was that more than chance?",
+    category: "Event studies",
+    assetClasses: [],
+    needs: NO_NEEDS,
+    runTime: "About 5 to 15 seconds",
+    component: null,
+    location: { primaryId: "top-down", secondaryId: "macro", tab: "fomc-reaction" },
+    keywords: "fomc fed federal reserve rate decision hike cut hold meeting reaction event study",
+    variants: {},
+  },
+  {
+    id: "fomc-week-variance",
+    title: "FOMC Week Variance",
+    question: "Are the days of a Federal Reserve meeting week more volatile than the same days in an ordinary week?",
+    category: "Event studies",
+    assetClasses: [],
+    needs: NO_NEEDS,
+    runTime: "About 5 to 15 seconds",
+    component: null,
+    location: { primaryId: "top-down", secondaryId: "macro", tab: "fomc-week-variance" },
+    keywords: "fomc fed federal reserve meeting week variance volatility range event study",
+    variants: {},
+  },
+  {
+    id: "catalyst-calendar",
+    title: "Catalyst Calendar",
+    question: "Which scheduled events (central banks, inflation and jobs reports, option expirations) are coming up, and which usually get the most attention?",
+    category: "Reference and tools",
+    assetClasses: [],
+    needs: NO_NEEDS,
+    runTime: "Instant",
+    component: null,
+    location: { primaryId: "top-down", secondaryId: "macro", tab: "catalyst-calendar" },
+    keywords: "catalyst calendar upcoming events earnings cpi jobs report fomc schedule",
+    variants: {},
   },
 
   // ---------------------------------------------------------------- Sections other teams built.

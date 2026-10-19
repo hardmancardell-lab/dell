@@ -15,7 +15,7 @@
  * hand-edited link falls back to the nearest valid view instead of an empty screen.
  */
 import { getStudy } from "./study-registry";
-import { PRIMARY_TABS, SECONDARY_TABS, STUDIES_SECTION, groupById } from "./trading-structure";
+import { PRIMARY_TABS, RESEARCH_TERTIARY_TABS, SECONDARY_TABS, STUDIES_SECTION, groupById, primaryIdForSection } from "./trading-structure";
 import { isAssetClass, resolveStudyRoute, resolveTickerRoute } from "./study-routes";
 import { parseAlertPrefill } from "./alert-prefill";
 
@@ -80,8 +80,13 @@ export function parseNavQuery(search: string): NavState {
   const base: NavState = { primaryId: agent };
 
   if (agent !== "trading") {
+    // A study that lives in this agent (the Research Agent's FOMC studies and Catalyst Calendar): ?agent=top-down&study=fomc-reaction.
+    if (!section && study?.location && study.status !== "planned" && study.location.primaryId === agent) return { ...study.location };
     const sections = SECONDARY_TABS[agent];
-    if (section && sections?.some((s) => s.id === section)) base.secondaryId = section;
+    if (section && sections?.some((s) => s.id === section)) {
+      base.secondaryId = section;
+      if (tab && RESEARCH_TERTIARY_TABS[section]?.some((x) => x.id === tab)) base.tab = tab;
+    }
     return base;
   }
 
@@ -149,7 +154,7 @@ export function navReducer(state: NavState, action: NavAction): NavState {
         return { primaryId: action.parentId, secondaryId: action.id };
       }
       if (state.secondaryId === action.parentId && state.tab === action.id) return state;
-      return { primaryId: "trading", secondaryId: action.parentId, tab: action.id };
+      return { primaryId: primaryIdForSection(action.parentId), secondaryId: action.parentId, tab: action.id };
     }
     case "patch": {
       const next: NavState = { ...state, ...action.patch };

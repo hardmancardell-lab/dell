@@ -104,6 +104,30 @@ export const SECONDARY_TABS: Record<string, Array<{ id: string; label: string }>
   ],
 };
 
+/**
+ * Tertiary tabs of a Research Agent section that are addressable by URL
+ * (?agent=top-down&section=macro&tab=fomc-reaction). The ids must match the tertiary Tabs in page.tsx; the reachability
+ * test checks that. Only sections listed here keep a `tab` in the URL.
+ */
+export const RESEARCH_TERTIARY_TABS: Record<string, Array<{ id: string; label: string }>> = {
+  macro: [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "stance", label: "Stance & Details" },
+    { id: "industry", label: "Industry Impact" },
+    { id: "global-news", label: "Global News" },
+    { id: "economic-outlook", label: "Economic Outlook" },
+    { id: "fomc-reaction", label: "FOMC Reaction Study" },
+    { id: "fomc-week-variance", label: "FOMC Week Variance" },
+    { id: "catalyst-calendar", label: "Catalyst Calendar" },
+  ],
+};
+
+/** The primary tab a secondary tab id belongs to (a tertiary click only knows its parent section). Trading when unknown. */
+export function primaryIdForSection(sectionId: string): string {
+  for (const [primary, sections] of Object.entries(SECONDARY_TABS)) if (sections.some((s) => s.id === sectionId)) return primary;
+  return "trading";
+}
+
 export function groupForAssetClass(assetClass: AssetClass): AssetGroup | undefined {
   return ASSET_GROUPS.find((g) => g.assetClass === assetClass);
 }
