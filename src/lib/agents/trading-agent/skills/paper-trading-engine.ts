@@ -12,6 +12,7 @@ import {
   cryptoTriggeredFill,
 } from "../crypto-paper";
 import {
+  applyFillRpc,
   cancelOcoSiblings,
   cancelOrder as dbCancelOrder,
   claimPendingOrder,
@@ -22,14 +23,20 @@ import {
   getAccountById,
   getAccountBySessionId,
   getAllPendingOrders,
+  getFillByOrderId,
   getFills,
   getOpenOrders,
   getOrCreateAccount,
+  getOrderById,
   getPosition,
   getPositions,
   insertFill,
   insertTradeLog,
   markOrderEvaluated,
+  PaperFillRpcMissingError,
+  PaperFillRpcRejectedError,
+  paperFillRpcEnabled,
+  tradeLogExistsForFill,
   updateAccountCash,
   upsertPosition,
 } from "@/lib/data/paper-trading-db";
@@ -38,6 +45,7 @@ import { ID_PATTERN, SYMBOL_PATTERN } from "@/lib/data/postgrest-safe";
 import type {
   AssetClass,
   PaperAccountSummary,
+  PaperFill,
   PaperOptionFields,
   PaperOptionRight,
   PaperOrder,
@@ -209,7 +217,9 @@ async function requireQuote(symbol: string): Promise<{ lastPrice: number }> {
  * Serializes async work per key inside this process, so overlapping orders / order checks on one account run one
  * after another instead of interleaving their read-modify-write of cash and positions (the audit measured 20
  * concurrent buys losing 23k of cash debits). LIMITATION: this protects one server instance only. Cross-instance
- * atomicity needs the database function in db/migrations/2026-10-16_paper_fill_atomic.sql.
+ * atomicity comes from the database function paper_apply_fill (db/migrations/2026-10-16_paper_fill_atomic.sql), which
+ * the engine calls automatically once it exists (see fillViaRpc); until then this lock plus the conditional claim is
+ * the protection.
  */
 const accountLocks = new Map<string, Promise<unknown>>();
 export async function withAccountLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -411,6 +421,117 @@ async function requireAccountById(accountId: string) {
   return acct;
 }
 
+// ---------------------------------------------------------------- atomic fill through the database function
+
+type RpcFillOutcome =
+  | { kind: "applied"; cancelledOco: string[] }
+  /** Someone else already filled / cancelled the order (applied=false): nothing to do. */
+  | { kind: "lost"; reason: string }
+  /** paper_apply_fill is not installed (migration not run): the caller uses the older multi-call path. */
+  | { kind: "unavailable" };
+
+/**
+ * Applies a PENDING order's fill with ONE database call (paper_apply_fill: cash, position, fill row, order status and
+ * OCO siblings in a single transaction), then writes the best-effort trade log row.
+ * - Throws FillRejectedError for a funds/holdings failure (the transaction rolled back, the order is still pending).
+ * - Any other thrown error is infrastructure; a network error is AMBIGUOUS (the call may have committed) and the caller
+ *   re-reads the order.
+ * Fees are computed here exactly as in the older path; the function derives the multiplier and the crypto fee-into-basis
+ * rule from the order's asset class and raises if the values passed here disagree.
+ */
+async function fillViaRpc(order: PaperOrder, fillPrice: number, slippagePerShare: number): Promise<RpcFillOutcome> {
+  requireUsablePrice(fillPrice, order.symbol);
+  const { secFee, finraFee, occFee, totalFees } = computeFees(order.assetClass, order.side, order.quantity, fillPrice);
+  let result;
+  try {
+    result = await applyFillRpc({
+      orderId: order.id,
+      fillPrice,
+      slippagePerShare,
+      secFee,
+      finraFee,
+      occFee,
+      totalFees,
+      multiplier: notionalMultiplier(order.assetClass),
+      feeIntoBasis: order.assetClass === "crypto",
+    });
+  } catch (err) {
+    if (err instanceof PaperFillRpcMissingError) return { kind: "unavailable" };
+    if (err instanceof PaperFillRpcRejectedError) throw new FillRejectedError(err.message);
+    throw err;
+  }
+  if (!result.applied) return { kind: "lost", reason: result.reason };
+
+  await insertTradeLog(order, result.fill); // never throws: the fill is already committed
+  let cancelledOco: string[] = result.cancelledOco ?? [];
+  if (result.cancelledOco === null && order.ocoGroupId) {
+    // A function version without in-transaction OCO handling: cancel the siblings now. The fill is committed, so a failure here is logged, not thrown.
+    try {
+      cancelledOco = await cancelOcoSiblings(order.ocoGroupId, order.id);
+    } catch (err) {
+      console.error(`[paper-trading] fill ${result.fill.id} applied but cancelling OCO siblings of ${order.id} failed:`, err instanceof Error ? err.message : err);
+    }
+  }
+  return { kind: "applied", cancelledOco };
+}
+
+/**
+ * After an RPC failure of unknown outcome: did the order end up filled anyway? If so finish the bookkeeping the failed
+ * call could not (the trade log row, unless it exists) and report true.
+ */
+async function orderLandedFilled(order: PaperOrder): Promise<boolean> {
+  const current = await getOrderById(order.id).catch(() => null);
+  if (current?.status !== "filled") return false;
+  const fill: PaperFill | null = await getFillByOrderId(order.id).catch(() => null);
+  if (fill && !(await tradeLogExistsForFill(fill.id).catch(() => true))) await insertTradeLog(order, fill);
+  return true;
+}
+
+/**
+ * Settles an order that was just created for an immediate (market / marketable) fill.
+ * viaRpc=true: the order row is "pending" and the database function fills it atomically; if the function turns out to
+ *   be missing the order is claimed and the older path below runs, so behaviour never regresses.
+ * viaRpc=false: the order row was created "filled" and the older multi-call path applies the fill.
+ * Every failure voids the order row, so a "filled" order never exists without a fill.
+ */
+async function settleImmediateFill(params: { order: PaperOrder; fillPrice: number; slippagePerShare: number; viaRpc: boolean }): Promise<void> {
+  const { order, fillPrice, slippagePerShare } = params;
+  if (params.viaRpc) {
+    let outcome: RpcFillOutcome;
+    try {
+      outcome = await fillViaRpc(order, fillPrice, slippagePerShare);
+    } catch (err) {
+      // Rolled back (funds/holdings) or failed in transit. The order is still pending unless the answer was lost after
+      // a commit: void it first (conditional on pending); if that finds it already filled, the fill did land.
+      const voided = await dbCancelOrder(order.id).catch(() => false);
+      if (!voided && (await orderLandedFilled(order))) return;
+      throw err;
+    }
+    if (outcome.kind === "applied") return;
+    if (outcome.kind === "lost") {
+      // Only another evaluator can have filled this brand-new order in the instant it was pending; that is a complete fill.
+      if (await dbOrderIsFilled(order.id)) return;
+      throw new Error(`The order was not filled (${outcome.reason}).`);
+    }
+    // outcome.kind === "unavailable": claim the pending order, then use the older path.
+    if (!(await claimPendingOrder(order.id))) {
+      if (await dbOrderIsFilled(order.id)) return;
+      throw new Error("The order could not be filled because it is no longer pending.");
+    }
+  }
+  try {
+    await applyFill({ order, fillPrice, slippagePerShare });
+  } catch (err) {
+    // The order row was already written as filled; do not leave it claiming a fill that never reached the position.
+    await dbCancelOrder(order.id, "filled").catch(() => undefined);
+    throw err;
+  }
+}
+
+async function dbOrderIsFilled(orderId: string): Promise<boolean> {
+  return (await getOrderById(orderId).catch(() => null))?.status === "filled";
+}
+
 /** Finds one live contract's real quote — used both to price a new options order and to mark an existing options position to market. */
 export async function getOptionContractQuote(
   underlyingSymbol: string,
@@ -483,6 +604,11 @@ async function placeStandardOrder(sessionId: string, input: PaperOrderInput): Pr
     (input.orderType === "limit" && input.side === "buy" && input.limitPrice! >= buyReference) ||
     (input.orderType === "limit" && input.side === "sell" && input.limitPrice! <= sellReference);
 
+  // With the atomic database function the order row starts as "pending" and the function flips it to "filled" together
+  // with cash and position. Without it (not installed, kill switch) the older path creates it already "filled".
+  // Known window: for the few milliseconds a marketable LIMIT order is pending, a concurrent Check Orders could fill it
+  // first at the limit price (the same price for every non-crypto class); either way it fills exactly once.
+  const viaRpc = isImmediatelyMarketable && paperFillRpcEnabled();
   const createOrder = isCrypto ? (o: Parameters<typeof dbCreateOrder>[0]) => dbCreateOrder(o).catch((err) => { throw explainCryptoDbError(err); }) : dbCreateOrder;
   const order = await createOrder({
     accountId: account.id,
@@ -497,7 +623,7 @@ async function placeStandardOrder(sessionId: string, input: PaperOrderInput): Pr
     ocoGroupId,
     strategyGroupId: input.strategyGroupId ?? null,
     attribution: sanitizeAttribution(input.attribution, "api"),
-    status: isImmediatelyMarketable ? "filled" : "pending",
+    status: isImmediatelyMarketable && !viaRpc ? "filled" : "pending",
     rejectedReason: null,
   });
 
@@ -531,10 +657,8 @@ async function placeStandardOrder(sessionId: string, input: PaperOrderInput): Pr
   }
 
   try {
-    await applyFill({ order: { ...order, quantity: input.quantity }, fillPrice, slippagePerShare });
+    await settleImmediateFill({ order: { ...order, quantity: input.quantity }, fillPrice, slippagePerShare, viaRpc });
   } catch (err) {
-    // The order row was already written as filled; do not leave it claiming a fill that never reached the position.
-    await dbCancelOrder(order.id, "filled").catch(() => undefined);
     if (!isCrypto) throw err;
     throw explainCryptoDbError(err);
   }
@@ -620,6 +744,7 @@ async function placeOptionOrder(sessionId: string, input: PaperOrderInput): Prom
     }
   }
 
+  const viaRpc = paperFillRpcEnabled();
   const order = await dbCreateOrder({
     accountId: account.id,
     symbol,
@@ -633,7 +758,7 @@ async function placeOptionOrder(sessionId: string, input: PaperOrderInput): Prom
     ocoGroupId: null,
     strategyGroupId: input.strategyGroupId ?? null,
     attribution: sanitizeAttribution(input.attribution, "api"),
-    status: "filled",
+    status: viaRpc ? "pending" : "filled",
     rejectedReason: null,
     underlyingSymbol,
     expirationDate,
@@ -641,12 +766,7 @@ async function placeOptionOrder(sessionId: string, input: PaperOrderInput): Prom
     strikePrice,
   });
 
-  try {
-    await applyFill({ order: { ...order, quantity: input.quantity }, fillPrice, slippagePerShare });
-  } catch (err) {
-    await dbCancelOrder(order.id, "filled").catch(() => undefined);
-    throw err;
-  }
+  await settleImmediateFill({ order: { ...order, quantity: input.quantity }, fillPrice, slippagePerShare, viaRpc });
 
   return { order: { ...order, status: "filled" }, filled: true, rejected: null };
 }
@@ -754,7 +874,28 @@ async function evaluateOrder(order: PaperOrder): Promise<{ filled: boolean; canc
   // Claim the order with a conditional PATCH (status=eq.pending) BEFORE touching cash or positions: only one of
   // several overlapping evaluators can win, so one order can never fill twice. The per-account lock keeps the fill's
   // cash/position updates from interleaving with other orders of the same account in this instance.
+  // When the database function paper_apply_fill is installed, ONE call claims, fills and cancels OCO siblings in a
+  // single transaction (atomic across instances); the claim-then-applyFill sequence below is the fallback.
   return withAccountLock(`acct:${pendingOrder.accountId}`, async () => {
+    if (paperFillRpcEnabled()) {
+      try {
+        const outcome = await fillViaRpc(pendingOrder, fillPriceFinal, slippageFinal);
+        if (outcome.kind === "applied") return { filled: true, cancelledOco: outcome.cancelledOco };
+        if (outcome.kind === "lost") return { filled: false, cancelledOco: [] as string[] }; // someone else won: nothing to do
+        // "unavailable": fall through to the older path
+      } catch (err) {
+        if (err instanceof FillRejectedError) {
+          // Rolled back and still pending: mark it rejected exactly as the older path does.
+          await rejectClaimedOrder(pendingOrder.id, err.message, "pending").catch(() => undefined);
+          return { filled: false, cancelledOco: [] as string[], rejectedReason: err.message };
+        }
+        // Infrastructure error. A lost answer may hide a commit: if the order turns out filled, the fill landed (the
+        // function also cancelled the OCO siblings in the same transaction). Otherwise it stays pending and the next
+        // check retries it.
+        if (await orderLandedFilled(pendingOrder)) return { filled: true, cancelledOco: [] as string[] };
+        throw err;
+      }
+    }
     const claimed = await claimPendingOrder(pendingOrder.id);
     if (!claimed) return { filled: false, cancelledOco: [] as string[] };
     try {

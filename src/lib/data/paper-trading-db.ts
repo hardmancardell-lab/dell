@@ -378,9 +378,12 @@ export async function releaseClaimedOrder(orderId: string): Promise<boolean> {
   return transitionOrder(orderId, "filled", { status: "pending", filled_at: null });
 }
 
-/** filled -> rejected: a claimed order whose fill failed a funds/holdings check at fill time. */
-export async function rejectClaimedOrder(orderId: string, reason: string): Promise<boolean> {
-  return transitionOrder(orderId, "filled", { status: "rejected", rejected_reason: reason.slice(0, 500), filled_at: null });
+/**
+ * filled -> rejected: a claimed order whose fill failed a funds/holdings check at fill time. When the atomic database
+ * function rolled the fill back, the order was never claimed and is still "pending", so that caller passes from="pending".
+ */
+export async function rejectClaimedOrder(orderId: string, reason: string, from: PaperOrderStatus = "filled"): Promise<boolean> {
+  return transitionOrder(orderId, from, { status: "rejected", rejected_reason: reason.slice(0, 500), filled_at: null });
 }
 
 /** pending -> cancelled by default (a filled order can no longer be cancelled). Pass "filled" only to void an order row whose fill never landed. */
@@ -441,6 +444,169 @@ export async function getFills(accountId: string, limit = 100): Promise<PaperFil
     { method: "GET", prefer: "return=representation" }
   );
   return rows.map(toFill);
+}
+
+/** The fill row of one order (an order has at most one), or null. Used to finish bookkeeping when an RPC answer was lost after it committed. */
+export async function getFillByOrderId(orderId: string): Promise<PaperFill | null> {
+  const rows = await supabaseRequest<FillRow[]>(`paper_fills?order_id=eq.${pgId(orderId)}&limit=1`, {
+    method: "GET",
+    prefer: "return=representation",
+  });
+  return rows[0] ? toFill(rows[0]) : null;
+}
+
+/** True when a trade-log row already exists for this fill (used to avoid a duplicate row when finishing bookkeeping after a lost answer). */
+export async function tradeLogExistsForFill(fillId: string): Promise<boolean> {
+  const rows = await supabaseRequest<{ id: string }[]>(`paper_trade_log?fill_id=eq.${pgId(fillId)}&select=id&limit=1`, {
+    method: "GET",
+    prefer: "return=representation",
+  });
+  return rows.length > 0;
+}
+
+// --- Atomic fill: the database function paper_apply_fill (db/migrations/2026-10-16_paper_fill_atomic.sql) ---
+
+/**
+ * One transaction in the database applies a whole fill (lock account, claim the pending order, check funds/holdings,
+ * move cash, write the position and the fill row, mark the order filled, cancel OCO siblings). The function may not
+ * exist yet (the migration is run by hand), so this module learns whether it is there and remembers the answer:
+ * - missing (PostgREST 404 / PGRST202): skip the RPC for RPC_RECHECK_MS, then try again once, so applying the migration
+ *   takes effect with no redeploy; one warning per process, not one per fill;
+ * - PAPER_FILL_RPC=off forces the old multi-call path.
+ */
+const RPC_RECHECK_MS = 5 * 60 * 1000;
+let rpcMissingUntil = 0;
+let rpcMissingWarned = false;
+
+export function paperFillRpcEnabled(now: number = Date.now()): boolean {
+  const flag = (process.env.PAPER_FILL_RPC ?? "").trim().toLowerCase();
+  if (flag === "off" || flag === "0" || flag === "false" || flag === "no") return false;
+  return now >= rpcMissingUntil;
+}
+
+/** Test hook: forget what was learned about the function. */
+export function resetPaperFillRpcState(): void {
+  rpcMissingUntil = 0;
+  rpcMissingWarned = false;
+}
+
+function noteRpcMissing(detail: string): void {
+  rpcMissingUntil = Date.now() + RPC_RECHECK_MS;
+  if (!rpcMissingWarned) {
+    rpcMissingWarned = true;
+    console.warn(
+      `[paper-trading] The database function paper_apply_fill() was not found (${detail.slice(0, 160)}). Fills use the older multi-step path, which is only safe within one server instance. ` +
+        "Run db/migrations/2026-10-16_paper_fill_atomic.sql in the Supabase SQL editor to make fills atomic; no redeploy is needed, the app re-checks every few minutes."
+    );
+  }
+}
+
+function noteRpcWorking(): void {
+  if (rpcMissingWarned) console.info("[paper-trading] paper_apply_fill() is now available; fills are atomic.");
+  rpcMissingWarned = false;
+  rpcMissingUntil = 0;
+}
+
+/** PostgREST answers 404 + PGRST202 for an unknown function; 42883 is Postgres' own "function does not exist". */
+export function isRpcFunctionMissing(status: number, code: string, message: string): boolean {
+  if (code === "PGRST202" || code === "42883") return true;
+  if (status === 404) return true;
+  return /paper_apply_fill/i.test(message) && /could not find|does not exist|schema cache/i.test(message);
+}
+
+export class PaperFillRpcMissingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PaperFillRpcMissingError";
+  }
+}
+
+/** The function refused the fill for lack of cash or holdings and rolled everything back (message began "REJECT:"). */
+export class PaperFillRpcRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PaperFillRpcRejectedError";
+  }
+}
+
+export interface AtomicFillParams {
+  orderId: string;
+  fillPrice: number;
+  slippagePerShare: number;
+  secFee: number;
+  finraFee: number;
+  occFee: number;
+  totalFees: number;
+  /** 100 for options, 1 otherwise: the function cross-checks it against the order's asset class. */
+  multiplier: number;
+  /** Crypto buy fee joins cost basis: the function cross-checks it too. */
+  feeIntoBasis: boolean;
+}
+
+export type AtomicFillResult =
+  | { applied: true; fill: PaperFill; cashBalance: number; realizedPnl: number | null; newQuantity: number; cancelledOco: string[] | null }
+  | { applied: false; reason: string };
+
+/**
+ * Calls paper_apply_fill once. Resolves with the outcome; throws PaperFillRpcMissingError when the function is not
+ * installed (nothing was applied), PaperFillRpcRejectedError on a funds/holdings failure (rolled back, order still
+ * pending), and a plain Error for anything else (network failure, 5xx, bad input). A network failure is AMBIGUOUS:
+ * the call may or may not have committed, so callers re-read the order before deciding (the function is idempotent
+ * per order: a second call on a filled order returns applied=false).
+ */
+export async function applyFillRpc(p: AtomicFillParams): Promise<AtomicFillResult> {
+  const { url, key } = requireConfig();
+  const res = await fetch(`${url}/rest/v1/rpc/paper_apply_fill`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      p_order_id: p.orderId,
+      p_fill_price: p.fillPrice,
+      p_slippage_per_share: p.slippagePerShare,
+      p_sec_fee: p.secFee,
+      p_finra_fee: p.finraFee,
+      p_occ_fee: p.occFee,
+      p_total_fees: p.totalFees,
+      p_multiplier: p.multiplier,
+      p_fee_into_basis: p.feeIntoBasis,
+    }),
+  });
+  const text = await res.text().catch(() => "");
+  let parsed: unknown = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    parsed = null;
+  }
+  const obj = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+
+  if (!res.ok) {
+    const message = typeof obj.message === "string" ? obj.message : text.slice(0, 300);
+    const code = typeof obj.code === "string" ? obj.code : "";
+    if (isRpcFunctionMissing(res.status, code, message)) {
+      noteRpcMissing(message || `HTTP ${res.status}`);
+      throw new PaperFillRpcMissingError(message || `HTTP ${res.status}`);
+    }
+    const rejected = /^REJECT:\s*([\s\S]*)$/.exec(message);
+    if (rejected) {
+      noteRpcWorking();
+      throw new PaperFillRpcRejectedError(rejected[1]);
+    }
+    throw new Error(`Supabase request failed (${res.status}) for rpc/paper_apply_fill: ${text.slice(0, 500)}`);
+  }
+
+  noteRpcWorking();
+  if (typeof obj.applied !== "boolean") throw new Error("paper_apply_fill returned an unexpected response.");
+  if (!obj.applied) return { applied: false, reason: typeof obj.reason === "string" ? obj.reason : "not applied" };
+  if (!obj.fill || typeof obj.fill !== "object") throw new Error("paper_apply_fill applied the fill but returned no fill row.");
+  return {
+    applied: true,
+    fill: toFill(obj.fill as FillRow),
+    cashBalance: Number(obj.cash_balance),
+    realizedPnl: obj.realized_pnl === null || obj.realized_pnl === undefined ? null : Number(obj.realized_pnl),
+    newQuantity: Number(obj.new_quantity),
+    cancelledOco: Array.isArray(obj.cancelled_oco) ? obj.cancelled_oco.map(String) : null,
+  };
 }
 
 // --- Positions ---
