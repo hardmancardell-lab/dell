@@ -1886,6 +1886,10 @@ export interface StrategyHypothesis {
   // shake out trades before the setup's own premise plays out? Never
   // computed from a negative-expectancy baseline.
   stopLossVerdict: StopLossVerdict | null;
+  // How many hypotheses were corrected together (the Benjamini-Hochberg family) when this row was judged. Null on rows
+  // from before the statistics fix (they were judged with the old, weaker rule), and on rows read before the
+  // fdr_family_size column exists. See skills/hypothesis-rule.ts for the legacy-rule test.
+  fdrFamilySize?: number | null;
 }
 
 export type StopLossVerdict = "stops_hurt" | "stops_help" | "inconclusive";

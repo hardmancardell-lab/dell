@@ -175,7 +175,8 @@ function collectCandidate(
  * Applies ONE Benjamini-Hochberg correction over every hypothesis of the run (family size = the number of hypotheses
  * collected, 368 in a full sweep; hypotheses without a p-value count as p = 1) and turns the candidates into ledger rows.
  * "Validated" = significant after that run-wide correction AND bootstrap interval excludes zero AND the held-out sign
- * agrees. The family size is written into each row's exit rule text, because the ledger table has no column for it yet.
+ * agrees. The family size is written to each row's fdrFamilySize field (the fdr_family_size column, once the 2026-10-19
+ * migration is applied) AND into the exit rule text, which is how rows are recognised as current-rule before the column exists.
  */
 export function finalizeCandidates(candidates: Candidate[]): Omit<StrategyHypothesis, "id" | "createdAt">[] {
   const familySize = candidates.length;
@@ -200,6 +201,7 @@ export function finalizeCandidates(candidates: Candidate[]): Omit<StrategyHypoth
       exitRule: `${c.base.exitRule} [Corrected for ${familySize} hypotheses tested together in this run.]`,
       passesThreeBars: passes,
       pValueFdr: pAdj,
+      fdrFamilySize: familySize,
       status: passes ? "validated" : "rejected",
       rejectionReason: passes ? null : rejectionReasonFor({ significantAfterFdr: significant, ciExcludesZero: c.ciExcludesZero, sameSignOutOfSample: c.sameSignOutOfSample }, familySize),
     };
