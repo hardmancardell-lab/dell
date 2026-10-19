@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
-import { TRACK, VEHICLE, TRAILER, ECONOMY } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { CITY, FARES, SHIFT, VEHICLE, TRAILER, ECONOMY, CAR_MODELS } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import type { CarModel, Fare } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import { LongHaulAudio } from "./long-haul-audio";
 
 /**
@@ -10,38 +11,42 @@ import { LongHaulAudio } from "./long-haul-audio";
  * HUD/modal/summary overlay via the callbacks below; this class owns the
  * canvas, the physics world, and the driving loop.
  *
- * Ported from a standalone prototype that was actually driven and verified
- * (not just reviewed) before this port — see project memory for the 3 real
- * bugs that surfaced only by testing: inverted steering, a Rapier internal
- * timestep that doesn't track real elapsed time by default, and boundary
- * walls that don't stop the car because this velocity-override controller
- * overwrites the rigid body's velocity every frame regardless of what the
- * collision solver just computed. All three fixes are preserved below.
+ * Reworked from a single straight track into a rideshare shift around one
+ * real city crossroads, after a direct user report that the original design
+ * was broken: the gas-station loan refueled the car to finish a distance it
+ * could already finish, so the "decision" cost and bought nothing. Fixed by
+ * replacing the fixed finish line with fares (pickup -> dropoff waypoints)
+ * and gating the loan offer on a real computed check — remaining fuel range
+ * vs. the real remaining driving distance across the rest of the shift —
+ * instead of a flat fuel-percentage threshold. See long-haul-content.ts for
+ * the full design rationale, including why there's deliberately no shift
+ * timer (a countdown adds exactly the kind of real-time pressure the
+ * curriculum's own scarcity/bandwidth module argues against).
  *
- * Revisited after shipping: the canvas rendered nothing in the real app — a
- * real bug found by actually loading it, not by review (see LongHaulGame.tsx
- * for the root cause: the renderer was sized from a hidden container's
- * clientWidth/Height, which reads 0). This pass also takes a real swing at
- * visual/feel quality: a car with rotating wheels instead of a floating box,
- * lane markings and rumble-strip curbs, roadside poles for speed parallax, a
- * gradient sky instead of a flat color, body roll/pitch on steer/throttle,
- * and a speed-reactive camera FOV — standard arcade-racer "juice" techniques,
- * not an attempt at console-AAA fidelity, which a browser/Three.js game
- * built solo in one sitting was never going to hit regardless of effort.
+ * Original 3 bugs from the first prototype pass (inverted steering, Rapier's
+ * fixed internal timestep, boundary walls not stopping a velocity-override
+ * controller), the 0x0-canvas rendering bug, and the arrow-key page-scroll
+ * bug are all still fixed below — this rewrite builds on verified code, not
+ * from scratch.
  */
 
 export interface LongHaulHud {
   speedMph: number;
-  speedFrac: number; // 0..1 of base max speed — drives the UI speed-sensation vignette
+  speedFrac: number;
   fuel: number;
-  tollPaid: number;
+  cashEarned: number;
+  cashGoal: number;
   trailerAttached: boolean;
   debt: number;
+  fareInstruction: string;
 }
 
 export interface LongHaulSummary {
   elapsedSeconds: number;
-  tollPaid: number;
+  cashEarned: number;
+  cashGoal: number;
+  faresCompleted: number;
+  faresTotal: number;
   tookLoan: boolean;
   debt: number;
 }
@@ -49,18 +54,21 @@ export interface LongHaulSummary {
 export interface LongHaulCallbacks {
   onHud: (hud: LongHaulHud) => void;
   onLoanPrompt: () => void;
+  onFareComplete: (fareLabel: string, payout: number) => void;
   onFinish: (summary: LongHaulSummary) => void;
 }
 
 type Phase = "driving" | "modal" | "finished";
+type FareStage = "to_pickup" | "to_dropoff";
 
 const BASE_FOV = 62;
-const MAX_FOV_BONUS = 14; // added at top speed, classic "sense of speed" trick
-const MAX_BANK = 0.16; // radians, body roll into a turn
-const MAX_PITCH = 0.05; // radians, nose dips/lifts under brake/throttle
+const MAX_FOV_BONUS = 14;
+const MAX_BANK = 0.16;
+const MAX_PITCH = 0.05;
 const WHEEL_RADIUS = 0.34;
 const DUST_POOL_SIZE = 18;
-const DUST_SPAWN_INTERVAL = 0.07; // seconds between spawns while kicking up dust
+const DUST_SPAWN_INTERVAL = 0.07;
+const TARGET_REACH_RADIUS = 5;
 
 interface DustParticle {
   sprite: THREE.Sprite;
@@ -70,7 +78,6 @@ interface DustParticle {
   active: boolean;
 }
 
-/** Small soft-radial-gradient canvas texture — shared recipe for the dust puff and the car's contact shadow, just different colors. */
 function makeRadialTexture(innerColor: string, outerColor: string): THREE.CanvasTexture {
   const size = 64;
   const canvas = document.createElement("canvas");
@@ -87,6 +94,33 @@ function makeRadialTexture(innerColor: string, outerColor: string): THREE.Canvas
   return texture;
 }
 
+/** A simple lit/unlit window-grid pattern, tiled across a building face. */
+function makeWindowTexture(litColor: string): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#1c1f26";
+  ctx.fillRect(0, 0, size, size);
+  const cell = 16;
+  for (let y = 4; y < size; y += cell) {
+    for (let x = 4; x < size; x += cell) {
+      ctx.fillStyle = Math.random() > 0.35 ? litColor : "#12141a";
+      ctx.fillRect(x, y, cell - 6, cell - 8);
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function dist2D(ax: number, az: number, bx: number, bz: number): number {
+  return Math.hypot(ax - bx, az - bz);
+}
+
 export class LongHaulEngine {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
@@ -94,7 +128,7 @@ export class LongHaulEngine {
   private world!: RAPIER.World;
   private carRigid!: RAPIER.RigidBody;
   private carGroup: THREE.Group;
-  private carTiltGroup: THREE.Group; // child of carGroup — carries roll/pitch so heading rotation stays clean
+  private carTiltGroup: THREE.Group;
   private wheels: THREE.Mesh[] = [];
   private trailerMesh: THREE.Mesh;
   private trailerHistory: { x: number; z: number; heading: number }[] = [];
@@ -104,16 +138,21 @@ export class LongHaulEngine {
   private dustPool: DustParticle[] = [];
   private dustSpawnTimer = 0;
   private readonly audio = new LongHaulAudio();
+  private readonly car: CarModel;
+
+  private targetBeacon!: THREE.Mesh;
+  private pedestrians: { group: THREE.Group; baseX: number; baseZ: number; axis: "x" | "z"; range: number; speedPhase: number }[] = [];
 
   private phase: Phase = "driving";
   private heading = Math.PI;
   private speed = 0;
   private fuel = 100;
-  private tollPaid = 0;
+  private cashEarned = 0;
   private trailerAttached = false;
   private debt = 0;
   private gasStationResolved = false;
-  private tollCharged = false;
+  private activeFareIndex = 0;
+  private fareStage: FareStage = "to_pickup";
   private startTime = performance.now();
 
   private keys = { up: false, down: false, left: false, right: false };
@@ -130,15 +169,12 @@ export class LongHaulEngine {
     private container: HTMLElement,
     private vw: number,
     private vh: number,
+    carModelId: string,
     private callbacks: LongHaulCallbacks
   ) {
+    this.car = CAR_MODELS.find((c) => c.id === carModelId) ?? CAR_MODELS[0];
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    // Fixed, explicit size — never measure container.clientWidth/Height.
-    // This component is hidden (display:none) until status flips to
-    // "ready", and a hidden element's clientWidth/Height reads 0, which is
-    // exactly what produced the blank-canvas bug this pass fixes. The
-    // wrapper scales the canvas down via CSS max-width on narrow screens;
-    // the renderer's internal resolution stays fixed.
     this.renderer.setSize(vw, vh);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -146,7 +182,7 @@ export class LongHaulEngine {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x141824, 55, 210);
+    this.scene.fog = new THREE.Fog(0x141824, 55, 220);
     this.scene.add(this.buildSky());
 
     this.camera = new THREE.PerspectiveCamera(BASE_FOV, vw / vh, 0.1, 500);
@@ -166,7 +202,6 @@ export class LongHaulEngine {
     window.addEventListener("keyup", this.onKeyUp);
   }
 
-  /** Async init (Rapier's WASM must load) — call once before the engine does anything. */
   async init() {
     await RAPIER.init();
     if (this.disposed) return;
@@ -179,17 +214,21 @@ export class LongHaulEngine {
     sun.position.set(40, 60, -20);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.left = -40;
-    sun.shadow.camera.right = 40;
-    sun.shadow.camera.top = 40;
-    sun.shadow.camera.bottom = -40;
-    sun.shadow.camera.far = 150;
+    sun.shadow.camera.left = -90;
+    sun.shadow.camera.right = 90;
+    sun.shadow.camera.top = 90;
+    sun.shadow.camera.bottom = -90;
+    sun.shadow.camera.far = 220;
     this.scene.add(sun);
     const fill = new THREE.DirectionalLight(0x5a6b8c, 0.35);
     fill.position.set(-30, 20, 30);
     this.scene.add(fill);
 
-    this.buildTrack();
+    this.buildStreets();
+    this.buildBuildings();
+    this.buildPedestrians();
+    this.buildGasStation();
+    this.buildTargetBeacon();
     this.buildCar();
     this.buildContactShadow();
     this.buildHeadlight();
@@ -197,80 +236,12 @@ export class LongHaulEngine {
 
     this.scene.add(this.carGroup);
     this.scene.add(this.trailerMesh);
+    this.updateBeaconForCurrentTarget();
 
     this.lastT = performance.now();
     this.animate();
   }
 
-  /** A soft dark blob just under the car — cheap, but it's what actually sells the car as sitting ON the road instead of floating above it. */
-  private buildContactShadow() {
-    const texture = makeRadialTexture("rgba(0,0,0,0.45)", "rgba(0,0,0,0)");
-    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-    this.contactShadow = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 4.6), mat);
-    this.contactShadow.rotation.x = -Math.PI / 2;
-    this.contactShadow.position.y = 0.02;
-    this.scene.add(this.contactShadow);
-  }
-
-  /** One forward-facing spotlight (no shadow — the sun's shadow map already covers the budget) for real headlight illumination on the road at night. */
-  private buildHeadlight() {
-    this.headlightSpot = new THREE.SpotLight(0xfff0cf, 6, 28, Math.PI / 6, 0.6, 1.2);
-    this.headlightTarget = new THREE.Object3D();
-    this.scene.add(this.headlightSpot);
-    this.scene.add(this.headlightTarget);
-    this.headlightSpot.target = this.headlightTarget;
-  }
-
-  private buildDustPool() {
-    const texture = makeRadialTexture("rgba(196,178,140,0.9)", "rgba(196,178,140,0)");
-    for (let i = 0; i < DUST_POOL_SIZE; i++) {
-      const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0, depthWrite: false });
-      const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(0.6, 0.6, 1);
-      sprite.visible = false;
-      this.scene.add(sprite);
-      this.dustPool.push({ sprite, velocity: new THREE.Vector3(), life: 0, maxLife: 1, active: false });
-    }
-  }
-
-  /** Spawns one dust puff near a rear wheel, reusing the oldest free pool slot. */
-  private spawnDust(carX: number, carZ: number) {
-    const slot = this.dustPool.find((p) => !p.active) ?? this.dustPool[0];
-    const backward = new THREE.Vector3(-Math.sin(this.heading), 0, -Math.cos(this.heading));
-    const sideJitter = (Math.random() - 0.5) * 1.2;
-    slot.sprite.position.set(
-      carX + backward.x * 1.6 + sideJitter,
-      0.15,
-      carZ + backward.z * 1.6 + sideJitter
-    );
-    slot.sprite.scale.set(0.5, 0.5, 1);
-    slot.velocity.set(backward.x * 1.5 + (Math.random() - 0.5), 1.2 + Math.random() * 0.8, backward.z * 1.5 + (Math.random() - 0.5));
-    slot.maxLife = 0.5 + Math.random() * 0.35;
-    slot.life = slot.maxLife;
-    slot.active = true;
-    slot.sprite.visible = true;
-    (slot.sprite.material as THREE.SpriteMaterial).opacity = 0.65;
-  }
-
-  private updateDust(dt: number) {
-    for (const p of this.dustPool) {
-      if (!p.active) continue;
-      p.life -= dt;
-      if (p.life <= 0) {
-        p.active = false;
-        p.sprite.visible = false;
-        continue;
-      }
-      p.sprite.position.addScaledVector(p.velocity, dt);
-      p.velocity.y -= dt * 1.5; // gentle gravity so puffs settle rather than float forever
-      const lifeFrac = p.life / p.maxLife;
-      (p.sprite.material as THREE.SpriteMaterial).opacity = 0.65 * lifeFrac;
-      const scale = 0.5 + (1 - lifeFrac) * 0.9;
-      p.sprite.scale.set(scale, scale, 1);
-    }
-  }
-
-  /** A large inverted sphere with a vertical gradient — cheap stand-in for a real sky, much better than a flat fill. */
   private buildSky(): THREE.Mesh {
     const geo = new THREE.SphereGeometry(300, 24, 16);
     const mat = new THREE.ShaderMaterial({
@@ -304,141 +275,357 @@ export class LongHaulEngine {
     return new THREE.Mesh(geo, mat);
   }
 
-  private buildTrack() {
-    const trackLen = Math.abs(TRACK.finishZ) + 20;
-    const centerZ = -trackLen / 2 + 20;
+  /** The "+" crossroads: one N-S corridor, one E-W cross street. */
+  private buildStreets() {
+    const corridorLen = CITY.corridorStartZ - CITY.corridorEndZ;
+    const corridorCenterZ = (CITY.corridorStartZ + CITY.corridorEndZ) / 2;
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x23272e, roughness: 0.88, metalness: 0.05 });
 
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x23272e, roughness: 0.88, metalness: 0.05 });
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(TRACK.halfWidth * 2, trackLen), groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(0, 0, centerZ);
-    ground.receiveShadow = true;
-    this.scene.add(ground);
+    const corridor = new THREE.Mesh(new THREE.PlaneGeometry(CITY.streetHalfWidth * 2, corridorLen), roadMat);
+    corridor.rotation.x = -Math.PI / 2;
+    corridor.position.set(0, 0, corridorCenterZ);
+    corridor.receiveShadow = true;
+    this.scene.add(corridor);
 
-    const roughMat = new THREE.MeshStandardMaterial({ color: 0x463c2b, roughness: 1 });
-    const roughLen = Math.abs(TRACK.laneSplitEndZ - TRACK.laneSplitStartZ);
-    const rough = new THREE.Mesh(new THREE.PlaneGeometry(TRACK.halfWidth - 2, roughLen), roughMat);
-    rough.rotation.x = -Math.PI / 2;
-    rough.position.set(-TRACK.halfWidth / 2 - 1, 0.01, (TRACK.laneSplitStartZ + TRACK.laneSplitEndZ) / 2);
-    rough.receiveShadow = true;
-    this.scene.add(rough);
+    const crossLen = CITY.crossStreetHalfLength * 2;
+    const cross = new THREE.Mesh(new THREE.PlaneGeometry(crossLen, CITY.crossStreetHalfWidth * 2), roadMat);
+    cross.rotation.x = -Math.PI / 2;
+    cross.position.set(0, 0.005, CITY.crossStreetZ);
+    cross.receiveShadow = true;
+    this.scene.add(cross);
 
-    const laneCurbMat = new THREE.MeshStandardMaterial({ color: 0xd6d0c0 });
-    const laneCurb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, roughLen), laneCurbMat);
-    laneCurb.position.set(0, 0.2, (TRACK.laneSplitStartZ + TRACK.laneSplitEndZ) / 2);
-    this.scene.add(laneCurb);
+    // Dashed centerlines on both streets.
+    this.buildDashedLine(0, CITY.corridorStartZ, CITY.crossStreetZ + CITY.crossStreetHalfWidth + 6, "z");
+    this.buildDashedLine(0, CITY.crossStreetZ - CITY.crossStreetHalfWidth - 6, CITY.corridorEndZ, "z");
+    this.buildDashedLine(-CITY.crossStreetHalfLength, CITY.crossStreetZ, -CITY.streetHalfWidth - 6, "x");
+    this.buildDashedLine(CITY.streetHalfWidth + 6, CITY.crossStreetZ, CITY.crossStreetHalfLength, "x");
 
-    this.buildDashedCenterline(0, -trackLen / 2 + 20, TRACK.laneSplitStartZ);
-    this.buildDashedCenterline(0, TRACK.laneSplitEndZ, TRACK.finishZ + 20);
-    this.buildRumbleStrips(trackLen, centerZ);
-    this.buildRoadsidePoles(trackLen, centerZ);
-
-    const tollMat = new THREE.MeshStandardMaterial({ color: 0xe8724f, emissive: 0x6b2200, emissiveIntensity: 0.6 });
-    const tollGate = new THREE.Mesh(new THREE.BoxGeometry(TRACK.halfWidth, 6, 0.6), tollMat);
-    tollGate.position.set(TRACK.halfWidth / 4 + 2, 3, TRACK.tollZ);
-    tollGate.castShadow = true;
-    this.scene.add(tollGate);
-
-    const stationMat = new THREE.MeshStandardMaterial({ color: 0xf0c419, emissive: 0x4a3a00, emissiveIntensity: 0.5 });
-    const station = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 6), stationMat);
-    station.position.set(TRACK.halfWidth - 8, 2.5, TRACK.gasStationZ);
-    station.castShadow = true;
-    this.scene.add(station);
-
-    const finishMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x333333 });
-    const finishLine = new THREE.Mesh(new THREE.BoxGeometry(TRACK.halfWidth * 2, 0.2, 1), finishMat);
-    finishLine.position.set(0, 0.1, TRACK.finishZ);
-    this.scene.add(finishLine);
-
+    // Boundary walls along the outer edges of the whole district, matching
+    // the old track's "clamp bounds directly" fix (see animate()).
     const wallMat = new THREE.MeshStandardMaterial({ color: 0x3a3f47, roughness: 0.7 });
-    [-TRACK.halfWidth, TRACK.halfWidth].forEach((x) => {
-      const wallMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 3, trackLen), wallMat);
-      wallMesh.position.set(x, 1.5, centerZ);
-      wallMesh.castShadow = true;
-      this.scene.add(wallMesh);
+    [-CITY.streetHalfWidth, CITY.streetHalfWidth].forEach((x) => {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(1, 3, corridorLen), wallMat);
+      wall.position.set(x, 1.5, corridorCenterZ);
+      wall.castShadow = true;
+      this.scene.add(wall);
     });
   }
 
-  /** Dashed white centerline for a single-lane stretch from startZ down to endZ (startZ > endZ). */
-  private buildDashedCenterline(_x: number, startZ: number, endZ: number) {
+  private buildDashedLine(x1: number, z1: number, x2OrZ2: number, axis: "x" | "z") {
+    const mat = new THREE.MeshStandardMaterial({ color: 0xe8e4d8, emissive: 0x151310 });
     const dashLen = 3;
     const gapLen = 4;
-    const mat = new THREE.MeshStandardMaterial({ color: 0xe8e4d8, emissive: 0x151310 });
-    let z = startZ;
-    while (z > endZ) {
-      const dash = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.05, dashLen), mat);
-      dash.position.set(0, 0.03, z - dashLen / 2);
-      this.scene.add(dash);
-      z -= dashLen + gapLen;
-    }
-  }
-
-  /** Classic alternating red/white rumble-strip curbs along both track edges, full length. */
-  private buildRumbleStrips(trackLen: number, centerZ: number) {
-    const segLen = 2;
-    const redMat = new THREE.MeshStandardMaterial({ color: 0xb8302a, roughness: 0.6 });
-    const whiteMat = new THREE.MeshStandardMaterial({ color: 0xe9e5da, roughness: 0.6 });
-    const startZ = centerZ + trackLen / 2;
-    const count = Math.ceil(trackLen / segLen);
-    for (const side of [-1, 1]) {
-      const edgeX = side * (TRACK.halfWidth - 0.6);
-      for (let i = 0; i < count; i++) {
-        const mat = i % 2 === 0 ? redMat : whiteMat;
-        const seg = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, segLen), mat);
-        seg.position.set(edgeX, 0.06, startZ - i * segLen - segLen / 2);
-        this.scene.add(seg);
+    if (axis === "z") {
+      let z = z1;
+      const end = x2OrZ2;
+      const dir = end > z ? 1 : -1;
+      while (dir > 0 ? z < end : z > end) {
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.05, dashLen), mat);
+        dash.position.set(x1, 0.03, z + (dir * dashLen) / 2);
+        this.scene.add(dash);
+        z += dir * (dashLen + gapLen);
+      }
+    } else {
+      let x = x1;
+      const end = x2OrZ2;
+      while (x < end) {
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(dashLen, 0.05, 0.25), mat);
+        dash.position.set(x + dashLen / 2, 0.03, z1);
+        this.scene.add(dash);
+        x += dashLen + gapLen;
       }
     }
   }
 
-  /** Thin roadside poles outside the walls — parallax cue for a real sense of speed while driving. */
-  private buildRoadsidePoles(trackLen: number, centerZ: number) {
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x8a8f98, roughness: 0.5, metalness: 0.3 });
-    const spacing = 14;
-    const startZ = centerZ + trackLen / 2 - 6;
-    const count = Math.floor(trackLen / spacing);
-    for (const side of [-1, 1]) {
-      const x = side * (TRACK.halfWidth + 3);
-      for (let i = 0; i < count; i++) {
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 4.5, 6), poleMat);
-        pole.position.set(x, 2.25, startZ - i * spacing);
-        pole.castShadow = true;
-        this.scene.add(pole);
+  /** Buildings line both streets, skipping the intersection so it stays open to turn through. */
+  private buildBuildings() {
+    const windowTex = makeWindowTexture("#f0c419");
+    const intersectionClearance = CITY.crossStreetHalfWidth + 10;
+
+    const colorPalette = [0x3a4252, 0x4a3f3a, 0x2f3a3f, 0x463c4a, 0x3f4a3f];
+    let paletteIdx = 0;
+    const nextColor = () => colorPalette[paletteIdx++ % colorPalette.length];
+
+    // Along the N-S corridor.
+    for (let z = CITY.corridorStartZ - 10; z > CITY.corridorEndZ + 10; z -= 16) {
+      if (Math.abs(z - CITY.crossStreetZ) < intersectionClearance) continue;
+      for (const side of [-1, 1]) {
+        this.addBuilding(side * (CITY.streetHalfWidth + 6), z, nextColor(), windowTex, "z");
       }
+    }
+
+    // Along the E-W cross street.
+    for (let x = -CITY.crossStreetHalfLength + 10; x < CITY.crossStreetHalfLength - 10; x += 16) {
+      if (Math.abs(x) < intersectionClearance) continue;
+      for (const side of [-1, 1]) {
+        this.addBuilding(x, CITY.crossStreetZ + side * (CITY.crossStreetHalfWidth + 6), nextColor(), windowTex, "x");
+      }
+    }
+  }
+
+  private addBuilding(x: number, z: number, color: number, windowTex: THREE.CanvasTexture, streetAxis: "x" | "z") {
+    const width = 8 + Math.random() * 3;
+    const depth = 8 + Math.random() * 3;
+    const height = 6 + Math.random() * 16; // mix of houses, apartments, stores
+    const sideMat = new THREE.MeshStandardMaterial({ map: windowTex, color, roughness: 0.9 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x1a1d22, roughness: 0.95 });
+    const building = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), [sideMat, sideMat, roofMat, roofMat, sideMat, sideMat]);
+    building.position.set(x, height / 2, z);
+    building.castShadow = true;
+    building.receiveShadow = true;
+    this.scene.add(building);
+
+    // A raised sidewalk/curb strip between street and building.
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0x6b6f76 });
+    const curbWidth = streetAxis === "z" ? 3 : depth + 2;
+    const curbDepth = streetAxis === "z" ? depth + 2 : 3;
+    const curb = new THREE.Mesh(new THREE.BoxGeometry(curbWidth, 0.2, curbDepth), curbMat);
+    const inward = streetAxis === "z" ? (x > 0 ? -1 : 1) : x; // offset toward the street
+    if (streetAxis === "z") curb.position.set(x + inward * (width / 2 + 1.2), 0.1, z);
+    else curb.position.set(x, 0.1, z + (z > CITY.crossStreetZ ? -1 : 1) * (depth / 2 + 1.2));
+    this.scene.add(curb);
+  }
+
+  private buildPedestrians() {
+    const spots: { x: number; z: number; axis: "x" | "z" }[] = [
+      { x: -CITY.streetHalfWidth - 3, z: -10, axis: "z" },
+      { x: CITY.streetHalfWidth + 3, z: -40, axis: "z" },
+      { x: -CITY.streetHalfWidth - 3, z: -70, axis: "z" },
+      { x: 20, z: CITY.crossStreetZ - CITY.crossStreetHalfWidth - 3, axis: "x" },
+      { x: -20, z: CITY.crossStreetZ + CITY.crossStreetHalfWidth + 3, axis: "x" },
+      { x: CITY.streetHalfWidth + 3, z: -180, axis: "z" },
+      { x: -CITY.streetHalfWidth - 3, z: -210, axis: "z" },
+    ];
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.8 });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xd9a066, roughness: 0.7 });
+
+    for (const spot of spots) {
+      const group = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.75, 4, 8), bodyMat);
+      body.position.y = 0.72;
+      body.castShadow = true;
+      group.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 10), skinMat);
+      head.position.y = 1.28;
+      head.castShadow = true;
+      group.add(head);
+      group.position.set(spot.x, 0, spot.z);
+      this.scene.add(group);
+      this.pedestrians.push({
+        group,
+        baseX: spot.x,
+        baseZ: spot.z,
+        axis: spot.axis,
+        range: 2.5 + Math.random() * 2,
+        speedPhase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  private buildGasStation() {
+    const stationMat = new THREE.MeshStandardMaterial({ color: 0xf0c419, emissive: 0x4a3a00, emissiveIntensity: 0.5 });
+    const station = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 6), stationMat);
+    station.position.set(CITY.streetHalfWidth + 9, 2.5, CITY.gasStationZ);
+    station.castShadow = true;
+    this.scene.add(station);
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0xe8e4d8, emissive: 0x222222 });
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(10, 0.4, 8), canopyMat);
+    canopy.position.set(CITY.streetHalfWidth + 6, 4.5, CITY.gasStationZ);
+    this.scene.add(canopy);
+  }
+
+  /** One glowing beacon, repositioned to whatever the current fare target is — one thing to drive toward at a time. */
+  private buildTargetBeacon() {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x4fe8d0, emissive: 0x4fe8d0, emissiveIntensity: 1.4, transparent: true, opacity: 0.85 });
+    this.targetBeacon = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.2, 10), mat);
+    this.targetBeacon.position.y = 2.5;
+    this.scene.add(this.targetBeacon);
+  }
+
+  private currentTarget(): { x: number; z: number } {
+    const fare = FARES[this.activeFareIndex];
+    return this.fareStage === "to_pickup" ? fare.pickup : fare.dropoff;
+  }
+
+  private updateBeaconForCurrentTarget() {
+    if (this.activeFareIndex >= FARES.length) {
+      this.targetBeacon.visible = false;
+      return;
+    }
+    const target = this.currentTarget();
+    this.targetBeacon.visible = true;
+    this.targetBeacon.position.set(target.x, 2.5, target.z);
+    const isPickup = this.fareStage === "to_pickup";
+    (this.targetBeacon.material as THREE.MeshStandardMaterial).color.setHex(isPickup ? 0x4fe8d0 : 0xf0c419);
+    (this.targetBeacon.material as THREE.MeshStandardMaterial).emissive.setHex(isPickup ? 0x4fe8d0 : 0xf0c419);
+  }
+
+  private fareInstructionText(): string {
+    if (this.activeFareIndex >= FARES.length) return "Shift complete";
+    const fare = FARES[this.activeFareIndex];
+    return this.fareStage === "to_pickup" ? `Pick up: ${fare.label}` : `Drop off: ${fare.label}`;
+  }
+
+  /** The real fix: remaining distance across the REST of the shift, not just "is fuel below a flat %." */
+  private remainingShiftDistance(carX: number, carZ: number): number {
+    if (this.activeFareIndex >= FARES.length) return 0;
+    const fare = FARES[this.activeFareIndex];
+    const target = this.currentTarget();
+    let remaining = dist2D(carX, carZ, target.x, target.z);
+    if (this.fareStage === "to_pickup") remaining += fare.legDistance;
+    for (let i = this.activeFareIndex + 1; i < FARES.length; i++) remaining += FARES[i].legDistance;
+    return remaining;
+  }
+
+  private buildContactShadow() {
+    const texture = makeRadialTexture("rgba(0,0,0,0.45)", "rgba(0,0,0,0)");
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
+    this.contactShadow = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 4.6), mat);
+    this.contactShadow.rotation.x = -Math.PI / 2;
+    this.contactShadow.position.y = 0.02;
+    this.scene.add(this.contactShadow);
+  }
+
+  private buildHeadlight() {
+    this.headlightSpot = new THREE.SpotLight(0xfff0cf, 6, 28, Math.PI / 6, 0.6, 1.2);
+    this.headlightTarget = new THREE.Object3D();
+    this.scene.add(this.headlightSpot);
+    this.scene.add(this.headlightTarget);
+    this.headlightSpot.target = this.headlightTarget;
+  }
+
+  private buildDustPool() {
+    const texture = makeRadialTexture("rgba(196,178,140,0.9)", "rgba(196,178,140,0)");
+    for (let i = 0; i < DUST_POOL_SIZE; i++) {
+      const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.6, 0.6, 1);
+      sprite.visible = false;
+      this.scene.add(sprite);
+      this.dustPool.push({ sprite, velocity: new THREE.Vector3(), life: 0, maxLife: 1, active: false });
+    }
+  }
+
+  private spawnDust(carX: number, carZ: number) {
+    const slot = this.dustPool.find((p) => !p.active) ?? this.dustPool[0];
+    const backward = new THREE.Vector3(-Math.sin(this.heading), 0, -Math.cos(this.heading));
+    const sideJitter = (Math.random() - 0.5) * 1.2;
+    slot.sprite.position.set(carX + backward.x * 1.6 + sideJitter, 0.15, carZ + backward.z * 1.6 + sideJitter);
+    slot.sprite.scale.set(0.5, 0.5, 1);
+    slot.velocity.set(backward.x * 1.5 + (Math.random() - 0.5), 1.2 + Math.random() * 0.8, backward.z * 1.5 + (Math.random() - 0.5));
+    slot.maxLife = 0.5 + Math.random() * 0.35;
+    slot.life = slot.maxLife;
+    slot.active = true;
+    slot.sprite.visible = true;
+    (slot.sprite.material as THREE.SpriteMaterial).opacity = 0.65;
+  }
+
+  private updateDust(dt: number) {
+    for (const p of this.dustPool) {
+      if (!p.active) continue;
+      p.life -= dt;
+      if (p.life <= 0) {
+        p.active = false;
+        p.sprite.visible = false;
+        continue;
+      }
+      p.sprite.position.addScaledVector(p.velocity, dt);
+      p.velocity.y -= dt * 1.5;
+      const lifeFrac = p.life / p.maxLife;
+      (p.sprite.material as THREE.SpriteMaterial).opacity = 0.65 * lifeFrac;
+      const scale = 0.5 + (1 - lifeFrac) * 0.9;
+      p.sprite.scale.set(scale, scale, 1);
     }
   }
 
   private buildCar() {
-    const paintMat = new THREE.MeshStandardMaterial({ color: 0x3fd8c4, roughness: 0.35, metalness: 0.55 });
+    const paintMat = new THREE.MeshStandardMaterial({ color: this.car.color, roughness: 0.35, metalness: 0.55 });
     const glassMat = new THREE.MeshStandardMaterial({ color: 0x11161f, roughness: 0.15, metalness: 0.4 });
     const trimMat = new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.6 });
 
-    const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.55, 3.6), paintMat);
-    lowerBody.position.y = 0.42;
+    const L = this.car.bodyLength;
+    const W = this.car.bodyWidth;
+    const H = this.car.bodyHeight;
+
+    const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(W, H, L), paintMat);
+    lowerBody.position.y = H / 2 + 0.1;
     lowerBody.castShadow = true;
     this.carTiltGroup.add(lowerBody);
 
-    // Tapered nose — a single wedge-shaped box (scaled + shifted) reads as a
-    // hood far better than a flat front face, at near-zero extra cost.
-    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.42, 1.0), paintMat);
-    nose.position.set(0, 0.46, 1.9);
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(W * 0.9, H * 0.75, L * 0.26), paintMat);
+    nose.position.set(0, H / 2 + 0.14, L / 2 - 0.1);
     nose.rotation.x = -0.12;
     nose.castShadow = true;
     this.carTiltGroup.add(nose);
 
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.5, 1.7), glassMat);
-    cabin.position.set(0, 0.92, -0.25);
+    // Roof style drives cabin length/position/rake — the real differentiator
+    // between the 4 selectable cars beyond paint color. Tuned against real
+    // reference photos the user sent: an Impala SS (confirms the Caprice's
+    // boxy formal 4-light greenhouse), a Chevelle SS 454 (continuous sloped
+    // fastback line running into the trunk, not a boxy cabin with a slight
+    // tilt), and a Challenger/Monte Carlo pair (flat long-hood/short-deck
+    // coupe vs. a notchback with a sharp B-pillar kick into a short flat deck).
+    let cabinLen = L * 0.46;
+    let cabinZ = -L * 0.07;
+    let roofH = H + 0.5;
+    let cabinRotX = 0;
+    let skipRoofCap = false;
+    if (this.car.roofStyle === "formal") {
+      cabinLen = L * 0.5;
+      roofH = H + 0.56;
+    } else if (this.car.roofStyle === "fastback") {
+      // Long, low, and raked hard enough that the glass box itself reads as
+      // the sloping roofline running down into the deck — a flat cap on top
+      // would contradict that, so it's skipped for this style.
+      cabinLen = L * 0.56;
+      cabinZ = -L * 0.16;
+      roofH = H + 0.36;
+      cabinRotX = 0.24;
+      skipRoofCap = true;
+    } else if (this.car.roofStyle === "coupe") {
+      // Cabin pushed toward the tail (not centered) so there's a long gap
+      // ahead of it to the nose (long hood) and almost none behind it to the
+      // tail (short deck) — the classic muscle-coupe proportion.
+      cabinLen = L * 0.32;
+      cabinZ = -L * 0.18;
+      roofH = H + 0.36;
+      cabinRotX = 0.04;
+    } else {
+      cabinLen = L * 0.4;
+      cabinZ = -L * 0.08;
+      roofH = H + 0.48;
+    }
+
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(W * 0.72, roofH - H, cabinLen), glassMat);
+    cabin.position.set(0, H / 2 + 0.1 + (roofH - H) / 2 + 0.26, cabinZ);
+    cabin.rotation.x = cabinRotX;
     cabin.castShadow = true;
     this.carTiltGroup.add(cabin);
 
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 1.2), paintMat);
-    roof.position.set(0, 1.21, -0.3);
-    this.carTiltGroup.add(roof);
+    if (!skipRoofCap) {
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(W * 0.65, 0.08, cabinLen * 0.75), paintMat);
+      roof.position.set(0, H / 2 + 0.1 + (roofH - H) + 0.2, cabinZ - (this.car.roofStyle === "coupe" ? 0.1 : 0));
+      this.carTiltGroup.add(roof);
+    }
 
-    // Mirrors — tiny, but a car silhouette reads as "a car" much faster with them.
+    if (this.car.roofStyle === "notchback") {
+      // The Monte Carlo's signature: a short, flat, stepped-down rear-glass
+      // panel (a sharp B-pillar kick), not a smooth taper — then a short flat
+      // deck lip right behind it. Two distinct steps down, not one gradient.
+      const backlight = new THREE.Mesh(new THREE.BoxGeometry(W * 0.68, (roofH - H) * 0.55, cabinLen * 0.22), glassMat);
+      backlight.position.set(0, H / 2 + 0.1 + (roofH - H) * 0.32 + 0.26, cabinZ - cabinLen / 2 - cabinLen * 0.08);
+      backlight.rotation.x = 0.55;
+      backlight.castShadow = true;
+      this.carTiltGroup.add(backlight);
+
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(W * 0.85, 0.16, 0.45), paintMat);
+      deck.position.set(0, H / 2 + 0.1 + 0.1, cabinZ - cabinLen / 2 - cabinLen * 0.22);
+      this.carTiltGroup.add(deck);
+    }
+
     for (const side of [-1, 1]) {
       const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.22), trimMat);
-      mirror.position.set(side * 0.95, 0.85, 0.5);
+      mirror.position.set((side * W) / 2, H + 0.3, cabinZ + cabinLen / 2 - 0.1);
       this.carTiltGroup.add(mirror);
     }
 
@@ -446,20 +633,22 @@ export class LongHaulEngine {
     const taillightMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, emissive: 0xff3b30, emissiveIntensity: 1.1 });
     for (const side of [-1, 1]) {
       const headlight = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.08), headlightMat);
-      headlight.position.set(side * 0.65, 0.5, 2.38);
+      headlight.position.set((side * W) / 2.9, H / 2 + 0.2, L / 2 + 0.28);
       this.carTiltGroup.add(headlight);
       const taillight = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.06), taillightMat);
-      taillight.position.set(side * 0.68, 0.55, -1.78);
+      taillight.position.set((side * W) / 2.9, H / 2 + 0.25, -L / 2 - 0.18);
       this.carTiltGroup.add(taillight);
     }
 
     const wheelGeo = new THREE.CylinderGeometry(WHEEL_RADIUS, WHEEL_RADIUS, 0.28, 14);
     const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
+    const wheelX = W / 2 - 0.05;
+    const wheelZ = L / 2 - 0.65;
     const wheelPositions: [number, number][] = [
-      [-0.95, 1.15],
-      [0.95, 1.15],
-      [-0.95, -1.15],
-      [0.95, -1.15],
+      [-wheelX, wheelZ],
+      [wheelX, wheelZ],
+      [-wheelX, -wheelZ],
+      [wheelX, -wheelZ],
     ];
     for (const [x, z] of wheelPositions) {
       const wheel = new THREE.Mesh(wheelGeo, wheelMat);
@@ -472,19 +661,11 @@ export class LongHaulEngine {
 
     const carRigidDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 1, 0).lockRotations();
     this.carRigid = this.world.createRigidBody(carRigidDesc);
-    this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.9, 0.5, 1.7).setMass(1), this.carRigid);
+    this.world.createCollider(RAPIER.ColliderDesc.cuboid(W / 2, H / 2, L / 2).setMass(1), this.carRigid);
   }
 
   private setKey(code: string, val: boolean, e?: KeyboardEvent) {
     if (!LongHaulEngine.DRIVE_KEYS.has(code)) return;
-
-    // Arrow keys (and Space, though we don't use it) scroll the page by
-    // default — with this card embedded mid-page in a long scrolling
-    // curriculum, every press was yanking the viewport away from the
-    // canvas the instant someone tried to drive. Confirmed by a real user
-    // hitting it, not caught in review. Guarded on the active element so
-    // this never swallows arrow-key input inside an actual text field,
-    // number input, or select elsewhere on the page.
     const active = document.activeElement;
     const isEditable =
       active instanceof HTMLInputElement ||
@@ -493,10 +674,6 @@ export class LongHaulEngine {
       (active instanceof HTMLElement && active.isContentEditable);
     if (!isEditable) e?.preventDefault();
 
-    // Browsers require a real user gesture before audio can play — the
-    // first drive key is as natural a gesture as this game has. start() is
-    // idempotent, so calling it on every keydown costs nothing after the
-    // first real one.
     if (val) this.audio.start();
     if (code === "KeyW" || code === "ArrowUp") this.keys.up = val;
     if (code === "KeyS" || code === "ArrowDown") this.keys.down = val;
@@ -509,17 +686,14 @@ export class LongHaulEngine {
   }
 
   private currentTuning() {
-    const mult = this.trailerAttached
+    const trailerMult = this.trailerAttached
       ? { maxSpeed: TRAILER.maxSpeedMult, turn: TRAILER.turnRateMult, accel: TRAILER.accelMult }
       : { maxSpeed: 1, turn: 1, accel: 1 };
-    const pos = this.carRigid.translation();
-    const inRoughZone = pos.z < TRACK.laneSplitStartZ && pos.z > TRACK.laneSplitEndZ && pos.x < -2;
-    const roughMult = inRoughZone ? VEHICLE.roughSurfaceSpeedMult : 1;
     const fuelMult = this.fuel <= 0 ? VEHICLE.outOfFuelSpeedMult : 1;
     return {
-      maxSpeed: VEHICLE.baseMaxSpeed * mult.maxSpeed * roughMult * fuelMult,
-      turnRate: VEHICLE.baseTurnRate * mult.turn,
-      accel: VEHICLE.baseAccel * mult.accel,
+      maxSpeed: VEHICLE.baseMaxSpeed * this.car.maxSpeedMult * trailerMult.maxSpeed * fuelMult,
+      turnRate: VEHICLE.baseTurnRate * this.car.turnRateMult * trailerMult.turn,
+      accel: VEHICLE.baseAccel * this.car.accelMult * trailerMult.accel,
     };
   }
 
@@ -551,11 +725,12 @@ export class LongHaulEngine {
     this.speed = 0;
     this.phase = "driving";
     this.fuel = 100;
-    this.tollPaid = 0;
+    this.cashEarned = 0;
     this.trailerAttached = false;
     this.debt = 0;
     this.gasStationResolved = false;
-    this.tollCharged = false;
+    this.activeFareIndex = 0;
+    this.fareStage = "to_pickup";
     this.startTime = performance.now();
     this.trailerMesh.visible = false;
     this.trailerHistory = [];
@@ -565,6 +740,7 @@ export class LongHaulEngine {
       p.active = false;
       p.sprite.visible = false;
     }
+    this.updateBeaconForCurrentTarget();
   }
 
   private animate = () => {
@@ -592,31 +768,48 @@ export class LongHaulEngine {
 
       const speedFrac = Math.abs(this.speed) / tuning.maxSpeed;
       const turnAmount = steer * tuning.turnRate * Math.max(0.2, Math.min(1, speedFrac + 0.2)) * dt;
-      // forward = (sin(heading), cos(heading)) means DECREASING heading
-      // swings forward.x positive — steer > 0 (right/+X) must subtract.
-      // Caught by driving the prototype toward +X and watching it go -X.
       this.heading -= Math.sign(this.speed || 1) * turnAmount;
 
+      // No ground collider exists (or is needed) for this velocity-override
+      // controller — every distance/reach check below uses X/Z only, and the
+      // visual car mesh hardcodes y=0 when synced from the rigid body further
+      // down. Without zeroing Y here, world gravity free-falls the rigid body
+      // forever (harmless today, but bad physics hygiene over a long session).
       const forward = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
-      this.carRigid.setLinvel(
-        { x: forward.x * this.speed, y: this.carRigid.linvel().y, z: forward.z * this.speed },
-        true
-      );
+      this.carRigid.setLinvel({ x: forward.x * this.speed, y: 0, z: forward.z * this.speed }, true);
 
       const drain = ECONOMY.fuelDrainIdle + (throttle > 0 ? ECONOMY.fuelDrainAtFullThrottle : 0);
       this.fuel = Math.max(0, this.fuel - drain * dt);
 
       const pos = this.carRigid.translation();
 
-      if (!this.tollCharged && pos.z <= TRACK.tollZ && pos.x > 2) {
-        this.tollCharged = true;
-        this.tollPaid += ECONOMY.tollCost;
-        this.audio.playToll();
+      // Fare pickup/dropoff reached?
+      if (this.activeFareIndex < FARES.length) {
+        const target = this.currentTarget();
+        if (dist2D(pos.x, pos.z, target.x, target.z) < TARGET_REACH_RADIUS) {
+          if (this.fareStage === "to_pickup") {
+            this.fareStage = "to_dropoff";
+            this.audio.playPickup();
+          } else {
+            const fare = FARES[this.activeFareIndex];
+            this.cashEarned += fare.payout;
+            this.callbacks.onFareComplete(fare.label, fare.payout);
+            this.audio.playCashIn();
+            this.activeFareIndex += 1;
+            this.fareStage = "to_pickup";
+          }
+          this.updateBeaconForCurrentTarget();
+        }
       }
 
-      if (!this.gasStationResolved && pos.z <= TRACK.gasStationZ) {
+      // The actual fix: only offer the loan if fuel genuinely can't cover
+      // what's left. Reusing the gas-station landmark as the trigger point
+      // (narrative "pull in here"), but the decision math is real.
+      if (!this.gasStationResolved && pos.z <= CITY.gasStationZ) {
         this.gasStationResolved = true;
-        if (this.fuel < TRACK.gasStationFuelThreshold) {
+        const remaining = this.remainingShiftDistance(pos.x, pos.z);
+        const rangeLeft = this.fuel * VEHICLE.fuelRangePerPercent;
+        if (rangeLeft < remaining) {
           this.pauseCar();
           this.phase = "modal";
           this.audio.playLoanAlert();
@@ -624,46 +817,41 @@ export class LongHaulEngine {
         }
       }
 
-      // Engine note + tire noise react to real state every driving frame.
-      const inRoughZoneNow = pos.z < TRACK.laneSplitStartZ && pos.z > TRACK.laneSplitEndZ && pos.x < -2;
+      const inRoughZoneNow = false; // no rough-surface lane on the city layout yet
       this.audio.setEngineState(speedFrac, throttle > 0);
       this.audio.setSurfaceNoise(inRoughZoneNow, speedFrac);
 
       this.dustSpawnTimer -= dt;
-      const kickingUpDust = Math.abs(this.speed) > 4 && (inRoughZoneNow || Math.abs(steer) > 0.6);
+      const kickingUpDust = Math.abs(this.speed) > 10 && Math.abs(steer) > 0.6;
       if (kickingUpDust && this.dustSpawnTimer <= 0) {
         this.dustSpawnTimer = DUST_SPAWN_INTERVAL;
         this.spawnDust(pos.x, pos.z);
       }
 
-      if (pos.z <= TRACK.finishZ) {
+      if (this.activeFareIndex >= FARES.length) {
         this.pauseCar();
         this.phase = "finished";
         this.audio.playFinish();
         const elapsedSeconds = (now - this.startTime) / 1000;
         this.callbacks.onFinish({
           elapsedSeconds,
-          tollPaid: this.tollPaid,
+          cashEarned: this.cashEarned,
+          cashGoal: SHIFT.cashGoal,
+          faresCompleted: FARES.length,
+          faresTotal: FARES.length,
           tookLoan: this.trailerAttached,
           debt: this.debt,
         });
       }
 
-      // Rapier's default internal timestep is fixed (~1/60s) regardless of
-      // real elapsed time — without this, a throttled/variable frame rate
-      // makes simulated time lag real time. Match it to our measured dt.
       this.world.timestep = dt;
       this.world.step();
 
-      // This controller overwrites the rigid body's velocity every frame
-      // regardless of what the collision solver just computed from a wall
-      // contact, so a physical wall collider alone does not stop the car —
-      // confirmed by testing (it drove straight through at x=-20). Clamp
-      // track bounds directly instead of fighting the solver.
       const clampPos = this.carRigid.translation();
-      const edge = TRACK.halfWidth - 1.2;
-      if (Math.abs(clampPos.x) > edge) {
-        const clampedX = Math.sign(clampPos.x) * edge;
+      const corridorEdge = CITY.streetHalfWidth - 1.2;
+      const nearCrossStreet = Math.abs(clampPos.z - CITY.crossStreetZ) < CITY.crossStreetHalfWidth + 2;
+      if (!nearCrossStreet && Math.abs(clampPos.x) > corridorEdge) {
+        const clampedX = Math.sign(clampPos.x) * corridorEdge;
         this.carRigid.setTranslation({ x: clampedX, y: clampPos.y, z: clampPos.z }, true);
         const lv = this.carRigid.linvel();
         this.carRigid.setLinvel({ x: 0, y: lv.y, z: lv.z }, true);
@@ -674,16 +862,11 @@ export class LongHaulEngine {
     this.carGroup.position.set(t.x, 0, t.z);
     this.carGroup.rotation.y = this.heading;
 
-    // Body roll into turns + pitch under throttle/brake — arcade "juice"
-    // that makes the car feel alive even with a kinematic velocity-override
-    // controller instead of real suspension physics. Lerped so key taps
-    // (not sustained holds) don't make it snap.
     const targetBank = -steer * MAX_BANK;
     const targetPitch = throttle * MAX_PITCH;
     this.carTiltGroup.rotation.z += (targetBank - this.carTiltGroup.rotation.z) * 0.15;
     this.carTiltGroup.rotation.x += (targetPitch - this.carTiltGroup.rotation.x) * 0.15;
 
-    // Wheel spin, purely visual — radians per frame from real linear speed.
     const wheelSpin = (this.speed * dt) / WHEEL_RADIUS;
     for (const wheel of this.wheels) wheel.rotation.x += wheelSpin;
 
@@ -702,23 +885,30 @@ export class LongHaulEngine {
     this.camera.position.lerp(desiredCamPos, 0.12);
     this.camera.lookAt(t.x, 1, t.z);
 
-    // Speed-reactive FOV — a classic racing-game trick for conveying velocity
-    // that a static camera can't: widen the lens as speed climbs.
-    const maxSpeedForFov = VEHICLE.baseMaxSpeed;
-    const speedFracForFov = Math.min(1, Math.abs(this.speed) / maxSpeedForFov);
+    const speedFracForFov = Math.min(1, Math.abs(this.speed) / VEHICLE.baseMaxSpeed);
     const targetFov = BASE_FOV + speedFracForFov * MAX_FOV_BONUS;
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * 0.1;
       this.camera.updateProjectionMatrix();
     }
 
-    // Contact shadow and headlight track the car every frame regardless of
-    // phase, so they're still correct the instant a paused run resumes.
     this.contactShadow.position.set(t.x, 0.02, t.z);
     this.contactShadow.rotation.z = -this.heading;
     const forwardForLight = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
     this.headlightSpot.position.set(t.x, 0.9, t.z);
     this.headlightTarget.position.set(t.x + forwardForLight.x * 14, 0, t.z + forwardForLight.z * 14);
+
+    if (this.targetBeacon.visible) {
+      this.targetBeacon.position.y = 2.3 + Math.sin(now / 300) * 0.3;
+      this.targetBeacon.rotation.y += dt * 2;
+    }
+
+    for (const ped of this.pedestrians) {
+      const offset = Math.sin(now / 900 + ped.speedPhase) * ped.range;
+      if (ped.axis === "x") ped.group.position.x = ped.baseX + offset;
+      else ped.group.position.z = ped.baseZ + offset;
+      ped.group.position.y = Math.abs(Math.sin(now / 180 + ped.speedPhase)) * 0.04;
+    }
 
     this.updateDust(dt);
 
@@ -726,9 +916,11 @@ export class LongHaulEngine {
       speedMph: Math.round(Math.abs(this.speed) * 3.2),
       speedFrac: speedFracForFov,
       fuel: Math.round(this.fuel),
-      tollPaid: this.tollPaid,
+      cashEarned: this.cashEarned,
+      cashGoal: SHIFT.cashGoal,
       trailerAttached: this.trailerAttached,
       debt: this.debt,
+      fareInstruction: this.fareInstructionText(),
     });
 
     this.renderer.render(this.scene, this.camera);

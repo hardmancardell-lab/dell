@@ -131,6 +131,18 @@ export class LongHaulAudio {
     this.blip(880, 1320, 0.12, "triangle", 0.25);
   }
 
+  /** Passenger picked up — a short double-tap chime. */
+  playPickup() {
+    this.blip(660, 880, 0.08, "triangle", 0.22);
+    setTimeout(() => this.blip(880, 1100, 0.08, "triangle", 0.22), 90);
+  }
+
+  /** Fare paid out — a quick "cha-ching," distinct from the bigger end-of-shift fanfare. */
+  playCashIn() {
+    this.blip(784, 1047, 0.1, "square", 0.2);
+    setTimeout(() => this.blip(1047, 1568, 0.12, "square", 0.2), 70);
+  }
+
   playLoanAlert() {
     if (!this.ctx) return;
     this.blip(440, 330, 0.18, "square", 0.22);
