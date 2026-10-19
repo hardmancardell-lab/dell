@@ -1,5 +1,6 @@
 "use client";
 
+import { CALL_COLOR, PUT_COLOR, CallPutLegend } from "./option-colors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { OPTION_FLOW_SYMBOLS, feedBadgeText, feedSummary, loggingStatus, sessionDateET } from "@/lib/agents/trading-agent/skills/option-flow-snapshot";
 import type { OptionFlowRow } from "@/lib/agents/trading-agent/skills/option-flow-snapshot";
@@ -19,10 +20,13 @@ interface ApiResponse {
   serverTime?: number;
 }
 
-// Colours chosen to stay apart for colour-blind viewers and to carry no direction: blue = by volume, gold = by premium, teal = new-volume bars.
+// Call/put colours: calls are teal, puts are amber, shared by every options view (option-colors.tsx). They are used only where a
+// call column or a put column is named (the raw table). The chart series below are put/call RATIOS, so they must not look like
+// either side: blue = by volume (solid), white dashed = by premium, grey bars = new volume. Dash and line weight carry the
+// difference as well as colour.
 const VOL_COLOR = "#3987e5";
-const PREM_COLOR = "#e0b020";
-const BAR_COLOR = "#34a89f";
+const PREM_COLOR = "var(--text-0)";
+const BAR_COLOR = "var(--text-2)";
 
 const OPEN_MIN = 570; // 9:30 ET
 const CLOSE_MIN = 960; // 16:00 ET
@@ -157,12 +161,12 @@ function Charts({ rows, hover, setHover }: { rows: OptionFlowRow[]; hover: numbe
       <text x={left} y={16} fontSize={12} fill="var(--text-0)">Cumulative put/call, day to date</text>
       <g fontSize={11.5}>
         <line x1={left + 232} x2={left + 252} y1={12} y2={12} stroke={VOL_COLOR} strokeWidth={2.2} /><text x={left + 257} y={16} fill="var(--text-1)">by volume</text>
-        <line x1={left + 330} x2={left + 350} y1={12} y2={12} stroke={PREM_COLOR} strokeWidth={2.2} /><text x={left + 355} y={16} fill="var(--text-1)">by premium</text>
+        <line x1={left + 330} x2={left + 350} y1={12} y2={12} stroke={PREM_COLOR} strokeWidth={2.2} strokeDasharray="5 3" /><text x={left + 355} y={16} fill="var(--text-1)">by premium</text>
       </g>
       <text x={left} y={P2.top - 10} fontSize={12} fill="var(--text-0)">Put/call of only the new volume in each interval</text>
       <g fontSize={11.5}>
         <rect x={left + 308} y={P2.top - 19} width={10} height={10} fill={BAR_COLOR} opacity={0.85} /><text x={left + 322} y={P2.top - 10} fill="var(--text-1)">new volume</text>
-        <line x1={left + 400} x2={left + 420} y1={P2.top - 14} y2={P2.top - 14} stroke="var(--text-1)" strokeWidth={1.4} /><text x={left + 425} y={P2.top - 10} fill="var(--text-1)">cumulative by volume</text>
+        <line x1={left + 400} x2={left + 420} y1={P2.top - 14} y2={P2.top - 14} stroke={VOL_COLOR} strokeWidth={1.8} /><text x={left + 425} y={P2.top - 10} fill="var(--text-1)">cumulative by volume</text>
         <rect x={left + 555} y={P2.top - 19} width={10} height={10} fill="none" stroke={BAR_COLOR} strokeDasharray="2 2" /><text x={left + 569} y={P2.top - 10} fill="var(--text-1)">flagged (volume dropped)</text>
       </g>
       <text x={left} y={P3.top - 10} fontSize={12} fill="var(--text-0)">Spot (underlying last price at each snapshot)</text>
@@ -187,7 +191,7 @@ function Charts({ rows, hover, setHover }: { rows: OptionFlowRow[]; hover: numbe
       {runs.map((run, i) => (
         <g key={i}>
           <path d={line(run, (r) => r.pc_volume, y1)} fill="none" stroke={VOL_COLOR} strokeWidth={2} strokeLinejoin="round" />
-          <path d={line(run, (r) => r.pc_premium, y1)} fill="none" stroke={PREM_COLOR} strokeWidth={2} strokeLinejoin="round" />
+          <path d={line(run, (r) => r.pc_premium, y1)} fill="none" stroke={PREM_COLOR} strokeWidth={2} strokeDasharray="6 3" strokeLinejoin="round" />
           {run.length === 1 && run[0].row.pc_volume !== null && <circle cx={run[0].x} cy={y1(run[0].row.pc_volume)} r={2.5} fill={VOL_COLOR} />}
         </g>
       ))}
@@ -214,7 +218,7 @@ function Charts({ rows, hover, setHover }: { rows: OptionFlowRow[]; hover: numbe
         );
       })}
       {runs.map((run, i) => (
-        <path key={i} d={line(run, (r) => r.pc_volume, y2)} fill="none" stroke="var(--text-1)" strokeWidth={1.4} strokeLinejoin="round" />
+        <path key={i} d={line(run, (r) => r.pc_volume, y2)} fill="none" stroke={VOL_COLOR} strokeWidth={1.8} strokeLinejoin="round" />
       ))}
 
       {/* Panel 3 */}
@@ -430,16 +434,17 @@ export function OptionFlowTab() {
             <div className="jv-card">
               <div className="jv-br-b" />
               <div className="text-sm font-medium mb-2" style={{ color: "var(--text-0)" }}>Raw rows, {symbol} {viewing}</div>
+              <CallPutLegend className="mb-2" />
               <div className="overflow-auto" style={{ maxHeight: 420 }}>
                 <table className="jv-table">
                   <thead>
                     <tr>
                       <th>Fetched (ET)</th><th>Bucket</th>
                       <th className="jv-num">Spot</th>
-                      <th className="jv-num">Call vol</th><th className="jv-num">Put vol</th>
+                      <th className="jv-num" style={{ color: CALL_COLOR }}>Call vol</th><th className="jv-num" style={{ color: PUT_COLOR }}>Put vol</th>
                       <th className="jv-num">P/C vol</th><th className="jv-num">P/C prem</th><th className="jv-num">P/C OI</th>
-                      <th className="jv-num">New calls</th><th className="jv-num">New puts</th><th className="jv-num">P/C new</th>
-                      <th className="jv-num">Call@ask</th><th className="jv-num">Call@bid</th><th className="jv-num">Put@ask</th><th className="jv-num">Put@bid</th><th className="jv-num">Unclass.</th>
+                      <th className="jv-num" style={{ color: CALL_COLOR }}>New calls</th><th className="jv-num" style={{ color: PUT_COLOR }}>New puts</th><th className="jv-num">P/C new</th>
+                      <th className="jv-num" style={{ color: CALL_COLOR }}>Call@ask</th><th className="jv-num" style={{ color: CALL_COLOR }}>Call@bid</th><th className="jv-num" style={{ color: PUT_COLOR }}>Put@ask</th><th className="jv-num" style={{ color: PUT_COLOR }}>Put@bid</th><th className="jv-num">Unclass.</th>
                       <th className="jv-num">IV near</th><th className="jv-num">IV next</th>
                       <th>Flags</th>
                     </tr>

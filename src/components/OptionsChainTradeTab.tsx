@@ -7,6 +7,8 @@ import { PaperOrderForm, type PrefillOption } from "./PaperOrderForm";
 import { mapStrategyToLegs, type StrategyLegPrefill } from "@/lib/agents/trading-agent/skills/strategy-order-mapper";
 import { summarizeStrategyPayoff, type PayoffLeg } from "@/lib/agents/trading-agent/skills/option-payoff";
 import type { MarketOptionContract, MarketOptionsChain } from "@/lib/data/market-data-types";
+// Calls are teal and puts are amber everywhere in the options views (see option-colors.tsx for why); red is kept for loss.
+import { CALL_COLOR, PUT_COLOR, CallPutLegend } from "./option-colors";
 
 const STRATEGY_NAMES = [
   "Covered Call",
@@ -244,11 +246,12 @@ export function OptionsChainTradeTab({ initialTicker }: { initialTicker?: string
       {rows.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
           <div className="overflow-x-auto">
+            <CallPutLegend className="mb-2" />
             <table className="jv-table">
               <thead>
                 <tr>
                   {["Call Bid", "Call Ask", "Call OI", "Call Vol", "Call Δ", "", "Strike", "", "Put Δ", "Put Vol", "Put OI", "Put Ask", "Put Bid"].map((h, i) => (
-                    <th key={`${h}-${i}`} className="text-center">
+                    <th key={`${h}-${i}`} className="text-center" style={h.startsWith("Call") ? { color: CALL_COLOR } : h.startsWith("Put") ? { color: PUT_COLOR } : undefined}>
                       {h}
                     </th>
                   ))}
@@ -271,7 +274,8 @@ export function OptionsChainTradeTab({ initialTicker }: { initialTicker?: string
                           <button
                             onClick={() => setSelected({ right: "call", contract: row.call! })}
                             className="text-xs px-2 py-1"
-                            style={{ border: "1px solid var(--signal)", color: "var(--signal)" }}
+                            aria-label={`Trade the ${row.strike} call`}
+                            style={{ border: `1px solid ${CALL_COLOR}`, color: CALL_COLOR }}
                           >
                             Trade
                           </button>
@@ -280,22 +284,23 @@ export function OptionsChainTradeTab({ initialTicker }: { initialTicker?: string
                       <td className="text-center jv-num font-medium" style={{ color: "var(--text-0)" }}>
                         {row.strike}
                       </td>
-                      <td className={`text-center ${putItm ? "jv-chain-itm" : ""}`}>
+                      <td className={`text-center ${putItm ? "jv-chain-itm-put" : ""}`}>
                         {row.put && (
                           <button
                             onClick={() => setSelected({ right: "put", contract: row.put! })}
                             className="text-xs px-2 py-1"
-                            style={{ border: "1px solid var(--danger)", color: "var(--danger)" }}
+                            aria-label={`Trade the ${row.strike} put`}
+                            style={{ border: `1px solid ${PUT_COLOR}`, color: PUT_COLOR }}
                           >
                             Trade
                           </button>
                         )}
                       </td>
-                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{fmt(row.put?.delta, 3)}</td>
-                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{row.put?.totalVolume ?? "—"}</td>
-                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{row.put?.openInterest ?? "—"}</td>
-                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{fmt(row.put?.ask)}</td>
-                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm" : ""}`}>{fmt(row.put?.bid)}</td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm-put" : ""}`}>{fmt(row.put?.delta, 3)}</td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm-put" : ""}`}>{row.put?.totalVolume ?? "—"}</td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm-put" : ""}`}>{row.put?.openInterest ?? "—"}</td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm-put" : ""}`}>{fmt(row.put?.ask)}</td>
+                      <td className={`text-center jv-num ${putItm ? "jv-chain-itm-put" : ""}`}>{fmt(row.put?.bid)}</td>
                     </tr>
                   );
                 })}

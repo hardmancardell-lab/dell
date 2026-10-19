@@ -447,6 +447,8 @@ body.jv-app-bg {
    as .jv-badge.c-signal; the ATM/current-price row gets the verdict-amber
    accent already used elsewhere for "pay attention here" panels. */
 .jarvis .jv-chain-itm { background: rgba(79, 232, 208, 0.05); }
+/* Put side of the chain uses the put colour (verdict amber), matching option-colors.tsx. */
+.jarvis .jv-chain-itm-put { background: rgba(240, 168, 104, 0.06); }
 .jarvis .jv-chain-atm td {
   border-top: 2px solid var(--verdict);
   border-bottom: 2px solid var(--verdict);

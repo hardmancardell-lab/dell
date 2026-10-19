@@ -6,6 +6,7 @@ import { DEALER_SIGN_LABELS, type DealerSignMode } from "@/lib/agents/trading-ag
 import { useDealerSign } from "@/lib/agents/trading-agent/dealer-sign-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { ResearchNotice } from "./ResearchNotice";
+import { CALL_COLOR, PUT_COLOR, CallPutLegend } from "./option-colors";
 
 type View = "net" | "call" | "put" | "gross";
 type Scale = "shared" | "each";
@@ -33,10 +34,13 @@ const SCALES: [Scale, string][] = [
 /** Strike-range choices as a share of spot, shown to the user as dollars either side of spot. */
 const RANGE_FRACTIONS = [0.04, 0.05, 0.08, 0.1, 0.2];
 
-// Two colours that stay apart for colour-blind viewers: blue for calls, orange for puts, teal for the combined view.
-const CALL_COLOR = "#3987e5";
-const PUT_COLOR = "#d95926";
-const GROSS_COLOR = "#34a89f";
+// Colours. Calls are teal and puts are amber, the pair shared by every options view (see option-colors.tsx).
+// The Net view is NOT calls versus puts: it is the sign of dealer gamma, and the sign switch flips it. So it gets its own
+// pair, kept off the call/put colours: steadying (dealers long gamma) is light grey-blue, destabilising (short) is danger red.
+// Gross, which adds both sides, is a neutral grey-blue. All Jarvis tokens; nothing here is a new hex value.
+const NET_LONG_COLOR = "var(--text-1)";
+const NET_SHORT_COLOR = "var(--danger)";
+const GROSS_COLOR = "var(--text-2)";
 
 const niceRange = (v: number) => (v >= 5 ? Math.round(v) : Math.round(v * 2) / 2);
 const money = (m: number) => {
@@ -77,7 +81,7 @@ function Seg<T extends string | number>({ label, items, value, onChange }: { lab
 }
 
 function baseColor(view: View, v: number): string {
-  if (view === "net") return v >= 0 ? CALL_COLOR : PUT_COLOR;
+  if (view === "net") return v >= 0 ? NET_LONG_COLOR : NET_SHORT_COLOR;
   return view === "call" ? CALL_COLOR : view === "put" ? PUT_COLOR : GROSS_COLOR;
 }
 
@@ -324,8 +328,9 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
               {view === "net" ? (
                 <>
                   <span>negative gamma (dealers short)</span>
-                  <i style={{ display: "inline-block", height: 10, width: 140, borderRadius: 2, background: `linear-gradient(90deg, ${PUT_COLOR}, var(--ink-800), ${CALL_COLOR})` }} />
+                  <i style={{ display: "inline-block", height: 10, width: 140, borderRadius: 2, background: `linear-gradient(90deg, ${NET_SHORT_COLOR}, var(--ink-800), ${NET_LONG_COLOR})` }} />
                   <span>positive gamma (dealers long)</span>
+                  <span style={{ color: "var(--text-2)" }}>&middot; in this view colour is the dealer sign, not calls or puts</span>
                 </>
               ) : (
                 <>
@@ -335,6 +340,7 @@ export function GammaHeatMapTab({ defaultTicker = "SPY" }: { defaultTicker?: str
                 </>
               )}
             </div>
+            {(view === "call" || view === "put") && <CallPutLegend className="mb-2" />}
             <HeatMap data={data} view={view} sign={sign} windowDays={windowDays} scale={scale} rangeDollars={rangeDollars} />
             <p className="text-xs mt-3" style={{ color: "var(--text-2)" }}>
               Units: dollars of stock a 1% move in {data.underlying} would require hedging, per strike and date, from open interest. Colours use a
