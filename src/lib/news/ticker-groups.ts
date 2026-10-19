@@ -1,6 +1,6 @@
 import { extractHeadlines } from "@/lib/agents/trading-agent/skills/global-financial-news";
 import type { AssetClass } from "@/lib/agents/trading-agent/types";
-import { FEEDS, matchesKeywords, planNews, type FeedDef } from "./category-map";
+import { FEEDS, isMarketRelevant, matchesKeywords, planNews, type FeedDef } from "./category-map";
 import {
   GROUP_ABOUT_TITLE,
   GROUP_MACRO_TITLE,
@@ -59,8 +59,8 @@ async function fetchFeed(def: FeedDef): Promise<FeedFetch> {
   }
 }
 
-function statusFor(def: FeedDef, r: FeedFetch, count: number): SourceStatus {
-  return { name: def.name, what: def.what, ok: r.error === null, count, note: r.error ?? (count === 0 ? "No headline in this feed named the asset right now." : null) };
+function statusFor(def: FeedDef, r: FeedFetch, count: number, emptyNote = "No headline in this feed named the asset right now."): SourceStatus {
+  return { name: def.name, what: def.what, ok: r.error === null, count, note: r.error ?? (count === 0 ? emptyNote : null) };
 }
 
 function keysOf(items: NewsItem[]): { urls: Set<string>; titles: Set<string> } {
@@ -97,18 +97,22 @@ async function build(displaySymbol: string, assetClass: AssetClass, includeBackg
   categoryDefs.forEach((def, i) => {
     const r = categoryR[i];
     let matched = 0;
+    let kept = 0;
     for (const it of r.items) {
       if (plan.categoryIsAbout || matchesKeywords(it.title, plan.keywords)) {
         aboutExtra.push(it);
         matched += 1;
-      } else {
+      } else if (isMarketRelevant(it.title, plan.topic)) {
         macroCategory.push(it);
+        kept += 1;
+      } else {
+        // Off topic (not about the asset, markets, money, rates, the economy or regulation): dropped from both groups.
       }
     }
     if (plan.categoryIsAbout) {
       aboutSources.push(statusFor(def, r, r.items.length));
     } else {
-      macroSources.push(statusFor(def, r, r.items.length));
+      macroSources.push(statusFor(def, r, kept, "No market or macro headline in this feed right now."));
       if (plan.keywords.length > 0) aboutSources.push(statusFor(def, r, matched));
     }
   });

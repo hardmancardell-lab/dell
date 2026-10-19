@@ -192,6 +192,94 @@ const CURRENCY_WORDS: Record<string, string[]> = {
   MXN: ["peso"],
 };
 
+/**
+ * RELEVANCE RULE for the "Market and macro" group (added 2026-10-19).
+ *
+ * Why: several category feeds are the whole-site feed of an outlet, so they carry stories that have nothing to do with
+ * markets (a crypto site posting about a pink diamond or a map app). Those showed up under "Market and macro".
+ *
+ * The rule, in plain words. A headline from a CATEGORY feed that does not name the asset stays in the group only when it
+ * contains at least one word from MARKET_MACRO_TERMS (markets, money, rates, the economy, regulation and law) or one
+ * word from the topic's own list in TOPIC_TERMS (for example "bitcoin" or "stablecoin" for crypto, "crude" for energy).
+ * Everything else is dropped from both groups. The broad business outlets in MACRO_FEED_IDS are never filtered, because
+ * they are the broad market and macro news by design.
+ *
+ * It is a plain word list on purpose: anyone can read it, test it and change it. A term ending in "*" matches any word
+ * that starts with it ("regulat*" matches regulation, regulators, regulatory). Other terms must match a whole word.
+ * Words that are common in unrelated stories (price, record, bill, deal, sale, million) are left out on purpose.
+ */
+export const MARKET_MACRO_TERMS: string[] = [
+  // markets and trading
+  "market", "markets", "stock", "stocks", "equit*", "shares", "trader*", "trading", "invest*", "fund", "funds", "etf", "etfs", "ipo", "earnings",
+  "futures", "options", "volatility", "rally", "rallies", "selloff", "sell-off", "slump", "plunge", "wall street", "hedge fund*", "liquidity",
+  // rates, money and the economy
+  "rate", "rates", "yield", "yields", "bond", "bonds", "treasury", "treasuries", "inflation", "deflation", "fed", "federal reserve", "fomc",
+  "powell", "central bank*", "ecb", "boj", "bank of england", "bank of japan", "bank", "banks", "banking", "economy", "economic*", "economist*",
+  "gdp", "jobs", "payroll*", "unemployment", "recession", "tariff*", "trade war", "sanction*", "dollar", "currency", "currencies", "debt",
+  "pmi", "manufacturing", "factory", "retail sales", "industrial production", "eurozone", "budget", "stimulus", "cpi", "deficit", "trade deficit",
+  "financing", "loan*", "main events", "economic calendar", "price index", "import price*", "services sector", "trade balance",
+  // commodity and currency prices are market news wherever they appear
+  "commodit*", "oil", "crude", "natural gas", "gold", "silver", "copper", "forex", "fx", "euro", "yen", "pound", "sterling", "franc", "yuan", "lira", "rupee", "usd", "eur", "gbp", "jpy", "price forecast",
+  // regulation and law
+  "regulat*", "sec", "cftc", "lawmaker*", "congress", "senate", "legislat*", "lawsuit*", "court", "tax", "taxes", "compliance", "sec chair",
+];
+
+/** Words that make a headline on-topic for one topic, on top of MARKET_MACRO_TERMS. */
+export const TOPIC_TERMS: Record<Topic, string[]> = {
+  crypto: [
+    "crypto*", "bitcoin", "btc", "ethereum", "ether", "eth", "blockchain", "token", "tokens", "tokeniz*", "stablecoin*", "defi", "web3", "altcoin*",
+    "memecoin*", "nft", "nfts", "on-chain", "onchain", "solana", "xrp", "ripple", "dogecoin", "cardano", "binance", "coinbase", "airdrop*", "halving", "satoshi",
+    "zcash", "zec", "mica", "esma", "wallet*", "hodl*", "exchange", "exchanges", "chain", "kraken", "bitget", "bingx", "bybit", "okx", "tether", "usdt", "usdc",
+    "staking", "validator*", "dividend*",
+  ],
+  energy: [
+    "oil", "crude", "gas", "lng", "opec", "energy", "power", "electricity", "pipeline*", "refiner*", "refining", "drilling", "rig", "rigs", "shale",
+    "petrol*", "fuel", "diesel", "gasoline", "uranium", "nuclear", "coal", "solar", "wind", "renewable*", "grid", "brent", "wti", "barrel*", "exxon",
+    "chevron", "shell", "bp", "saudi", "offshore", "emissions", "utility", "utilities", "hurricane", "propane", "load", "ercot", "pjm", "hormuz", "iran", "tanker*", "shipping", "data center*", "data centre*",
+  ],
+  metals: [
+    "gold", "silver", "copper", "platinum", "palladium", "nickel", "zinc", "lithium", "cobalt", "uranium", "iron ore", "steel", "aluminium", "aluminum",
+    "metal*", "mine", "mines", "mining", "miner", "miners", "ore", "smelter*", "bullion", "ounce*", "rare earth*", "xau", "xag", "tin", "graphite", "vanadium", "mineral*", "potash", "chrome", "rio tinto", "anglo american", "de beers", "bhp", "glencore",
+  ],
+  agriculture: [
+    "crop*", "grain*", "corn", "wheat", "soy*", "farm*", "agricultur*", "harvest*", "planting", "livestock", "cattle", "hog", "hogs", "dairy", "fertilizer*",
+    "drought", "weather", "usda", "food", "ethanol", "rice", "cotton", "sugar", "coffee", "cocoa", "beef", "pork", "milk", "rural", "yield", "acre*", "tariff*",
+  ],
+  currency: [
+    "forex", "fx", "euro", "eurozone", "yen", "pound", "sterling", "franc", "yuan", "renminbi", "aussie", "loonie", "kiwi", "peso", "usd", "eur", "gbp", "jpy",
+    "cad", "aud", "nzd", "chf", "cny", "boe", "snb", "rba", "rbnz", "boc", "pboc", "dxy", "gold", "silver", "xau", "oil", "lira", "rupee", "rand", "krona", "krone", "monetary",
+  ],
+  rates: [],
+  bond: [],
+  "equity-index": [],
+  stock: [],
+  unknown: [],
+};
+
+/** Unknown-topic maps (fxstreet, mining, oilprice) use the energy, metals and currency lists together. */
+function topicTermsFor(topic: Topic): string[] {
+  if (topic === "unknown") return [...TOPIC_TERMS.energy, ...TOPIC_TERMS.metals, ...TOPIC_TERMS.currency];
+  return TOPIC_TERMS[topic] ?? [];
+}
+
+/** Whole-word match, or prefix match for a term ending in "*". Case-insensitive. */
+export function matchesAnyTerm(title: string, terms: string[]): boolean {
+  const t = title.toLowerCase();
+  return terms.some((term) => {
+    const stem = term.endsWith("*");
+    const esc = (stem ? term.slice(0, -1) : term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^a-z0-9])${esc}${stem ? "" : "($|[^a-z0-9])"}`, "i").test(t);
+  });
+}
+
+/**
+ * Whether a category-feed headline that does not name the asset is market, finance, regulation or economy news for the
+ * topic. False means the story is off topic and is dropped. See the RELEVANCE RULE above.
+ */
+export function isMarketRelevant(title: string, topic: Topic): boolean {
+  return matchesAnyTerm(title, MARKET_MACRO_TERMS) || matchesAnyTerm(title, topicTermsFor(topic));
+}
+
 /** Plain OCC option symbol, for example AAPL261218C00200000. */
 const OCC_OPTION_RE = /^([A-Z.]{1,6})\d{6}[CP]\d{8}$/;
 

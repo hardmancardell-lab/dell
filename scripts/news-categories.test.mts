@@ -333,3 +333,110 @@ test("reader-facing copy of the two-group view is at or below grade 8", async ()
   assert.deepEqual(bad.map((b) => `${b.fk.toFixed(1)} ${b.t.slice(0, 70)}`), []);
   assert.ok(readingStats(texts.join(" ")).fk <= TARGET_GRADE, `whole copy grade ${readingStats(texts.join(" ")).fk.toFixed(2)}`);
 });
+
+// ---- Relevance rule for "Market and macro" (added 2026-10-19) ----
+
+test("relevance rule: off-topic stories from category feeds are dropped, market and regulation stories are kept", () => {
+  const R = (t: string, topic = "crypto") => CM.isMarketRelevant(t, topic);
+  // Real off-topic headlines seen in crypto feeds on 2026-10-19, plus the pink-diamond example from the owner.
+  for (const t of [
+    "MapQuest Now Shows Drivers Where Flock Cameras Are Watching",
+    "Rare pink diamond sells at auction for a record sum",
+    "Tesla Roadster Rocket Is the Cool 'Flying' Car You Can’t Have",
+    "Hackers Jailbreak iPhone 18 Pro on Stage, and It Survives a Reboot",
+    "Romanian F-16s shoot down two drones over Black Sea, NATO council to meet Tuesday",
+  ]) assert.equal(R(t), false, t);
+  for (const t of [
+    "Crypto vault deposits top $10 billion as lending risks draw regulatory scrutiny", // stem: regulat*
+    "SEC delays decision on a spot Solana fund",
+    "JPMorgan brings JPM Coin, representing dollar deposits, to Ethereum",
+    "BingX, YouHodler added to ESMA MiCA register in latest update",
+    "Fed minutes show split over pace of rate cuts",
+    "Stablecoin bill clears Senate committee",
+  ]) assert.equal(R(t), true, t);
+});
+
+test("relevance rule: whole-word matching, stems only where marked, topic lists apply to their topic", () => {
+  assert.equal(CM.matchesAnyTerm("A secret recipe for sourdough", ["sec"]), false, "sec must not match secret");
+  assert.equal(CM.matchesAnyTerm("SEC sues an exchange", ["sec"]), true);
+  assert.equal(CM.matchesAnyTerm("New regulatory framework", ["regulat*"]), true, "a trailing * is a prefix match");
+  assert.equal(CM.matchesAnyTerm("Marketing team hires a chef", ["market*"]), true, "market* is a prefix, so it also matches marketing");
+  assert.equal(CM.matchesAnyTerm("Marketing team hires a chef", ["market"]), false);
+  assert.equal(CM.matchesAnyTerm("The ether of the universe", ["eth"]), false);
+  assert.equal(CM.matchesAnyTerm("Fed holds, yields climb", ["yields"]), true);
+  // topic lists: a crypto word is on topic for crypto but a plain farm story is not market news for crypto
+  assert.equal(CM.isMarketRelevant("Zcash developers plan a fix for private swaps", "crypto"), true);
+  assert.equal(CM.isMarketRelevant("Zcash developers plan a fix for private swaps", "agriculture"), false);
+  assert.equal(CM.isMarketRelevant("Corn harvest runs ahead of last year", "agriculture"), true);
+  assert.equal(CM.isMarketRelevant("Strait of Hormuz tanker attacks raise shipping costs", "energy"), true);
+  assert.equal(CM.isMarketRelevant("Silver miners lift output at a Peru mine", "metals"), true);
+  assert.equal(CM.isMarketRelevant("Turkish Lira: Policy pause and MSCI risk weigh", "currency"), true);
+  assert.equal(CM.isMarketRelevant("Anything at all", "unknown"), false, "no term, no match");
+  // every list is real words, no empty strings, no duplicates inside one list
+  for (const [name, list] of Object.entries({ MARKET_MACRO_TERMS: CM.MARKET_MACRO_TERMS, ...CM.TOPIC_TERMS }) as [string, string[]][]) {
+    assert.ok(list.every((w) => w.trim().length >= 2 && w === w.toLowerCase()), `${name}: terms are lower case words`);
+    assert.equal(new Set(list).size, list.length, `${name}: no duplicate terms`);
+  }
+});
+
+test("Market and macro drops off-topic category-feed stories for crypto, metals, energy and currency, but never filters the broad outlets", async () => {
+  H.clearNewsHubCaches();
+  handlers = mappedFeeds(
+    {
+      coindesk: [fi("Bitcoin slips as ETF outflows grow for third day", 1), fi("Ether fund inflows climb as regulators watch stablecoins", 2)],
+      decrypt: [fi("MapQuest Now Shows Drivers Where Flock Cameras Are Watching", 3), fi("Rare pink diamond sells at auction for a record sum", 4)],
+      cointelegraph: [fi("Chinese suspect in $75M international crime network arrested in Bangkok", 5)],
+      // Broad outlets are not filtered: a story with none of the rule's words still shows.
+      cnbc: [fi("Evercore names two co presidents in a shake up", 6)],
+    },
+    [yahoo([]), secOff]
+  );
+  const g = await TG.getTickerNewsGroups("BTC-USD", "crypto");
+  const all = [...g.about.items, ...g.macro.items].map((i: any) => i.title).join(" | ");
+  assert.ok(!/MapQuest|pink diamond|crime network/.test(all), "off-topic crypto-site stories are in neither group: " + all);
+  assert.ok(g.macro.items.some((i: any) => /Ether fund inflows/.test(i.title)), "a market and regulation story stays");
+  assert.ok(g.macro.items.some((i: any) => /Evercore/.test(i.title)), "the broad outlet is never filtered");
+  const dec = g.macro.sources.find((s: any) => s.name === "Decrypt");
+  assert.ok(dec && dec.ok === true && dec.count === 0 && /No market or macro headline/.test(dec.note), "a feed with nothing relevant is working with zero, not down: " + JSON.stringify(dec));
+  const cd = g.macro.sources.find((s: any) => s.name === "CoinDesk");
+  assert.equal(cd.count, 1, "count is the number kept in the macro group");
+
+  H.clearNewsHubCaches();
+  handlers = mappedFeeds(
+    {
+      mining: [fi("Gold hits a record as investors seek safety", 1), fi("Copper-hungry US buyers circle Ivanhoe Electric mine", 2), fi("Lawrence Tech launches $100,000 innovation challenge for students", 3)],
+      fxstreet: [fi("Oil: High prices seen easing only gradually – Commerzbank", 4), fi("Indian Rupee extends last week’s outperformance into the new week", 5)],
+    },
+    [yahoo([])]
+  );
+  const gold = await TG.getTickerNewsGroups("GC", "future");
+  const goldMacro = gold.macro.items.map((i: any) => i.title);
+  assert.ok(goldMacro.some((t: string) => /Copper-hungry/.test(t)) && goldMacro.some((t: string) => /Oil: High prices/.test(t)));
+  assert.ok(!goldMacro.some((t: string) => /Lawrence Tech/.test(t)), "off-topic mining-site story dropped");
+
+  H.clearNewsHubCaches();
+  handlers = mappedFeeds(
+    {
+      oilprice: [fi("America Needs 48,000 Tons of Rare Earth Magnets. It Only Makes 300", 1), fi("Qatari LNG cargo heads through Red Sea to Europe", 2)],
+      eia: [fi("PJM, ERCOT, and SWPP all set peak load records this summer", 3)],
+    },
+    [yahoo([])]
+  );
+  const oil = await TG.getTickerNewsGroups("CL", "future");
+  const oilMacro = oil.macro.items.map((i: any) => i.title);
+  assert.ok(oilMacro.some((t: string) => /LNG/.test(t)) && oilMacro.some((t: string) => /ERCOT/.test(t)));
+  assert.ok(!oilMacro.some((t: string) => /Rare Earth Magnets/.test(t)));
+
+  H.clearNewsHubCaches();
+  handlers = mappedFeeds(
+    {
+      forexlive: [fi("US September import price index +1.1% vs +0.8% expected", 1), fi("Romanian F-16s shoot down two drones over Black Sea, NATO council to meet Tuesday", 2)],
+      fxstreet: [fi("Euro firms as ECB signals patience on cuts", 3)],
+    },
+    [yahoo([])]
+  );
+  const fx = await TG.getTickerNewsGroups("EUR/USD", "forex");
+  const fxAll = [...fx.about.items, ...fx.macro.items].map((i: any) => i.title);
+  assert.ok(fxAll.some((t: string) => /import price index/.test(t)));
+  assert.ok(!fxAll.some((t: string) => /Romanian F-16s/.test(t)));
+});
