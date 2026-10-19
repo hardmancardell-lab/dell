@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { memo, useMemo, useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { AnchoredVolumeProfileResponse } from "@/lib/agents/trading-agent/skills/anchored-volume-profile-service";
@@ -427,6 +428,9 @@ export function AnchoredVolumeProfileTab({ defaultTicker = "SPY" }: { defaultTic
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca 5-minute bars (IEX feed, one exchange) for stocks; Coinbase for crypto" hypothetical={false}>
+        Volume at each price is estimated by spreading every bar across its high-to-low range. A level shows where trading happened, not where price will go.
+      </ResearchNotice>
       <p className="jv-lede">
         Shows where volume actually traded over a chosen stretch of 5-minute bars: the busiest price (point of control), the band holding 70% of
         the volume (value area), and the peaks and troughs of the profile (high- and low-volume nodes). Pick the anchor, then read the levels

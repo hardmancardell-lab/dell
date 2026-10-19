@@ -29,6 +29,8 @@ export interface ResearchNoticeProps {
   testsRun?: number | null;
   /** Set for backtests and other hypothetical results (adds the hypothetical-performance sentence). */
   hypothetical?: boolean;
+  /** Set for a view that uses no live market data (written analysis, a calculator). Replaces the as-of and delayed-prices wording, which would not be true there. */
+  noLiveData?: boolean;
   /** Any extra sentence (a study-specific caveat). */
   children?: ReactNode;
 }
@@ -41,7 +43,7 @@ export function PaperBadge({ className = "" }: { className?: string }) {
   );
 }
 
-export function ResearchNotice({ source, asOf, delayed, sampleSize, testsRun, hypothetical = true, children }: ResearchNoticeProps) {
+export function ResearchNotice({ source, asOf, delayed, sampleSize, testsRun, hypothetical = true, noLiveData = false, children }: ResearchNoticeProps) {
   const asOfText = fmtAsOf(asOf);
   return (
     <aside className="jv-card" style={{ borderColor: "var(--line-bright)" }} aria-label="Research notice" data-testid="research-notice">
@@ -52,11 +54,20 @@ export function ResearchNotice({ source, asOf, delayed, sampleSize, testsRun, hy
         Past performance does not predict future results.
       </p>
       <p className="text-xs" style={{ color: "var(--text-2)", margin: "6px 0 0" }}>
-        {source ? `Data: ${source}. ` : ""}
-        {asOfText
-          ? `As of ${asOfText}. `
-          : "Data is pulled when you run this view and is as of the latest completed bar the data source returned; it is not a live feed. "}
-        {delayed ? "Some prices are delayed. " : "Prices may be delayed. "}
+        {noLiveData ? (
+          <>
+            {source ? `Based on: ${source}. ` : ""}
+            This view uses no live market data, so it has no as-of time and does not change with the market.
+          </>
+        ) : (
+          <>
+            {source ? `Data: ${source}. ` : ""}
+            {asOfText
+              ? `As of ${asOfText}. `
+              : "Data is pulled when you run this view and is as of the latest completed bar the data source returned; it is not a live feed. "}
+            {delayed ? "Some prices are delayed. " : "Prices may be delayed. "}
+          </>
+        )}
       </p>
       {(typeof sampleSize === "number" || (typeof testsRun === "number" && testsRun > 1)) && (
         <p className="text-xs" style={{ color: "var(--text-2)", margin: "6px 0 0" }}>

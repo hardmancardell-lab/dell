@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useCallback, useEffect, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
@@ -72,6 +73,9 @@ export function CryptoWatchlistTab() {
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Coinbase public market data (no key)" hypothetical={false}>
+        Last price, with 24-hour and 7-day changes measured over rolling windows that end now.
+      </ResearchNotice>
       <p className="jv-lede">
         Your crypto watchlist: last price and the rolling 24-hour and 7-day change for each Coinbase USD pair. Crypto trades
         around the clock, so these windows end now rather than at a market close. Add a coin here and it also appears on the

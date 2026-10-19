@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useMemo, useState } from "react";
 import { StatCard } from "./StatCard";
 import { CostBars, FeeDragChart } from "./RetirementCharts";
@@ -192,6 +193,9 @@ export function RetirementPlanView({ plan, hydrated, update, clearAll }: PlanSto
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <ResearchNotice source="the plan details you type in, an example fund menu from a Hamilton College plan administered with Fidelity (Aug 2022), and published figures cited where shown" hypothetical={false} noLiveData>
+        Projections use the return and fee assumptions you set. They illustrate how fees compound and are not predictions of your balance. What you type stays in this browser.
+      </ResearchNotice>
       <div>
         <div className="jv-eyebrow">401(k) Optimizer</div>
         <h1 className="jv-title">See what your 401(k) really costs and what you are leaving behind</h1>

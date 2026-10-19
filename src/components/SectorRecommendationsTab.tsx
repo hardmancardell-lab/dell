@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useEffect, useState } from "react";
 import type { SectorRecommendation } from "@/lib/agents/research-agent/types";
 
@@ -52,6 +53,9 @@ export function SectorRecommendationsTab() {
   // stack a second background/padding/radial-gradient layer.
   return (
     <div>
+      <ResearchNotice source="FRED indicator series" hypothetical={false}>
+        Each industry stance is a screening signal built from indicator trends, not a forecast.
+      </ResearchNotice>
       <p className="jv-lede">
         Live macro indicator readings mapped to each industry&apos;s primary drivers, converging into one
         stance per industry &mdash; a screening signal, not a forecast. Pair with the written analysis and

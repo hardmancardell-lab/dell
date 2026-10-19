@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useState } from "react";
 import type { CheckStatus, RegimeCheck, RegimeLabel } from "@/lib/agents/trading-agent/skills/crypto-regime";
 import type { CryptoRegimeResult, RegimeSourceStatus } from "@/lib/agents/trading-agent/skills/crypto-regime-service";
@@ -162,6 +163,9 @@ export function CryptoRegimeTab() {
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="CoinGecko, DefiLlama, alternative.me, Yahoo Finance and the Farside ETF flow table (free public data, cached up to 15 minutes)" hypothetical={false}>
+        A checklist of conditions, not a prediction. ETF flows come from a scraped public table unless you type them in, and the 10-year yield is a delayed quote.
+      </ResearchNotice>
       <p className="jv-lede">
         Six liquidity and trend conditions that have tended to come before a sustained crypto up-leg: stablecoin supply growth, US spot Bitcoin
         ETF flows, BTC dominance, BTC against its 200-day average, the 10-year Treasury yield and the Fear &amp; Greed index. Four or more met

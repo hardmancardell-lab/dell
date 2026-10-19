@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useState } from "react";
 import { useResearchWatchlist } from "@/lib/agents/research-agent/watchlist-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
@@ -111,6 +112,9 @@ export function SecurityAnalystTab() {
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Financial Modeling Prep financial statements and dividend history (free tier)" hypothetical={false}>
+        The Value Checklist is a rule-based screen of past statements. It does not tell you what a stock is worth or whether to buy or sell it.
+      </ResearchNotice>
       <p className="jv-lede" style={{ marginBottom: 20 }}>
         A cold-blooded interrogation of one company&apos;s financial statements &mdash; NCAV, earnings
         stability, debt coverage, and the value multiplier.

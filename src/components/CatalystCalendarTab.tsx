@@ -1,7 +1,8 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { upcomingCatalysts, type CatalystImpact, type CatalystResult, type UpcomingCatalyst } from "@/lib/agents/trading-agent/skills/catalyst-calendar";
+import { CALENDAR_VERIFIED_ON, upcomingCatalysts, type CatalystImpact, type CatalystResult, type UpcomingCatalyst } from "@/lib/agents/trading-agent/skills/catalyst-calendar";
 
 const DAYS_OPTIONS = [7, 14, 30, 60, 90];
 const IMPACT_OPTIONS: { value: CatalystImpact; label: string }[] = [
@@ -116,6 +117,9 @@ export function CatalystCalendarTab() {
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="the Federal Reserve, ECB, Bank of England and Bank of Japan calendars, BLS release schedules and NYSE rules; each event shows how its date was set" hypothetical={false}>
+        Official dates were last read from the publishers on {CALENDAR_VERIFIED_ON} and schedules can change. The impact tag is a judgement about attention, not a forecast of direction.
+      </ResearchNotice>
       <p className="jv-lede">
         What is scheduled, and how much attention it usually gets: central-bank decisions, US inflation and jobs reports, option expirations,
         elections and market closures. Enter a ticker, a forex pair such as GBP/JPY or a crypto symbol to see only what matters for it. This is a

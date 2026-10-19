@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useCallback, useEffect, useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import { CENTRAL_BANKS, CENTRAL_BANK_COVERAGE_GAPS, CENTRAL_BANK_CRITICAL_DISTINCTION } from "@/lib/agents/economic-outlook/central-bank-registry";
@@ -353,6 +354,9 @@ export function EconomicOutlookTab() {
 
   return (
     <div className="jarvis flex flex-col gap-4">
+      <ResearchNotice source="FRED for every figure; the qualitative read is written by an AI model (Claude) from those figures" hypothetical={false}>
+        Each version carries its own as-of date and a refresh is always manual. Items the app cannot source (a market-implied rate path, r-star, a live FOMC calendar) are flagged as unavailable rather than guessed.
+      </ResearchNotice>
       <p className="jv-lede" style={{ marginBottom: 0 }}>
         A versioned macro workstream modeled on the College Fed Challenge format — real FRED data for every hard
         number, one Claude pass to synthesize the qualitative read (regime, risk balance, adversarial self-Q&amp;A),

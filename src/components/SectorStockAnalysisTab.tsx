@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useState } from "react";
 import { useTrackEvent } from "@/lib/analytics/use-track";
 import type { SectorStockAnalysisResult } from "@/lib/agents/research-agent/types";
@@ -68,6 +69,9 @@ export function SectorStockAnalysisTab() {
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Financial Modeling Prep fundamentals (free tier) for a curated list of large companies per sector; FRED for the macro read" hypothetical={false}>
+        Forecast mode adds an AI-written summary of the data shown. It is commentary on that data, not a recommendation.
+      </ResearchNotice>
       <p className="jv-lede" style={{ marginBottom: 20 }}>
         Real fundamentals for the curated companies in one sector, tagged by where the current
         macro read places that sector in the business cycle. Optional forecast mode adds an

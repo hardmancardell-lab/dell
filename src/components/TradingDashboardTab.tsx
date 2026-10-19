@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useCallback, useEffect, useState } from "react";
 import { useWatchlist } from "@/lib/agents/trading-agent/watchlist-storage";
 import { assetClassLabel } from "@/lib/agents/trading-agent/asset-class-label";
@@ -92,6 +93,9 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Alpaca daily and minute bars (IEX feed, one exchange); Coinbase for crypto; OANDA for forex" hypothetical={false}>
+        These are live readings of the latest bars, not predictions. A flag means a condition is met today and nothing more.
+      </ResearchNotice>
       <p className="jv-lede">
         {filterAssetClass
           ? `Add ${assetClassLabel(filterAssetClass).toLowerCase()} symbols, then scan for five signals: Volume Displacement (today's volume vs. its trailing average), Momentum (3 consecutive green closes with rising volume), Mean Reversion (price deviation from its rolling daily mean), VWAP Mean Reversion (today's live price deviation from its own session VWAP), and PM-Volume Anomaly (today's real premarket volume vs. a rolling average). This dashboard scans automatically when it loads.`

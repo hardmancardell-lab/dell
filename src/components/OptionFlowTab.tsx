@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { CALL_COLOR, PUT_COLOR, CallPutLegend } from "./option-colors";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { OPTION_FLOW_SYMBOLS, feedBadgeText, feedSummary, loggingStatus, sessionDateET } from "@/lib/agents/trading-agent/skills/option-flow-snapshot";
@@ -339,6 +340,7 @@ export function OptionFlowTab() {
 
   return (
     <div className="jarvis">
+      <ResearchNotice source="Tradier option chains, recorded by the app every 5 minutes through the regular session (the sandbox feed is delayed about 15 minutes; the status chip shows which feed was used)" hypothetical={false} />
       <div className="jv-card mb-4" style={{ borderColor: "var(--verdict-dim)" }}>
         <div className="jv-br-b" />
         <p className="text-sm" style={{ color: "var(--verdict)" }}>

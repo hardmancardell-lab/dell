@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { INDUSTRY_IMPACTS } from "@/lib/agents/research-agent/skills/industry-impact";
 import { INDICATOR_LIBRARY } from "@/lib/agents/research-agent/skills/indicator-metadata";
 import { getResearchGlossaryEntry } from "@/lib/agents/research-agent/skills/glossary";
@@ -16,6 +17,7 @@ const DRIVER_GLOSSARY_TERM: Record<string, string> = {
 export function IndustryImpactTab() {
   return (
     <div className="jarvis flex flex-col gap-6">
+      <ResearchNotice source="the app's own written industry analysis, which names the FRED indicators it relies on" hypothetical={false} noLiveData />
       <p className="text-sm" style={{ color: "var(--text-2)" }}>
         How the macro environment translates into industry-level risk and opportunity —
         which indicators matter most for each industry, and why.

@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useState } from "react";
 import { INDICATOR_LIBRARY } from "@/lib/agents/research-agent/skills/indicator-metadata";
 import { IndicatorChart } from "./IndicatorChart";
@@ -11,6 +12,9 @@ export function MacroDashboardTab() {
 
   return (
     <div className="jarvis flex flex-col gap-10">
+      <ResearchNotice source="FRED (Federal Reserve Bank of St. Louis)" hypothetical={false}>
+        Each series updates on its own release schedule, so the latest point can be weeks or months old.
+      </ResearchNotice>
       <section>
         <div className="jv-strip-title">Six Flagship Indicators</div>
         <p className="text-sm mb-4" style={{ color: "var(--text-2)" }}>

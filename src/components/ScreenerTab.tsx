@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useCallback, useEffect, useState } from "react";
 import { useResearchWatchlist } from "@/lib/agents/research-agent/watchlist-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
@@ -55,6 +56,9 @@ export function ScreenerTab() {
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <ResearchNotice source="Financial Modeling Prep financial statements (free tier) and FRED macro trends; a curated list of bellwether tickers per sector, not a live market screen" hypothetical={false}>
+        A pass on the Value Checklist is a screen of past statements, not a recommendation to buy.
+      </ResearchNotice>
       <div className="flex items-center justify-between gap-4">
         <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           Candidate securities seeded from the Research Agent&apos;s own Sector Recommendations (real

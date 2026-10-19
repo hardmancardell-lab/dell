@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useState } from "react";
 import { StatCard } from "./StatCard";
 import { PhaseLadder, RatingGauge, RevenueProfitChart, SeriesLegend, ValueCurveChart, ratingColor } from "./PhaseCharts";
@@ -130,6 +131,9 @@ export function BusinessPhaseTab() {
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <ResearchNotice source="SEC EDGAR company filings, Alpaca daily prices and FRED" hypothetical={false}>
+        The phase and the valuation rating come from fixed rules applied to the filings. They place a company in its life cycle; they are not a forecast of its price.
+      </ResearchNotice>
       <div>
         <div className="jv-eyebrow">Business phase</div>
         <h1 className="jv-title">Where is the business in its life, and what does that say about its price?</h1>

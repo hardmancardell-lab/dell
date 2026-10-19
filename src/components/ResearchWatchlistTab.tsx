@@ -1,5 +1,6 @@
 "use client";
 
+import { ResearchNotice } from "./ResearchNotice";
 import { useCallback, useEffect, useState } from "react";
 import { useResearchWatchlist } from "@/lib/agents/research-agent/watchlist-storage";
 import { useTrackEvent } from "@/lib/analytics/use-track";
@@ -42,6 +43,9 @@ export function ResearchWatchlistTab() {
 
   return (
     <div className="jarvis flex flex-col gap-8">
+      <ResearchNotice source="Financial Modeling Prep financial statements (free tier) and FRED macro readings" hypothetical={false}>
+        The checklist flags are rule-based screens run when the page loads. They are not alerts and not recommendations.
+      </ResearchNotice>
       <div className="flex items-center justify-between gap-4">
         <p className="jv-lede flex-1" style={{ marginBottom: 0 }}>
           Tickers saved from Analyze Ticker or the Screener, with a fresh Value Checklist run the moment this
