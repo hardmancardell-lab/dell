@@ -88,7 +88,10 @@ export class FrameBudget {
     private readonly limitMs = 25,
     private readonly windowTotalMs = 2000,
     private readonly ignoreAboveMs = 250,
+    /** Frames during this much start-up time are not judged: shader compilation and texture upload make the first frames slow everywhere. */
+    private readonly warmupMs = 3000,
   ) {}
+  private elapsedMs = 0;
 
   get isTripped(): boolean {
     return this.tripped;
@@ -97,6 +100,10 @@ export class FrameBudget {
   /** Feed one frame's duration in ms. Returns true exactly once, on the frame that trips the budget. */
   push(frameMs: number): boolean {
     if (this.tripped || !Number.isFinite(frameMs) || frameMs <= 0) return false;
+    if (this.elapsedMs < this.warmupMs) {
+      this.elapsedMs += Math.min(frameMs, this.ignoreAboveMs);
+      return false;
+    }
     if (frameMs > this.ignoreAboveMs) {
       this.restartWindow();
       return false;

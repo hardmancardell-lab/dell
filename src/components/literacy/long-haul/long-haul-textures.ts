@@ -383,30 +383,21 @@ export function makeGlowTexture(power = 2): THREE.CanvasTexture {
   return tex(c, { mipmaps: false });
 }
 
-/** Light cast on the road by the headlights: a bright patch fading with distance (texture "up" = forward). */
+/** Light cast on the road by the headlights: two soft, long ovals fading with distance (texture "up" = forward). */
 export function makeHeadlightPoolTexture(): THREE.CanvasTexture {
   const { c, g } = canvas(128, 256);
-  const grad = g.createLinearGradient(0, 256, 0, 0);
-  grad.addColorStop(0, "rgba(255,246,220,0.0)");
-  grad.addColorStop(0.1, "rgba(255,246,220,0.85)");
-  grad.addColorStop(1, "rgba(255,246,220,0)");
-  g.fillStyle = grad;
-  g.beginPath();
-  g.moveTo(46, 256);
-  g.lineTo(0, 0);
-  g.lineTo(128, 0);
-  g.lineTo(82, 256);
-  g.closePath();
-  g.fill();
-  // soften the sides
-  g.globalCompositeOperation = "destination-in";
-  const side = g.createLinearGradient(0, 0, 128, 0);
-  side.addColorStop(0, "rgba(0,0,0,0)");
-  side.addColorStop(0.3, "rgba(0,0,0,1)");
-  side.addColorStop(0.7, "rgba(0,0,0,1)");
-  side.addColorStop(1, "rgba(0,0,0,0)");
-  g.fillStyle = side;
-  g.fillRect(0, 0, 128, 256);
+  for (const cx of [38, 90]) {
+    g.save();
+    g.translate(cx, 236);
+    g.scale(1, 4.2);
+    const rg = g.createRadialGradient(0, 0, 0, 0, 0, 30);
+    rg.addColorStop(0, "rgba(255,246,220,0.8)");
+    rg.addColorStop(0.45, "rgba(255,246,220,0.32)");
+    rg.addColorStop(1, "rgba(255,246,220,0)");
+    g.fillStyle = rg;
+    g.fillRect(-40, -60, 80, 120);
+    g.restore();
+  }
   return tex(c, { mipmaps: false });
 }
 

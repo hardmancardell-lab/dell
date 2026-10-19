@@ -750,7 +750,7 @@ export class LongHaulWorld {
     // Red aircraft beacons on the tallest towers
     const beaconGeo = bin.add(new THREE.BufferGeometry());
     beaconGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(beaconPts), 3));
-    const beaconMat = bin.add(new THREE.PointsMaterial({ map: glow, color: PAL.danger, size: 9, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    const beaconMat = bin.add(new THREE.PointsMaterial({ map: glow, color: PAL.danger, size: 5, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     const beacons = new THREE.Points(beaconGeo, beaconMat);
     beacons.frustumCulled = false;
     group.add(beacons);
