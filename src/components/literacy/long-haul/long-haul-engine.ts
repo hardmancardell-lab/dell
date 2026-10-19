@@ -400,6 +400,8 @@ export class LongHaulEngine {
       this.phase === "driving" && this.keys.up,
       this.fuel,
       now / 1000,
+      this.phase === "driving" && this.keys.down && this.speed > 0.3,
+      t.z < TRACK.laneSplitStartZ && t.z > TRACK.laneSplitEndZ && t.x < -2,
     );
 
     this.callbacks.onHud({
