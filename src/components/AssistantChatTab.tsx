@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { getOrCreateSessionId, useTrackEvent } from "@/lib/analytics/use-track";
 import { useAppNavigation } from "@/lib/navigation/app-navigation";
 import type { AssistantMessage } from "@/lib/agents/assistant/types";
+import { CANCEL_MESSAGE, CONFIRM_MESSAGE, activePending, parsePending, type PendingUi } from "@/lib/agents/assistant/pending-ui";
 
 interface PaperTradingNavigationTarget {
   target: { primaryId: string; secondaryId: string };
@@ -20,6 +21,12 @@ interface DisplayMessage extends AssistantMessage {
   toolsUsed?: string[];
   dataLimitations?: string[];
   navigationTarget?: PaperTradingNavigationTarget | null;
+  /** An action the assistant proposed and is waiting on the person to confirm (see pending-ui.ts). */
+  pending?: PendingUi | null;
+}
+
+function shorten(text: string, max = 120): string {
+  return text.length > max ? `${text.slice(0, max).trimEnd()}...` : text;
 }
 
 function describePrefill(prefill: PaperTradingNavigationTarget["prefill"]): string {
@@ -67,10 +74,21 @@ export function AssistantChatTab() {
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [speakReplies, setSpeakReplies] = useState(false);
   const [speechOutputSupported, setSpeechOutputSupported] = useState(false);
+  // The clock the Confirm / Cancel buttons are judged against. It only ever moves forward, and it is bumped by a timer at the
+  // moment a proposal expires, so the buttons disappear on their own instead of offering an action the server has forgotten.
+  const [now, setNow] = useState(() => Date.now());
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { track } = useTrackEvent();
   const { navigateTo } = useAppNavigation();
+
+  const pending = activePending(messages, now);
+  const pendingExpiresAt = pending?.expiresAt;
+  useEffect(() => {
+    if (pendingExpiresAt === undefined) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, pendingExpiresAt - Date.now()) + 50);
+    return () => window.clearTimeout(timer);
+  }, [pendingExpiresAt]);
 
   useEffect(() => {
     setVoiceSupported(getSpeechRecognitionCtor() !== null);
@@ -144,6 +162,7 @@ export function AssistantChatTab() {
           toolsUsed: data.toolsUsed,
           dataLimitations: data.dataLimitations,
           navigationTarget: data.navigationTarget ?? null,
+          pending: parsePending(data.pendingConfirmation, Date.now()),
         },
       ]);
       speak(data.reply);
@@ -228,6 +247,31 @@ export function AssistantChatTab() {
                   ))}
                 </ul>
               )}
+              {m.role === "assistant" && pending && i === messages.length - 1 && (
+                <div role="group" aria-label="Confirm or cancel the action the assistant proposed" className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => send(CONFIRM_MESSAGE)}
+                    disabled={loading}
+                    aria-label={`Confirm: ${shorten(pending.summary)}`}
+                    className="jv-btn"
+                    style={{ padding: "6px 14px", fontSize: 12 }}
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => send(CANCEL_MESSAGE)}
+                    disabled={loading}
+                    aria-label={`Cancel: ${shorten(pending.summary)}`}
+                    className="text-xs"
+                    style={{ padding: "6px 14px", border: "1px solid var(--line-control)", color: "var(--text-1)" }}
+                  >
+                    Cancel
+                  </button>
+                  <span className="text-xs" style={{ color: "var(--text-2)" }}>Or type yes or no.</span>
+                </div>
+              )}
               {m.role === "assistant" && m.navigationTarget && (
                 <button
                   onClick={() => {
@@ -250,6 +294,9 @@ export function AssistantChatTab() {
         ))}
 
         {loading && <div className="text-sm" style={{ color: "var(--text-2)" }}>Thinking…</div>}
+        <div className="sr-only" role="status" aria-live="polite">
+          {pending ? "The assistant is asking you to confirm an action. Confirm and Cancel buttons are below its message." : ""}
+        </div>
       </div>
 
       {error && (
