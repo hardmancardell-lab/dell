@@ -67,79 +67,79 @@ const STRATEGY_PLAYBOOK: { value: string; label: string; definition: string; whe
     value: "pm_volume_momentum",
     label: "Premarket Volume Momentum",
     definition: "Unusual premarket volume relative to its rolling average, used as an early signal of a move that may continue into the session.",
-    whereToBacktest: "Equities → Dashboard (PM-Volume Anomaly scan) and Backtest tab (Volume Displacement signal).",
+    whereToBacktest: "Equities → Dashboard (PM-Volume Anomaly scan) and Studies tab, Signal Backtest (Volume Displacement signal).",
   },
   {
     value: "weekly_swing",
     label: "Weekly Swing",
     definition: "A multi-day directional position sized around a weekly thesis rather than an intraday trigger.",
-    whereToBacktest: "Equities → Calendar Effects (day-of-week) and ORB Strategy tabs.",
+    whereToBacktest: "Equities → Studies tab: Calendar Effects (day-of-week) and Opening Range Breakout.",
   },
   {
     value: "mean_reversion",
     label: "Mean Reversion",
     definition: "Price has moved statistically far from its rolling mean (z-score) with no fresh catalyst — bet on reversion toward the mean.",
-    whereToBacktest: "Equities/Currency/Futures/Commodities → Backtest tab (Mean Reversion Oversold/Overbought signal).",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Studies tab, Signal Backtest (Mean Reversion Oversold/Overbought signal).",
   },
   {
     value: "hedge",
     label: "Hedge / Risk Offset",
     definition: "Taken to offset risk in another position (e.g. a call bought against event risk on a name you're structurally bearish, or vice versa) — sized by the risk being offset, not by directional conviction alone.",
-    whereToBacktest: "Options → Strategy Guide (collar/protective-put patterns) and this app's payoff calculator.",
+    whereToBacktest: "Options → Studies tab: Options Strategy Guide (collar/protective-put patterns) and this app's payoff calculator.",
   },
   {
     value: "volumeDisplacement",
     label: "Volume Displacement",
     definition: "Today's volume comes in meaningfully above its rolling average — a real, mechanically-detected signal, not a discretionary read.",
-    whereToBacktest: "Equities/Currency/Futures/Commodities → Backtest tab (Volume Displacement signal) — real BH-FDR/bootstrap/out-of-sample results.",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Studies tab, Signal Backtest (Volume Displacement signal) — real BH-FDR/bootstrap/out-of-sample results.",
   },
   {
     value: "momentum",
     label: "Momentum",
     definition: "Three consecutive green closes with rising volume — the app's mechanical momentum trigger.",
-    whereToBacktest: "Equities/Currency/Futures/Commodities → Backtest tab (Momentum signal).",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Studies tab, Signal Backtest (Momentum signal).",
   },
   {
     value: "meanReversionOversold",
     label: "Mean Reversion — Oversold",
     definition: "Price's rolling z-score vs. its own mean has crossed below the oversold threshold — the app's precise, backtested mean-reversion signal.",
-    whereToBacktest: "Equities/Currency/Futures/Commodities → Backtest tab (Mean Reversion Oversold signal).",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Studies tab, Signal Backtest (Mean Reversion Oversold signal).",
   },
   {
     value: "meanReversionOverbought",
     label: "Mean Reversion — Overbought",
     definition: "Price's rolling z-score has crossed above the overbought threshold.",
-    whereToBacktest: "Equities/Currency/Futures/Commodities → Backtest tab (Mean Reversion Overbought signal).",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Studies tab, Signal Backtest (Mean Reversion Overbought signal).",
   },
   {
     value: "orbBreakout_long",
     label: "Opening Range Breakout — Long",
     definition: "Price closes above the opening range high — a long breakout entry.",
-    whereToBacktest: "Equities/Currency/Futures/Commodities → ORB Strategy tab (Watchlist + Ticker Detail).",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Studies tab, Opening Range Breakout (Watchlist + Ticker Detail).",
   },
   {
     value: "orbBreakout_short",
     label: "Opening Range Breakout — Short",
     definition: "Price closes below the opening range low — a short breakout entry.",
-    whereToBacktest: "Equities/Currency/Futures/Commodities → ORB Strategy tab (Watchlist + Ticker Detail).",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Studies tab, Opening Range Breakout (Watchlist + Ticker Detail).",
   },
   {
     value: "dayOfWeekEffect",
     label: "Day-of-Week Effect",
     definition: "A specific weekday has a real, statistically-tested tendency to move differently than others for this ticker.",
-    whereToBacktest: "Equities/Currency/Futures/Commodities → Calendar Effects tab (Day-of-Week mode).",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Studies tab, Calendar Effects (Day-of-Week mode).",
   },
   {
     value: "timeOfDayEffect",
     label: "Time-of-Day Effect",
     definition: "A specific intraday window (first 15 min, power hour, etc.) has a real tested tendency for this ticker.",
-    whereToBacktest: "Equities/Currency/Futures/Commodities → Calendar Effects tab (Time-of-Day mode).",
+    whereToBacktest: "Equities/Currency/Futures/Commodities → Studies tab, Calendar Effects (Time-of-Day mode).",
   },
   {
     value: "pegReversion",
     label: "Currency Peg Reversion",
     definition: "A pegged/managed currency pair has drifted from its target band and is expected to revert.",
-    whereToBacktest: "Currency → Currency Pegs tab.",
+    whereToBacktest: "Currency → Studies tab, Currency Pegs.",
   },
 ];
 
@@ -608,7 +608,7 @@ export function TradeJournalTab() {
                   {s.definition}
                 </div>
                 <div className="text-xs mt-1" style={{ color: "var(--text-2)" }}>
-                  Backtest it: {s.whereToBacktest}
+                  Backtest it: {s.whereToBacktest} (Ctrl+K searches every study by name.)
                 </div>
               </div>
             ))}

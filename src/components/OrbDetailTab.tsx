@@ -104,7 +104,7 @@ export function OrbDetailTab({ defaultTicker = "AAPL" }: { defaultTicker?: strin
         uses the high/low of the first N minutes after the open; ATR mode uses the instrument&apos;s own
         recent volatility instead of a fixed window, which fits an instrument (FX pairs especially) with no
         single clean session open better than a clock-time range does. Backtested with the same
-        FDR/bootstrap/out-of-sample rigor as the equity Backtest tab either way, long and short breakouts
+        FDR/bootstrap/out-of-sample rigor as the equity Signal Backtest study either way, long and short breakouts
         kept separate since their edge is expected to differ.
       </p>
 

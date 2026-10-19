@@ -284,7 +284,7 @@ export function TradingDashboardTab({ filterAssetClass }: { filterAssetClass?: A
             <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
               Today&apos;s live price vs. its own session-anchored VWAP &plusmn;2 standard-deviation bands &mdash;
               the intraday counterpart to Mean Reversion above, which only looks at daily closes. A statistical
-              deviation, not a prediction &mdash; see the VWAP Reversion Backtest tab for whether reversion
+              deviation, not a prediction &mdash; see the VWAP Reversion Backtest study (Studies tab, or Ctrl+K) for whether reversion
               actually followed historically.
             </p>
             {vwapReversionFlagged.length === 0 ? (

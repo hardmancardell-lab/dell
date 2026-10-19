@@ -86,7 +86,7 @@ export function OptionsStrategiesTab() {
           section then maps that regime plus put/call flow skew to 1-2 candidate strategies from the catalog
           above. That mapping itself is a documented, rule-based expert heuristic (e.g. &ldquo;positive gamma
           + neutral skew → conditions commonly associated with iron condors&rdquo;), not a backtested or
-          statistically validated recommendation the way the Backtest tabs elsewhere in this app are — treat
+          statistically validated recommendation the way the Signal Backtest studies elsewhere in this app are — treat
           it as a starting framework for your own analysis, not investment advice.
         </p>
       </div>

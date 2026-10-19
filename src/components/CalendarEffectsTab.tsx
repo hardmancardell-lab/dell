@@ -191,7 +191,7 @@ export function CalendarEffectsTab({ defaultTicker = "AAPL", assetClass = "equit
       <MacroRegimeBanner />
       <p className="jv-lede">
         Does this ticker tend to move on specific days of the week, or at specific times of day — or is any
-        apparent pattern just noise? Same statistical rigor as the Backtest tab (Benjamini-Hochberg FDR
+        apparent pattern just noise? Same statistical rigor as Signal Backtest in the Studies tab (Benjamini-Hochberg FDR
         correction, bootstrap confidence intervals, time-based out-of-sample split), applied to weekday and
         intraday-session buckets instead of forward horizons.
       </p>

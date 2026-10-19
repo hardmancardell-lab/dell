@@ -8,6 +8,7 @@ import { OptionScenarioPanel } from "./OptionScenarioPanel";
 import { usePortfolio } from "@/lib/agents/trading-agent/portfolio-storage";
 import type { GuidedTradeSignal } from "@/lib/agents/trading-agent/types";
 import { ResearchNotice } from "./ResearchNotice";
+import { OpenStudyLink } from "./OpenStudyLink";
 
 function fmtUsd(v: number): string {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -93,15 +94,15 @@ function GuidedCard({ signal }: { signal: GuidedTradeSignal }) {
       {signal.exitType === "time" && signal.stopLossVerdict === "stops_help" && (
         <p className="text-sm mb-3 font-medium" style={{ color: "var(--signal)" }}>
           Tested against real data: a stop-loss at some level meaningfully cuts the drawdown above while keeping most
-          of this setup&apos;s edge — check the Backtest tab for {signal.ticker} / {signal.strategyType} to see the
+          of this setup&apos;s edge — open <OpenStudyLink studyId="backtest" assetClass={signal.assetClass} ticker={signal.ticker}>Signal Backtest</OpenStudyLink> (Studies tab, or Ctrl+K) for {signal.ticker} / {signal.strategyType} to see the
           exact level.
         </p>
       )}
       {signal.exitType === "time" && (signal.stopLossVerdict === "inconclusive" || signal.stopLossVerdict === null) && (
         <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
           {signal.stopLossVerdict === "inconclusive"
-            ? "Tested against real data: no stop level tested clearly helps or hurts this setup — see the Backtest tab for the full comparison before assuming one either way."
-            : "Want to know if a stop-loss would actually help here? Run this ticker/signal in the Backtest tab — it now shows a real stop-loss overlay (tested at -1%/-2%/-3%/-5%) against this exact same historical sample, not a guess."}
+            ? "Tested against real data: no stop level tested clearly helps or hurts this setup — see Signal Backtest in the Studies tab (or press Ctrl+K) for the full comparison before assuming one either way."
+            : "Want to know if a stop-loss would actually help here? Run this ticker/signal in Signal Backtest (Studies tab, or press Ctrl+K) — it shows a real stop-loss overlay (tested at -1%/-2%/-3%/-5%) against this exact same historical sample, not a guess."}
         </p>
       )}
       <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
