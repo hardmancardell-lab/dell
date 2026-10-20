@@ -4,7 +4,7 @@
 // (long-haul-rules.ts), so the model cannot drift from the game. Audit finding: the loan offer never appeared on the
 // highway lane in 24,000 modeled runs, and the loan never cost more than its flat $50.
 import { TRACK, VEHICLE, TRAILER, ECONOMY, XP } from "../../src/lib/agents/financial-literacy/skills/long-haul-content.ts";
-import { stepSpeed, fuelAfter, shouldOfferLoan, takeLoan, advanceLoan, NO_LOAN, ROLLOVER_FEE } from "../../src/lib/agents/financial-literacy/skills/long-haul-rules.ts";
+import { stepSpeed, fuelAfter, shouldOfferLoan, fuelRange, takeLoan, advanceLoan, NO_LOAN, ROLLOVER_FEE } from "../../src/lib/agents/financial-literacy/skills/long-haul-rules.ts";
 
 let bad = 0, passed = 0;
 const t = (name: string, ok: boolean, detail = "") => { if (ok) passed++; else bad++; console.log(ok ? "PASS" : "FAIL", name, ok ? "" : detail); };
@@ -26,7 +26,7 @@ function run({ duty, lane, accept, rng, dt = 1 / 60 }: { duty: number; lane: "hi
     if (!tollDone && z <= TRACK.tollZ && lane === "highway") { tollDone = true; toll += ECONOMY.tollCost; }
     if (!resolved && z <= TRACK.gasStationZ) {
       resolved = true; fuelAtStation = fuel;
-      if (shouldOfferLoan(fuel)) { prompted = true; speed = 0; if (accept) { trailer = true; loan = takeLoan(); fuel = 100; } }
+      if (shouldOfferLoan(fuel, z - TRACK.finishZ)) { prompted = true; speed = 0; if (accept) { trailer = true; loan = takeLoan(); fuel = 100; } }
     }
   }
   return { time, prompted, tookLoan: trailer, debt: loan.debt, rollovers: loan.rollovers, toll, fuelAtStation, finished: z <= TRACK.finishZ };
@@ -35,11 +35,26 @@ function run({ duty, lane, accept, rng, dt = 1 / 60 }: { duty: number; lane: "hi
 // ---- 1. the loan offer now appears on the highway lane (it never did before)
 const full = run({ duty: 1, lane: "highway", accept: false, rng: () => 0 });
 t("highway, full throttle: loan offered at the gas station", full.prompted, `fuel at station ${full.fuelAtStation.toFixed(1)}`);
-t(`highway, full throttle reaches the station below the ${TRACK.gasStationFuelThreshold} threshold`, full.fuelAtStation < TRACK.gasStationFuelThreshold, full.fuelAtStation.toFixed(1));
+const stationToFinish = Math.abs(TRACK.gasStationZ - TRACK.finishZ);
+t("highway, full throttle reaches the station with too little range left to finish", fuelRange(full.fuelAtStation) < stationToFinish, `range ${fuelRange(full.fuelAtStation).toFixed(1)} vs ${stationToFinish} remaining`);
 const backFull = run({ duty: 1, lane: "back", accept: false, rng: () => 0 });
 t("back road, full throttle: loan offered", backFull.prompted);
 const half = run({ duty: 0.5, lane: "highway", accept: false, rng: mulberry32(11) });
 t("highway at about half throttle can still finish clean (no loan offered)", !half.prompted && half.finished, `fuel ${half.fuelAtStation.toFixed(1)}`);
+
+// ---- 1b. the real bug fix: the offer is gated on reachability, not a flat fuel percentage (2026-10-20)
+// Before this fix, shouldOfferLoan(fuel) ignored how much road was left — it could refuel the car for a
+// distance it could already finish on the fuel it had, so declining cost nothing and accepting bought
+// nothing. Pin the exact boundary: fuel that can JUST cover the remaining distance is never offered the
+// loan, and even one tick less IS offered — proving the check is reachability, not a fixed threshold.
+const exactRange = 120; // an arbitrary "remaining distance" distinct from the real track, to isolate the function
+const fuelThatExactlyReaches = exactRange / (VEHICLE.baseMaxSpeed / ECONOMY.fuelDrainAtFullThrottle);
+t("fuel that can exactly cover the remaining distance is NOT offered the loan", !shouldOfferLoan(fuelThatExactlyReaches, exactRange));
+t("fuel with room to spare over the remaining distance is NOT offered the loan", !shouldOfferLoan(fuelThatExactlyReaches * 1.2, exactRange));
+t("fuel just short of the remaining distance IS offered the loan", shouldOfferLoan(fuelThatExactlyReaches * 0.95, exactRange));
+t("fuelRange is linear in fuel (double the fuel, double the range)", Math.abs(fuelRange(80) - 2 * fuelRange(40)) < 1e-9);
+t("shouldOfferLoan no longer takes a flat-threshold shortcut: a huge remaining distance forces the offer even at full fuel", shouldOfferLoan(100, 1_000_000));
+t("shouldOfferLoan no longer takes a flat-threshold shortcut: a tiny remaining distance never offers even at low fuel", !shouldOfferLoan(5, 1));
 
 // ---- 2. seeded matrix (2 lanes x 6 throttle duties x 2 policies x 400 runs = 4,800)
 const rows: any[] = [];
@@ -52,11 +67,20 @@ if (process.argv.includes("--table")) console.table(rows);
 const hw = rows.filter((r) => r.lane === "highway" && !r.accept);
 const bk = rows.filter((r) => r.lane === "back" && !r.accept);
 const pr = (rs: any[], d: number) => rs.find((r) => r.duty === d).pctPrompted;
-t("highway: loan offered in at least 99% of runs at full or 0.9 throttle", pr(hw, 1) >= 99 && pr(hw, 0.9) >= 99, JSON.stringify(hw.map((r) => [r.duty, r.pctPrompted])));
-t("highway: roughly half of 0.7-throttle runs are offered the loan (a real decision, not a certainty)", pr(hw, 0.7) >= 40 && pr(hw, 0.7) <= 75, String(pr(hw, 0.7)));
+// Percentages below are now driven by real reachability (fuelRange() vs. the actual remaining
+// distance), not a flat fuel threshold, so they are measurably more forgiving than the old numbers
+// at anything short of full throttle — that is the fix working, not a regression. At 0.9 duty on the
+// highway you often genuinely have enough fuel left for the real 90-unit remainder; the old flat
+// threshold didn't know that and offered the loan anyway, which was exactly the reported bug.
+t("highway: loan offered in at least 99% of runs at full throttle", pr(hw, 1) >= 99, JSON.stringify(hw.map((r) => [r.duty, r.pctPrompted])));
+t("highway: 0.9 throttle is a real decision, not a certainty either way", pr(hw, 0.9) >= 5 && pr(hw, 0.9) <= 60, String(pr(hw, 0.9)));
 t("highway: fuel management matters (offered far less at 0.5 throttle than at full)", pr(hw, 0.5) <= 40 && pr(hw, 1) - pr(hw, 0.5) >= 50);
 t("highway offer rate falls as the player eases off (monotone within noise)", hw.every((r, i) => i === 0 || r.pctPrompted <= hw[i - 1].pctPrompted + 3));
-t("back road: loan offered in at least 85% of runs at every throttle (rough road burns fuel)", bk.every((r) => r.pctPrompted >= 85), JSON.stringify(bk.map((r) => [r.duty, r.pctPrompted])));
+t(
+  "back road needs the loan at least as often as highway at every throttle duty tested (less margin on the rough lane)",
+  bk.every((r, i) => r.pctPrompted >= hw[i].pctPrompted - 1),
+  JSON.stringify(bk.map((r, i) => [r.duty, r.pctPrompted, hw[i].pctPrompted])),
+);
 t("every modeled run finishes (declining never strands the car)", rows.every((r) => r.pctFinished === 100));
 t("anyone who takes the loan owes more than the $50 borrowed", rows.filter((r) => r.accept && r.meanDebtIfBorrowed > 0).every((r) => r.meanDebtIfBorrowed > ECONOMY.loanAmount), JSON.stringify(rows.filter((r) => r.accept).map((r) => [r.lane, r.duty, r.meanDebtIfBorrowed])));
 

@@ -11,6 +11,15 @@ import { ECONOMY, TRACK, VEHICLE } from "./long-haul-content";
  * never appeared on the highway lane (a full-throttle run reached the gas
  * station with 48.6 fuel against a threshold of 40) and the loan never cost
  * more than its flat $50, so the lesson was told, not shown.
+ *
+ * Real-user bug fix (2026-10-20): shouldOfferLoan() used to compare fuel
+ * against a flat percentage (gasStationFuelThreshold) regardless of how much
+ * road was actually left — so the loan could refuel the car for a distance
+ * it could already finish on the fuel it had. Declining then cost nothing
+ * and accepting bought nothing, which defeats the whole point of the
+ * decision. Fixed below: the offer is now gated on real reachability (the
+ * distance the remaining fuel can cover at full throttle vs. the real
+ * remaining distance to the finish), not a fuel percentage.
  */
 
 export interface SpeedTuning {
@@ -34,9 +43,14 @@ export function fuelAfter(fuel: number, throttleOn: boolean, dt: number): number
   return Math.max(0, fuel - drain * dt);
 }
 
-/** The gas station offers the quick-cash loan whenever the tank is below the threshold. */
-export function shouldOfferLoan(fuel: number): boolean {
-  return fuel < TRACK.gasStationFuelThreshold;
+/** Distance the remaining fuel can cover driving the rest of the way at full throttle — the real "can I make it on this tank" number. */
+export function fuelRange(fuel: number): number {
+  return fuel * (VEHICLE.baseMaxSpeed / ECONOMY.fuelDrainAtFullThrottle);
+}
+
+/** The gas station offers the quick-cash loan only when the fuel left genuinely cannot cover the real remaining distance to the finish. */
+export function shouldOfferLoan(fuel: number, remainingDistance: number): boolean {
+  return fuelRange(fuel) < remainingDistance;
 }
 
 /** Fee charged each time a payday-style loan rolls over: principal x APR x 14/365 ($7.50 on $50 at 391%). */

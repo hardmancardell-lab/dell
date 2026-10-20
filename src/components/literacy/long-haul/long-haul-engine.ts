@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
-import { TRACK, VEHICLE, TRAILER, ECONOMY } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { TRACK, VEHICLE, TRAILER, ECONOMY, CITY_CROSS, CAR_MODELS, type CarModel } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import { LongHaulAudio } from "./long-haul-audio";
 import { advanceLoan, fuelAfter, NO_LOAN, shouldOfferLoan, stepSpeed, takeLoan, type LoanState } from "@/lib/agents/financial-literacy/skills/long-haul-rules";
 import { PAL } from "./long-haul-palette";
@@ -123,7 +123,10 @@ export class LongHaulEngine {
   private readonly audio = new LongHaulAudio();
   private readonly onUserGesture = () => this.audio.unlock();
 
-  constructor(private container: HTMLElement, private callbacks: LongHaulCallbacks) {
+  private readonly carModel?: CarModel;
+
+  constructor(private container: HTMLElement, private callbacks: LongHaulCallbacks, carModelId?: string) {
+    this.carModel = carModelId ? CAR_MODELS.find((m) => m.id === carModelId) : undefined;
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
@@ -197,12 +200,16 @@ export class LongHaulEngine {
     }
 
     const glow = this.bin.add(makeGlowTexture(2));
-    this.car = new LongHaulCar(this.bin, {
-      shadow: this.bin.add(makeBlobShadowTexture()),
-      headlightPool: this.bin.add(makeHeadlightPoolTexture()),
-      glow,
-      envMap,
-    });
+    this.car = new LongHaulCar(
+      this.bin,
+      {
+        shadow: this.bin.add(makeBlobShadowTexture()),
+        headlightPool: this.bin.add(makeHeadlightPoolTexture()),
+        glow,
+        envMap,
+      },
+      this.carModel,
+    );
     this.scene.add(this.car.group);
     this.scene.add(this.car.trailer);
     this.effects = new DriveEffects(this.bin, this.scene, this.car.group, glow);
@@ -372,7 +379,8 @@ export class LongHaulEngine {
 
       if (!this.gasStationResolved && pos.z <= TRACK.gasStationZ) {
         this.gasStationResolved = true;
-        if (shouldOfferLoan(this.fuel)) {
+        const remainingDistance = pos.z - TRACK.finishZ;
+        if (shouldOfferLoan(this.fuel, remainingDistance)) {
           this.pauseCar();
           this.phase = "modal";
           this.audio.loanPrompt();
@@ -404,11 +412,16 @@ export class LongHaulEngine {
       // regardless of what the collision solver just computed from a wall
       // contact, so a physical wall collider alone does not stop the car —
       // confirmed by testing (it drove straight through at x=-20). Clamp
-      // track bounds directly instead of fighting the solver.
+      // track bounds directly instead of fighting the solver. Near
+      // CITY_CROSS.z the X boundary widens to the cross street's real
+      // length, so the car can actually turn and drive down it instead of
+      // being walled in at the main corridor's edge.
       const clampPos = this.carRigid.translation();
       const edge = TRACK.halfWidth - 1.2;
-      if (Math.abs(clampPos.x) > edge) {
-        const clampedX = Math.sign(clampPos.x) * edge;
+      const nearCrossStreet = Math.abs(clampPos.z - CITY_CROSS.z) <= CITY_CROSS.halfWidth;
+      const xLimit = nearCrossStreet ? CITY_CROSS.streetHalfLength - 1.2 : edge;
+      if (Math.abs(clampPos.x) > xLimit) {
+        const clampedX = Math.sign(clampPos.x) * xLimit;
         this.carRigid.setTranslation({ x: clampedX, y: clampPos.y, z: clampPos.z }, true);
         const lv = this.carRigid.linvel();
         this.carRigid.setLinvel({ x: 0, y: lv.y, z: lv.z }, true);

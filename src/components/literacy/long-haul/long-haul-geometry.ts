@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { PAL } from "./long-haul-palette";
+import type { CarModel } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 
 /**
  * Procedural geometry for "The Long Haul". Nothing here touches the DOM or WebGL, so it runs (and is unit tested) in plain Node.
@@ -169,7 +170,107 @@ export function buildWheelGeometry(radius = CAR.wheelRadius, width = CAR.wheelWi
   return mergeAll(parts, true);
 }
 
-export function buildCarGeometries(): CarGeometries {
+/**
+ * A selectable classic car's silhouette, in the same car-space (shape x = z
+ * forward, y = height) as the default hatchback above. CarModel (defined in
+ * long-haul-content.ts, not here, so the car-picker UI can list the cars
+ * without importing three.js) carries the length/width/roofline numbers;
+ * all 4 share the hatchback's fixed wheelbase (CAR.frontAxleZ/rearAxleZ/
+ * wheelX) -- only the visible body overhang and roofline change, the same
+ * way real cars on a shared platform differ. Straight-line profiles (not the
+ * hatchback's rounded corners) read as boxier, era-correct sheet metal.
+ */
+function buildClassicCarGeometries(p: CarModel): CarGeometries {
+  const L = p.length / 2;
+  const W = p.width;
+  const roofFrontPad = 0.35;
+
+  const lowerShape = poly([
+    [-L, p.rockerY],
+    [L, p.rockerY],
+    [L, p.beltlineY - 0.12],
+    [p.hoodZ, p.beltlineY],
+    [p.deckZ, p.beltlineY],
+    [-L, p.beltlineY - 0.12],
+  ]);
+  const lowerGeo = extrudeProfile(lowerShape, W - 0.04, 0.05);
+
+  let glassPts: [number, number][];
+  let roofGeo: THREE.BufferGeometry | null = null;
+  if (p.roofStyle === "fastback") {
+    // One continuous diagonal from the roof peak down to the deck -- no flat
+    // cap, so the glass itself reads as the sloped fastback roofline.
+    glassPts = [
+      [p.hoodZ, p.beltlineY + 0.02],
+      [p.hoodZ - roofFrontPad, p.roofY - 0.04],
+      [p.deckZ, p.beltlineY + 0.06],
+      [p.hoodZ - 0.1, p.beltlineY + 0.02],
+    ];
+  } else {
+    // A flat roof cap, then a backlight that drops to the deck -- short and
+    // steep for "notchback" (the sharp B-pillar kick), gentler for the rest.
+    const backlightPad = p.roofStyle === "coupe" ? 0.1 : p.roofStyle === "notchback" ? 0.05 : 0.12;
+    glassPts = [
+      [p.hoodZ, p.beltlineY + 0.02],
+      [p.hoodZ - roofFrontPad, p.roofY - 0.04],
+      [p.deckZ + backlightPad, p.roofY - 0.04],
+      [p.deckZ - backlightPad, p.beltlineY + 0.08],
+      [p.hoodZ - 0.1, p.beltlineY + 0.02],
+    ];
+    const roofShape = poly([
+      [p.hoodZ - roofFrontPad + 0.04, p.roofY],
+      [p.hoodZ - roofFrontPad, p.roofY + 0.04],
+      [p.deckZ + backlightPad, p.roofY + 0.04],
+      [p.deckZ + backlightPad - 0.04, p.roofY],
+    ]);
+    roofGeo = extrudeProfile(roofShape, W * 0.82, 0.03);
+  }
+  const glass = extrudeProfile(poly(glassPts), W * 0.86, 0.02);
+
+  const pillarParts: THREE.BufferGeometry[] = [];
+  for (const sx of [1, -1]) {
+    pillarParts.push(bar(0.06, 0.09, p.beltlineY + 0.02, p.hoodZ - 0.05, p.roofY - 0.02, p.hoodZ - roofFrontPad + 0.1, sx * (W * 0.41)));
+  }
+  if (p.roofStyle === "notchback") {
+    // The signature short, flat deck lid right behind the sharp backlight.
+    pillarParts.push(box(W * 0.85, 0.14, Math.max(0.3, Math.abs(p.deckZ - (-L)) - 0.2), 0, p.beltlineY - 0.05, (p.deckZ + -L) / 2 - 0.1));
+  }
+  const body = mergeAll([lowerGeo, ...(roofGeo ? [roofGeo] : []), ...pillarParts].map((geo) => ({ geo })));
+
+  const trimParts: THREE.BufferGeometry[] = [
+    box(W - 0.06, 0.12, 0.3, 0, p.rockerY + 0.08, L - 0.15), // front splitter
+    box(W - 0.1, 0.14, 0.2, 0, p.rockerY + 0.09, -L + 0.1), // rear diffuser
+    box(0.06, 0.1, p.length * 0.6, W / 2 - 0.03, p.rockerY + 0.08, 0), // skirts
+    box(0.06, 0.1, p.length * 0.6, -(W / 2) + 0.03, p.rockerY + 0.08, 0),
+    box(W * 0.5, 0.1, 0.04, 0, p.beltlineY - 0.2, L - 0.08), // grille
+    box(0.14, 0.09, 0.2, W / 2 - 0.08, p.beltlineY + 0.15, p.hoodZ), // mirrors
+    box(0.14, 0.09, 0.2, -(W / 2) + 0.08, p.beltlineY + 0.15, p.hoodZ),
+  ];
+  for (const sx of [1, -1]) {
+    for (const z of [CAR.frontAxleZ, CAR.rearAxleZ]) {
+      const arch = new THREE.CircleGeometry(CAR.wheelRadius + 0.1, 20);
+      arch.rotateY((sx * Math.PI) / 2);
+      arch.translate(sx * (W / 2 - 0.05), CAR.wheelRadius, z);
+      trimParts.push(arch);
+    }
+  }
+  const trim = mergeAll(trimParts.map((geo) => ({ geo })));
+
+  const headlights = mergeAll([
+    { geo: box(0.36, 0.1, 0.06, W * 0.34, p.rockerY + 0.3, L - 0.05) },
+    { geo: box(0.36, 0.1, 0.06, -W * 0.34, p.rockerY + 0.3, L - 0.05) },
+  ]);
+  const taillights = mergeAll([
+    { geo: box(0.4, 0.12, 0.05, W * 0.34, p.beltlineY - 0.08, -L + 0.03) },
+    { geo: box(0.4, 0.12, 0.05, -W * 0.34, p.beltlineY - 0.08, -L + 0.03) },
+  ]);
+
+  return { body, glass, trim, headlights, taillights, wheel: buildWheelGeometry() };
+}
+
+export function buildCarGeometries(profile?: CarModel): CarGeometries {
+  if (profile) return buildClassicCarGeometries(profile);
+
   // Lower body: nose, long hood, shoulder line, short tail, rounded corners. (shape x = z forward, y = height)
   const lower = new THREE.Shape();
   lower.moveTo(-1.8, 0.3);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ECONOMY, VEHICLE, XP } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { CAR_MODELS, ECONOMY, VEHICLE, XP } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import type { LongHaulHud, LongHaulSummary } from "./long-haul-engine";
 import { readSoundPreference } from "./long-haul-audio";
 
@@ -21,7 +21,8 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
   const engineRef = useRef<import("./long-haul-engine").LongHaulEngine | null>(null);
   const hasAwardedRef = useRef(false);
 
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [carModelId, setCarModelId] = useState<string | null>(null);
+  const [status, setStatus] = useState<"picking" | "loading" | "ready" | "error">("picking");
   const [error, setError] = useState<string | null>(null);
   const [hud, setHud] = useState<LongHaulHud>({ speedMph: 0, fuel: 100, tollPaid: 0, trailerAttached: false, debt: 0 });
   const [soundOn, setSoundOn] = useState(() => readSoundPreference());
@@ -29,6 +30,12 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
   const [summary, setSummary] = useState<LongHaulSummary | null>(null);
 
   useEffect(() => {
+    // Deliberately keyed on carModelId alone, NOT status: this effect's own async work calls
+    // setStatus("ready")/setStatus("error") below, and if status were a dependency here, that write
+    // would make React re-run this effect's cleanup (disposing the engine we just built) immediately
+    // after creating it -- the engine would init, start its render loop, and get torn down again
+    // within the same tick.
+    if (!carModelId) return;
     let cancelled = false;
     const container = containerRef.current;
     if (!container) return;
@@ -37,17 +44,21 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
       try {
         const { LongHaulEngine } = await import("./long-haul-engine");
         if (cancelled) return;
-        const engine = new LongHaulEngine(container, {
-          onHud: (h) => setHud(h),
-          onLoanPrompt: () => setModalOpen(true),
-          onFinish: (s) => {
-            setSummary(s);
-            if (!hasAwardedRef.current) {
-              hasAwardedRef.current = true;
-              onComplete(s.tookLoan ? XP.onFinishWithLoan : XP.onCleanFinish, s.tookLoan);
-            }
+        const engine = new LongHaulEngine(
+          container,
+          {
+            onHud: (h) => setHud(h),
+            onLoanPrompt: () => setModalOpen(true),
+            onFinish: (s) => {
+              setSummary(s);
+              if (!hasAwardedRef.current) {
+                hasAwardedRef.current = true;
+                onComplete(s.tookLoan ? XP.onFinishWithLoan : XP.onCleanFinish, s.tookLoan);
+              }
+            },
           },
-        });
+          carModelId,
+        );
         engineRef.current = engine;
         await engine.init();
         if (cancelled) {
@@ -69,7 +80,7 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
       engineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [carModelId]);
 
   function driveAgain() {
     hasAwardedRef.current = false;
@@ -78,10 +89,53 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
     engineRef.current?.reset();
   }
 
+  function pickCarAndStart(id: string) {
+    setCarModelId(id);
+    setStatus("loading");
+  }
+
+  function changeCar() {
+    engineRef.current?.dispose();
+    engineRef.current = null;
+    setSummary(null);
+    setModalOpen(false);
+    setCarModelId(null);
+    setStatus("picking");
+  }
+
   if (status === "error") {
     return (
       <div className="text-sm py-3" style={{ color: "var(--verdict)" }}>
         The Long Haul needs WebGL to run — {error}
+      </div>
+    );
+  }
+
+  if (status === "picking") {
+    return (
+      <div className="jv-card" style={{ maxWidth: CANVAS_WIDTH }}>
+        <div className="text-sm font-medium mb-1" style={{ color: "var(--text-0)" }}>Pick your car</div>
+        <p className="text-xs mb-3" style={{ color: "var(--text-2)" }}>
+          Four stylized classics — handling varies a little by body style, not just paint.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {CAR_MODELS.map((car) => (
+            <button
+              key={car.id}
+              onClick={() => pickCarAndStart(car.id)}
+              className="text-left rounded-lg p-3"
+              style={{ background: "var(--ink-800)", border: "1px solid var(--line)" }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <span
+                  style={{ width: 12, height: 12, borderRadius: 3, background: `#${car.color.toString(16).padStart(6, "0")}`, display: "inline-block" }}
+                />
+                <span className="text-sm font-medium" style={{ color: "var(--text-0)" }}>{car.label}</span>
+              </div>
+              <div className="text-xs" style={{ color: "var(--text-2)" }}>{car.blurb}</div>
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
@@ -217,7 +271,10 @@ export function LongHaulGame({ onComplete }: { onComplete: (xpAwarded: number, t
               ) : (
                 <p className="text-xs mb-3" style={{ color: "var(--text-1)" }}>No loan taken — fuel management alone got you to the finish.</p>
               )}
-              <button className="jv-btn" onClick={driveAgain}>Drive Again</button>
+              <div className="flex gap-3">
+                <button className="jv-btn" onClick={driveAgain}>Drive Again</button>
+                <button className="jv-btn-outline" onClick={changeCar}>Change Car</button>
+              </div>
             </div>
           </div>
         )}

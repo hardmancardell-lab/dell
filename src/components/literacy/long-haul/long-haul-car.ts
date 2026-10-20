@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { PAL } from "./long-haul-palette";
 import { CAR, TRAILER_DIMS, buildCarGeometries, buildTrailerGeometries, type ResourceBin } from "./long-haul-geometry";
 import { bodyPitch, bodyRoll, roughNoise, steerYaw, wheelSpinDelta, approach } from "./long-haul-feel";
+import type { CarModel } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 
 /**
  * The player's small hatchback and the loan trailer, built from procedural geometry (see long-haul-geometry.ts).
@@ -46,13 +47,14 @@ export class LongHaulCar {
   private pitch = 0;
   private brakeLevel = 0;
 
-  constructor(bin: ResourceBin, textures: CarTextures) {
-    const geo = buildCarGeometries();
+  constructor(bin: ResourceBin, textures: CarTextures, model?: CarModel) {
+    const geo = buildCarGeometries(model);
     for (const g of Object.values(geo)) bin.add(g);
+    const length = model?.length ?? CAR.length;
 
     const body = bin.add(
       new THREE.MeshPhysicalMaterial({
-        color: PAL.signal,
+        color: model?.color ?? PAL.signal,
         metalness: 0.5,
         roughness: 0.3,
         clearcoat: 1,
@@ -88,9 +90,11 @@ export class LongHaulCar {
       }
     }
 
-    // Soft shadow under the car and the light the headlights throw on the road.
+    // Soft shadow under the car and the light the headlights throw on the road, both scaled to the
+    // selected model's length so a longer Caprice or shorter Challenger doesn't look mismatched.
+    const lengthScale = length / CAR.length;
     const shadowMat = bin.add(new THREE.MeshBasicMaterial({ map: textures.shadow, transparent: true, depthWrite: false, opacity: 0.95, polygonOffset: true, polygonOffsetFactor: -2 }));
-    const shadowGeo = bin.add(new THREE.PlaneGeometry(2.7, 5.4));
+    const shadowGeo = bin.add(new THREE.PlaneGeometry(2.7, 5.4 * lengthScale));
     shadowGeo.rotateX(-Math.PI / 2);
     const shadow = new THREE.Mesh(shadowGeo, shadowMat);
     shadow.position.set(0, 0.045, 0);
@@ -104,7 +108,7 @@ export class LongHaulCar {
     poolGeo.rotateX(-Math.PI / 2);
     poolGeo.rotateY(Math.PI); // texture "up" is the direction of travel (+z in car space)
     const pool = new THREE.Mesh(poolGeo, poolMat);
-    pool.position.set(0, 0.055, 2.2 + 7.2);
+    pool.position.set(0, 0.055, length / 2 + 7.2);
     pool.renderOrder = 2;
     this.group.add(pool);
 
@@ -112,7 +116,7 @@ export class LongHaulCar {
     this.tailGlowMaterial = bin.add(new THREE.SpriteMaterial({ map: textures.glow, color: 0xff2b3a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
     for (const sx of [1, -1]) {
       const s = new THREE.Sprite(this.tailGlowMaterial);
-      s.position.set(sx * 0.62, 0.84, -2.05);
+      s.position.set(sx * 0.62, 0.84, -length / 2 + 0.05);
       s.scale.set(1.3, 0.8, 1);
       this.bodyPivot.add(s);
     }
