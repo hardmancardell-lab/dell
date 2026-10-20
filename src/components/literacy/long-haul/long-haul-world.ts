@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TRACK, ECONOMY } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { TRACK, ECONOMY, CITY_CROSS } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import { PAL } from "./long-haul-palette";
 import {
   FACADE,
@@ -50,6 +50,8 @@ const ROAD_LEN = WORLD.zNear - WORLD.zFar;
 const ROAD_CENTRE_Z = (WORLD.zNear + WORLD.zFar) / 2;
 const SPLIT_MID_Z = (TRACK.laneSplitStartZ + TRACK.laneSplitEndZ) / 2;
 const SPLIT_LEN = Math.abs(TRACK.laneSplitEndZ - TRACK.laneSplitStartZ);
+const CROSS_Z0 = CITY_CROSS.z + CITY_CROSS.halfWidth; // near edge of the cross-street gap (toward +z)
+const CROSS_Z1 = CITY_CROSS.z - CITY_CROSS.halfWidth; // far edge (toward -z)
 const FOG_NEAR = 45;
 const FOG_FAR = 270;
 
@@ -131,6 +133,7 @@ export class LongHaulWorld {
     this.buildDirtLane(anisotropy);
     this.buildMedian(anisotropy);
     this.buildCones();
+    this.buildCrossStreet(anisotropy, glow);
 
     const tollSign = this.buildTollGantry(anisotropy);
     this.tollSignMaterial = tollSign;
@@ -155,23 +158,29 @@ export class LongHaulWorld {
     };
     const parts = [] as { geo: THREE.BufferGeometry; color: number }[];
     for (const s of [1, -1]) {
-      parts.push(slab(7.4, 0.16, ROAD_LEN, s * 24.3, 0.08, ROAD_CENTRE_Z, 0x232d3a));
-      parts.push(slab(0.36, 0.2, ROAD_LEN, s * 20.8, 0.1, ROAD_CENTRE_Z, 0x46566a));
+      // Each side's sidewalk is split around the cross-street gap (CROSS_Z0/CROSS_Z1), same pattern as the gas-station gap below.
+      parts.push(slab(7.4, 0.16, WORLD.zNear - CROSS_Z0, s * 24.3, 0.08, (WORLD.zNear + CROSS_Z0) / 2, 0x232d3a));
+      parts.push(slab(7.4, 0.16, CROSS_Z1 - WORLD.zFar, s * 24.3, 0.08, (CROSS_Z1 + WORLD.zFar) / 2, 0x232d3a));
+      parts.push(slab(0.36, 0.2, WORLD.zNear - CROSS_Z0, s * 20.8, 0.1, (WORLD.zNear + CROSS_Z0) / 2, 0x46566a));
+      parts.push(slab(0.36, 0.2, CROSS_Z1 - WORLD.zFar, s * 20.8, 0.1, (CROSS_Z1 + WORLD.zFar) / 2, 0x46566a));
     }
     // Concrete apron in front of the gas station.
     parts.push(slab(26, 0.17, 40, 33.6, 0.085, TRACK.gasStationZ, 0x2b3644));
     const walkGeo = bin.add(mergeAll(parts, true));
     group.add(new THREE.Mesh(walkGeo, bin.add(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }))));
 
-    // Low jersey barriers along both road edges (visual only; the car is clamped to the road by the engine). Gap at the gas station.
+    // Low jersey barriers along both road edges (visual only; the car is clamped to the road by the engine). Gaps at the gas
+    // station (right side only) and at the cross street (both sides, so the car can actually turn and drive through).
     const barMat = bin.add(new THREE.MeshStandardMaterial({ color: 0x4a5b70, roughness: 0.85 }));
     const segments: { x: number; z0: number; z1: number }[] = [
-      { x: -20.25, z0: WORLD.zNear, z1: WORLD.zFar },
-      { x: 20.25, z0: WORLD.zNear, z1: TRACK.gasStationZ + 17 },
-      { x: 20.25, z0: TRACK.gasStationZ - 17, z1: WORLD.zFar },
+      { x: -20.25, z0: WORLD.zNear, z1: CROSS_Z0 },
+      { x: -20.25, z0: CROSS_Z1, z1: WORLD.zFar },
+      { x: 20.25, z0: WORLD.zNear, z1: Math.min(CROSS_Z0, TRACK.gasStationZ + 17) },
+      { x: 20.25, z0: Math.max(CROSS_Z1, TRACK.gasStationZ - 17), z1: WORLD.zFar },
     ];
     for (const seg of segments) {
       const len = seg.z0 - seg.z1;
+      if (len <= 0) continue;
       const mesh = new THREE.Mesh(bin.add(buildBarrierGeometry(len)), barMat);
       mesh.position.set(seg.x, 0, (seg.z0 + seg.z1) / 2);
       group.add(mesh);
@@ -182,9 +191,12 @@ export class LongHaulWorld {
     const studs: Inst[] = [];
     const colors: number[] = [];
     for (let z = WORLD.zNear - 2; z > WORLD.zFar; z -= 7) {
-      studs.push({ x: -19.86, y: 0.7, z, sx: 1, sy: 1, sz: 1, ry: 0 });
-      colors.push(0xdfe9f5);
-      if (z > TRACK.gasStationZ + 17 || z < TRACK.gasStationZ - 17) {
+      const inCrossGap = z < CROSS_Z0 && z > CROSS_Z1;
+      if (!inCrossGap) {
+        studs.push({ x: -19.86, y: 0.7, z, sx: 1, sy: 1, sz: 1, ry: 0 });
+        colors.push(0xdfe9f5);
+      }
+      if (!inCrossGap && (z > TRACK.gasStationZ + 17 || z < TRACK.gasStationZ - 17)) {
         studs.push({ x: 19.86, y: 0.7, z, sx: 1, sy: 1, sz: 1, ry: 0 });
         colors.push(PAL.verdict);
       }
@@ -344,6 +356,94 @@ export class LongHaulWorld {
     const m = new THREE.InstancedMesh(coneGeo, coneMat, cones.length);
     cones.forEach((c, i) => place(m, i, c.x, c.y, c.z));
     group.add(m);
+  }
+
+  /**
+   * A real, turnable cross street at CITY_CROSS.z -- the barrier/sidewalk gaps that make this
+   * drivable live in buildSidewalksAndBarriers() above; this just dresses the street itself:
+   * asphalt, sidewalks, a few buildings and lamps down both arms so turning onto it pays off.
+   */
+  private buildCrossStreet(anisotropy: number, glow: THREE.Texture): void {
+    const { bin, group } = this;
+    const z = CITY_CROSS.z;
+    const halfLen = CITY_CROSS.streetHalfLength;
+    const halfW = CITY_CROSS.streetHalfWidth;
+
+    const asphalt = bin.add(makeAsphaltTexture(anisotropy));
+    asphalt.repeat.set((halfLen * 2) / 8, (halfW * 2) / 8);
+    asphalt.needsUpdate = true;
+    const street = new THREE.Mesh(
+      bin.add(new THREE.PlaneGeometry(halfLen * 2, halfW * 2)),
+      bin.add(new THREE.MeshStandardMaterial({ color: 0xb8c4d2, map: asphalt, roughness: 0.92, metalness: 0 })),
+    );
+    street.rotation.x = -Math.PI / 2;
+    street.position.set(0, 0.002, z);
+    group.add(street);
+
+    // Dashed centre line down the street's length (dashes run along x, this street's direction).
+    const dashMat = bin.add(new THREE.MeshStandardMaterial({ color: PAL.paint, roughness: 0.7, emissive: 0x20262e, polygonOffset: true, polygonOffsetFactor: -1 }));
+    const dashXs: number[] = [];
+    for (let x = -halfLen + 4; x < halfLen - 4; x += 8) dashXs.push(x + 2);
+    const dashGeo = bin.add(new THREE.PlaneGeometry(1, 1));
+    dashGeo.rotateX(-Math.PI / 2);
+    const dashMesh = new THREE.InstancedMesh(dashGeo, dashMat, dashXs.length);
+    dashXs.forEach((x, i) => place(dashMesh, i, x, 0.025, z, 4, 1, 0.18));
+    group.add(dashMesh);
+
+    // Sidewalks along both long edges of the street, matching the main road's slab proportions.
+    const walkMat = bin.add(new THREE.MeshStandardMaterial({ color: 0x46566a, roughness: 1 }));
+    for (const s of [1, -1]) {
+      const walk = new THREE.Mesh(bin.add(new THREE.BoxGeometry(halfLen * 2 - 6, 0.16, 3.4)), walkMat);
+      walk.position.set(0, 0.08, z + s * (halfW + 1.7));
+      group.add(walk);
+    }
+
+    // A few buildings and lamps down each arm so there's something to actually drive toward.
+    const bldgMat = [0x2e3a4a, 0x3a3041, 0x27352f].map((c) => bin.add(new THREE.MeshStandardMaterial({ color: c, roughness: 0.88, metalness: 0.05 })));
+    const rnd = mulberry32(555);
+    let variant = 0;
+    for (const side of [1, -1]) {
+      let x = side * 24;
+      while (Math.abs(x) < halfLen - 9) {
+        const w = 8 + rnd() * 3;
+        const h = 7 + rnd() * 14;
+        for (const zs of [1, -1]) {
+          const bld = new THREE.Mesh(bin.add(buildBuildingGeometry(w, h, w)), bldgMat[variant++ % bldgMat.length]);
+          bld.position.set(x, 0, z + zs * (halfW + 5 + rnd() * 2.5));
+          group.add(bld);
+        }
+        x += side * (w + 4 + rnd() * 4);
+      }
+    }
+    // Lamp arms point toward -x by default (buildLampPoleGeometry's convention); rotating by Y maps
+    // local -x to world (-cos(ry), sin(ry)) in (x,z) -- so side +1 (arm must reach -z) uses ry=-PI/2
+    // and side -1 (arm must reach +z) uses ry=+PI/2.
+    const lampPoleGeo = bin.add(buildLampPoleGeometry());
+    const lampHeadGeo = bin.add(buildLampHeadGeometry());
+    const lampPoleMat = bin.add(new THREE.MeshStandardMaterial({ color: 0x26303d, roughness: 0.6, metalness: 0.5 }));
+    const lampHeadMat = bin.add(new THREE.MeshBasicMaterial({ color: PAL.lampWarm }));
+    const lamps: { x: number; side: 1 | -1 }[] = [];
+    for (let x = -halfLen + 10; x < halfLen - 10; x += 22) lamps.push({ x, side: 1 }, { x: x + 11, side: -1 });
+    const poles = new THREE.InstancedMesh(lampPoleGeo, lampPoleMat, lamps.length);
+    const heads = new THREE.InstancedMesh(lampHeadGeo, lampHeadMat, lamps.length);
+    lamps.forEach((l, i) => {
+      const lz = z + l.side * (halfW + 0.6);
+      const ry = l.side === 1 ? -Math.PI / 2 : Math.PI / 2;
+      place(poles, i, l.x, 0.16, lz, 1, 1, 1, ry);
+      place(heads, i, l.x, 0.16, lz, 1, 1, 1, ry);
+    });
+    group.add(poles, heads);
+    const glowGeo = bin.add(new THREE.BufferGeometry());
+    const positions = new Float32Array(lamps.length * 3);
+    lamps.forEach((l, i) => {
+      positions[i * 3] = l.x;
+      positions[i * 3 + 1] = 8.0;
+      positions[i * 3 + 2] = z + l.side * (halfW + 0.6);
+    });
+    glowGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const glowPts = new THREE.Points(glowGeo, bin.add(new THREE.PointsMaterial({ map: glow, color: 0xffcf90, size: 7, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })));
+    glowPts.frustumCulled = false;
+    group.add(glowPts);
   }
 
   // ---------------------------------------------------------------- gantries and signs
@@ -692,6 +792,7 @@ export class LongHaulWorld {
       if (row === 0 && side < 0 && z - half < -12 && z + half > -42) return true; // first billboard
       if (row <= 1 && side > 0 && z - half < -138 && z + half > -164) return true;
       if (row <= 1 && side < 0 && z - half < -268 && z + half > -296) return true;
+      if (row <= 1 && z - half < CROSS_Z0 + 6 && z + half > CROSS_Z1 - 6) return true; // cross street (buildCrossStreet owns this z band)
       return false;
     };
     for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {

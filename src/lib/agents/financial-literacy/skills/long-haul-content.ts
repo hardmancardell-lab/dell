@@ -29,6 +29,26 @@ export const TRACK = {
   finishZ: -320,
 };
 
+/**
+ * One real, turnable cross street, early on the main corridor -- between the
+ * car's spawn (z = 0, heading toward -z) and TRACK.laneSplitStartZ (-60), so
+ * it doesn't touch the fork/toll/gas-station/finish economy already tuned
+ * and tested against the straight corridor. The car's heading-based
+ * steering already supports a real turn -- this is purely a world-geometry
+ * and boundary-clamp change (long-haul-world.ts, long-haul-engine.ts), not a
+ * physics or rules change. Continuing straight through it costs effectively
+ * no extra distance (halfWidth is small relative to the ~90+ unit legs
+ * already tuned), so it doesn't require re-tuning ECONOMY; turning onto it
+ * is a real, explorable detour with buildings and sidewalks down both
+ * sides, not a scored shortcut.
+ */
+export const CITY_CROSS = {
+  z: -25,
+  halfWidth: 14, // z-span of the open intersection (no buildings, clamp relaxed) on the main corridor
+  streetHalfLength: 55, // how far the cross street reaches to each side (x)
+  streetHalfWidth: 9, // the cross street's own drivable half-width
+};
+
 export const VEHICLE = {
   baseMaxSpeed: 32,
   baseAccel: 22,

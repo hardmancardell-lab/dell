@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
-import { TRACK, VEHICLE, TRAILER, ECONOMY, CAR_MODELS, type CarModel } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { TRACK, VEHICLE, TRAILER, ECONOMY, CITY_CROSS, CAR_MODELS, type CarModel } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import { LongHaulAudio } from "./long-haul-audio";
 import { advanceLoan, fuelAfter, NO_LOAN, shouldOfferLoan, stepSpeed, takeLoan, type LoanState } from "@/lib/agents/financial-literacy/skills/long-haul-rules";
 import { PAL } from "./long-haul-palette";
@@ -412,11 +412,16 @@ export class LongHaulEngine {
       // regardless of what the collision solver just computed from a wall
       // contact, so a physical wall collider alone does not stop the car —
       // confirmed by testing (it drove straight through at x=-20). Clamp
-      // track bounds directly instead of fighting the solver.
+      // track bounds directly instead of fighting the solver. Near
+      // CITY_CROSS.z the X boundary widens to the cross street's real
+      // length, so the car can actually turn and drive down it instead of
+      // being walled in at the main corridor's edge.
       const clampPos = this.carRigid.translation();
       const edge = TRACK.halfWidth - 1.2;
-      if (Math.abs(clampPos.x) > edge) {
-        const clampedX = Math.sign(clampPos.x) * edge;
+      const nearCrossStreet = Math.abs(clampPos.z - CITY_CROSS.z) <= CITY_CROSS.halfWidth;
+      const xLimit = nearCrossStreet ? CITY_CROSS.streetHalfLength - 1.2 : edge;
+      if (Math.abs(clampPos.x) > xLimit) {
+        const clampedX = Math.sign(clampPos.x) * xLimit;
         this.carRigid.setTranslation({ x: clampedX, y: clampPos.y, z: clampPos.z }, true);
         const lv = this.carRigid.linvel();
         this.carRigid.setLinvel({ x: 0, y: lv.y, z: lv.z }, true);
