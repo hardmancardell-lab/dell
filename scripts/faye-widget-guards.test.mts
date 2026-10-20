@@ -255,7 +255,7 @@ test("widget: accessibility wiring (dialog name, labelled input and buttons, one
   assert.match(widgetSrc, /role="log"[\s\S]{0,40}aria-live="off"/, "the streaming conversation is not itself announced");
   assert.match(widgetSrc, /e\.key === "Escape"/);
   assert.match(widgetSrc, /launchRef\.current\?\.focus\(\)/, "focus returns to the launcher on close");
-  assert.match(widgetSrc, /inputRef\.current \?\? panelRef\.current\)\?\.focus\(\)/, "focus moves to the input on open");
+  assert.match(widgetSrc, /inputRef\.current && !inputRef\.current\.disabled \? inputRef\.current : panelRef\.current/, "focus moves to the input (or the panel) whenever it opens");
 });
 
 test("widget: copy under the mailbox is true; the old lines survive only for the local transport", () => {

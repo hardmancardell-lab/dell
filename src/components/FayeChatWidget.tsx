@@ -105,7 +105,7 @@ export const FAYE_WIDGET_CSS = `
 .fw{--fw-950:var(--ink-950,${J.ink950});--fw-900:var(--ink-900,${J.ink900});--fw-800:var(--ink-800,${J.ink800});--fw-700:var(--ink-700,${J.ink700});
 --fw-line:var(--line,${J.line});--fw-ctl:var(--line-control,${J.lineControl});--fw-signal:var(--signal,${J.signal});--fw-signal-dim:var(--signal-dim,${J.signalDim});
 --fw-verdict:var(--verdict,${J.verdict});--fw-danger:var(--danger,${J.danger});--fw-t0:var(--text-0,${J.text0});--fw-t1:var(--text-1,${J.text1});--fw-t2:var(--text-2,${J.text2});
---fw-focus:var(--focus-ring,${J.signal});--fw-gap:max(16px,env(safe-area-inset-right));
+--fw-focus:var(--focus-ring,${J.signal});--fw-gap:max(16px,env(safe-area-inset-right));--fw-lift:56px;
 font-family:var(--font-ui,-apple-system,"Segoe UI",system-ui,sans-serif);color:var(--fw-t0)}
 .fw *{box-sizing:border-box}
 .fw :focus-visible{outline:2px solid var(--fw-focus);outline-offset:2px}
@@ -114,12 +114,12 @@ font-family:var(--font-ui,-apple-system,"Segoe UI",system-ui,sans-serif);color:v
 .fw-btn:hover:not(:disabled){border-color:var(--fw-signal)}
 .fw-btn:disabled{opacity:.55;cursor:default}
 .fw-btn-primary{background:var(--fw-signal-dim);border-color:var(--fw-signal-dim)}
-.fw-launch{position:fixed;z-index:999;right:var(--fw-gap);bottom:max(16px,env(safe-area-inset-bottom));display:inline-flex;align-items:center;gap:8px;
+.fw-launch{position:fixed;z-index:999;right:var(--fw-gap);bottom:calc(max(16px,env(safe-area-inset-bottom)) + var(--fw-lift));display:inline-flex;align-items:center;gap:8px;
 min-height:48px;padding:6px 18px 6px 8px;border-radius:999px;background:var(--fw-900);border:1px solid var(--fw-ctl);color:var(--fw-t0);font:500 14px/1 var(--font-ui,system-ui,sans-serif);cursor:pointer;
 box-shadow:0 2px 14px color-mix(in srgb,var(--fw-950) 80%,transparent)}
 .fw-launch:hover{border-color:var(--fw-signal)}
-.fw-panel{position:fixed;z-index:999;right:var(--fw-gap);bottom:calc(max(16px,env(safe-area-inset-bottom)) + 60px);width:360px;
-max-height:calc(100vh - 100px);max-height:min(580px,calc(100dvh - 100px));display:flex;flex-direction:column;background:var(--fw-900);border:1px solid var(--fw-ctl);border-radius:14px;
+.fw-panel{position:fixed;z-index:999;right:var(--fw-gap);bottom:calc(max(16px,env(safe-area-inset-bottom)) + var(--fw-lift) + 60px);width:360px;
+max-height:calc(100vh - 156px);max-height:min(580px,calc(100dvh - 156px));display:flex;flex-direction:column;background:var(--fw-900);border:1px solid var(--fw-ctl);border-radius:14px;
 box-shadow:0 10px 36px color-mix(in srgb,var(--fw-950) 85%,transparent);overflow:hidden}
 .fw-head{display:flex;align-items:center;gap:10px;padding:10px 8px 8px 12px;border-bottom:1px solid var(--fw-line)}
 .fw-head-text{flex:1;min-width:0}
@@ -241,6 +241,16 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, status, recheck]);
 
+  // Whenever the panel opens, put focus in the input (or on the panel itself while the input is disabled), so keyboard and screen reader users start in the right place.
+  useEffect(() => {
+    if (!open) return;
+    const f = requestAnimationFrame(() => {
+      const el = inputRef.current && !inputRef.current.disabled ? inputRef.current : panelRef.current;
+      el?.focus();
+    });
+    return () => cancelAnimationFrame(f);
+  }, [open, status]);
+
   // Keep the newest text in view, unless the reader has scrolled up to re-read something.
   useEffect(() => {
     const el = scrollRef.current;
@@ -256,7 +266,6 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
     setOpen(true);
     setRecheck(0);
     void refreshStatus(true); // wake=1 tells the mailbox to expect a question soon (a no-op for the local transport)
-    requestAnimationFrame(() => (inputRef.current ?? panelRef.current)?.focus());
   }
 
   function closePanel() {
