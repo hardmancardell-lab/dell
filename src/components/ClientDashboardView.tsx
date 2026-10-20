@@ -215,11 +215,10 @@ export function ClientDashboardView({ slug }: { slug: string }) {
                     <th className="text-left">Symbol</th>
                     <th className="text-left">Class</th>
                     <th className="text-right">Shares</th>
-                    <th className="text-right">Avg Cost/Share</th>
-                    <th className="text-right">Price</th>
+                    <th className="text-right">Cost paid / Spot</th>
                     <th className="text-right">Value</th>
                     <th className="text-right">Market Cap</th>
-                    <th className="text-right">P&amp;L</th>
+                    <th className="text-right">Net P&amp;L</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -242,8 +241,12 @@ export function ClientDashboardView({ slug }: { slug: string }) {
                         </td>
                         <td style={{ color: "var(--text-2)" }}>{assetClassLabel(v.holding.assetClass)}</td>
                         <td className="jv-num">{v.holding.shares}</td>
-                        <td className="jv-num" style={{ color: "var(--text-2)" }}>{fmtUsd(v.holding.costBasisPerShare)}</td>
-                        <td className="jv-num">{v.error ? <span className="text-xs" style={{ color: "var(--danger)" }}>{v.error}</span> : fmtUsd(v.currentPrice)}</td>
+                        <td className="jv-num">
+                          <span className="block" style={{ color: "var(--text-2)" }} title="Average price paid per share">{fmtUsd(v.holding.costBasisPerShare)}</span>
+                          <span className="block" title="Today's price per share (latest trade), not the price on the date of purchase">
+                            {v.error ? <span className="text-xs" style={{ color: "var(--danger)" }}>{v.error}</span> : fmtUsd(v.currentPrice)}
+                          </span>
+                        </td>
                         <td className="jv-num">{fmtUsd(v.currentValue)}</td>
                         <td className="jv-num" style={{ color: "var(--text-2)" }}>{fmtMarketCap(v.marketCapUsd)}</td>
                         <td className={`jv-num ${pnlClass}`}>{fmtUsd(pnl)} ({fmtPct(v.unrealizedPLPercent)})</td>

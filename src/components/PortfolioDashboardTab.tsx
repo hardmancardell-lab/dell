@@ -430,11 +430,10 @@ export function PortfolioDashboardTab() {
                 <th className="text-left">Symbol</th>
                 <th className="text-left">Class</th>
                 <th className="text-right">{holdings.some((h) => h.assetClass === "crypto") ? "Shares / Coins" : "Shares"}</th>
-                <th className="text-right">Cost/Share</th>
-                <th className="text-right">Price</th>
+                <th className="text-right">Cost paid / Spot</th>
                 <th className="text-right">Value</th>
                 <th className="text-right">Market Cap</th>
-                <th className="text-right">P&amp;L (HPR)</th>
+                <th className="text-right">Net P&amp;L (HPR)</th>
                 <th className="text-right">Annualized</th>
                 <th></th>
               </tr>
@@ -459,8 +458,12 @@ export function PortfolioDashboardTab() {
                       </td>
                       <td style={{ color: "var(--text-2)" }}>{assetClassLabel(h.assetClass)}</td>
                       <td className="jv-num">{h.shares}</td>
-                      <td className="jv-num">{fmtUnitPrice(h.costBasisPerShare, h.assetClass)}</td>
-                      <td className="jv-num">{v?.error ? <span className="text-xs" style={{ color: "var(--danger)" }}>{v.error}</span> : fmtUnitPrice(v?.currentPrice ?? null, h.assetClass)}</td>
+                      <td className="jv-num">
+                        <span className="block" style={{ color: "var(--text-2)" }} title="What you paid per share">{fmtUnitPrice(h.costBasisPerShare, h.assetClass)}</span>
+                        <span className="block" title="Today's price per share (latest trade), not the price on the date you bought">
+                          {v?.error ? <span className="text-xs" style={{ color: "var(--danger)" }}>{v.error}</span> : fmtUnitPrice(v?.currentPrice ?? null, h.assetClass)}
+                        </span>
+                      </td>
                       <td className="jv-num">{fmtUsd(v?.currentValue ?? null)}</td>
                       <td className="jv-num" style={{ color: "var(--text-2)" }}>{fmtMarketCap(v?.marketCapUsd ?? null)}</td>
                       <td className={`jv-num ${pnlClass}`}>
