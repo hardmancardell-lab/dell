@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
-import { TRACK, VEHICLE, TRAILER, ECONOMY } from "@/lib/agents/financial-literacy/skills/long-haul-content";
+import { TRACK, VEHICLE, TRAILER, ECONOMY, CAR_MODELS, type CarModel } from "@/lib/agents/financial-literacy/skills/long-haul-content";
 import { LongHaulAudio } from "./long-haul-audio";
 import { advanceLoan, fuelAfter, NO_LOAN, shouldOfferLoan, stepSpeed, takeLoan, type LoanState } from "@/lib/agents/financial-literacy/skills/long-haul-rules";
 import { PAL } from "./long-haul-palette";
@@ -123,7 +123,10 @@ export class LongHaulEngine {
   private readonly audio = new LongHaulAudio();
   private readonly onUserGesture = () => this.audio.unlock();
 
-  constructor(private container: HTMLElement, private callbacks: LongHaulCallbacks) {
+  private readonly carModel?: CarModel;
+
+  constructor(private container: HTMLElement, private callbacks: LongHaulCallbacks, carModelId?: string) {
+    this.carModel = carModelId ? CAR_MODELS.find((m) => m.id === carModelId) : undefined;
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(this.renderer.domElement);
@@ -197,12 +200,16 @@ export class LongHaulEngine {
     }
 
     const glow = this.bin.add(makeGlowTexture(2));
-    this.car = new LongHaulCar(this.bin, {
-      shadow: this.bin.add(makeBlobShadowTexture()),
-      headlightPool: this.bin.add(makeHeadlightPoolTexture()),
-      glow,
-      envMap,
-    });
+    this.car = new LongHaulCar(
+      this.bin,
+      {
+        shadow: this.bin.add(makeBlobShadowTexture()),
+        headlightPool: this.bin.add(makeHeadlightPoolTexture()),
+        glow,
+        envMap,
+      },
+      this.carModel,
+    );
     this.scene.add(this.car.group);
     this.scene.add(this.car.trailer);
     this.effects = new DriveEffects(this.bin, this.scene, this.car.group, glow);
