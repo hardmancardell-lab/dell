@@ -247,7 +247,7 @@ any non-final -> cancelled (user pressed Stop)
 Lease 90 s, renewed by every `faye_append_chunks` call (an empty array is a valid heartbeat; send one every 15 s). Max runtime: chat 180 s, continue 30 s, extract 300 s, eval 3600 s. Past either limit the job becomes `failed` with `worker_lost`. A requeue happens only if no chunk was written.
 
 ### 5.3 `faye_append_chunks(p_token text, p_worker text, p_job_id uuid, p_chunks jsonb) -> jsonb`
-`p_chunks` is an array of `{ "seq": int, "ev": "chunk" | "retract" (default "chunk"), "text": string <= 8000 }`. At most 100 items and 64 KB per call. `seq` starts at 1 and must be consecutive: a `seq` already stored is skipped (idempotent retry); `seq = last + 1` is stored; anything else is rejected with `seq_gap`. At most 5000 chunks per job.
+`p_chunks` is an array of `{ "seq": int, "ev": "chunk" | "retract" (default "chunk"), "text": string <= 8000 }`. At most 100 items and 64 KB of JSON per call. `seq` starts at 1 and must be consecutive: a `seq` already stored is skipped (idempotent retry); `seq = last + 1` is stored; anything else is rejected with `seq_gap`. At most 5000 chunks per job.
 Replies:
 ```json
 { "ok": true, "cancel": false, "last_seq": 12, "interactive_waiting": false }
