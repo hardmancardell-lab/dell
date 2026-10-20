@@ -372,7 +372,8 @@ export class LongHaulEngine {
 
       if (!this.gasStationResolved && pos.z <= TRACK.gasStationZ) {
         this.gasStationResolved = true;
-        if (shouldOfferLoan(this.fuel)) {
+        const remainingDistance = pos.z - TRACK.finishZ;
+        if (shouldOfferLoan(this.fuel, remainingDistance)) {
           this.pauseCar();
           this.phase = "modal";
           this.audio.loanPrompt();

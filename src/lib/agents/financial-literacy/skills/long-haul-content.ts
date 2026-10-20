@@ -26,7 +26,6 @@ export const TRACK = {
   laneSplitEndZ: -190,
   tollZ: -100,
   gasStationZ: -230,
-  gasStationFuelThreshold: 40,
   finishZ: -320,
 };
 
@@ -49,10 +48,10 @@ export const TRAILER = {
 
 export const ECONOMY = {
   // Raised from 6 to 9 so that holding the throttle on the HIGHWAY reaches the
-  // gas station below gasStationFuelThreshold (25 fuel vs 49 before) and the
-  // loan offer is actually shown on both lanes; a lighter foot (about half
-  // throttle) still finishes clean, so fuel management is a real choice.
-  // Checked by scripts/quality/long-haul.test.mts.
+  // gas station with too little range left to finish (fuelRange() in
+  // long-haul-rules.ts) and the loan offer is actually shown on both lanes; a
+  // lighter foot (about half throttle) still finishes clean, so fuel
+  // management is a real choice. Checked by scripts/quality/long-haul.test.mts.
   fuelDrainAtFullThrottle: 9, // per second
   fuelDrainIdle: 0.5, // per second
   tollCost: 5,
