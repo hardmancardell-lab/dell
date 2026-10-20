@@ -58,7 +58,14 @@ function isPublicPath(pathname: string): boolean {
  */
 export async function middleware(request: NextRequest) {
   const sitePassword = process.env.SITE_ACCESS_PASSWORD;
-  if (sitePassword) {
+  // /gate (the password page) and /api/gate (the endpoint that checks the
+  // password and sets the cookie) must stay reachable even with no cookie
+  // yet -- without this exemption, a first-time visitor with no cookie gets
+  // redirected to /gate, which itself fails the same check and redirects to
+  // /gate again, forever. Confirmed live: any Preview deployment with
+  // SITE_ACCESS_PASSWORD set 307-loops on every path including /gate itself.
+  const isGatePath = request.nextUrl.pathname === "/gate" || request.nextUrl.pathname.startsWith("/api/gate");
+  if (sitePassword && !isGatePath) {
     const cookie = request.cookies.get(SITE_GATE_COOKIE)?.value;
     if (cookie !== sitePassword) {
       return NextResponse.redirect(new URL("/gate", request.url));
