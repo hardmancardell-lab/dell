@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 const PG = await import("../src/lib/faye/plan-guards.ts");
 const AV = await import("../src/lib/faye/action-validation.ts");
 const POV = await import("../src/lib/faye/paper-order-validation.ts");
+const TRANSPORT = await import("../src/lib/faye/transport.ts");
 
 const call = (id: any, extra: any = {}) => ({ id, tool: "macro_overview", agent: "Research", method: "GET", path: "/api/macro-overview", params: {}, ...extra });
 const many = (n: number) => Array.from({ length: n }, (_, i) => call("c" + i));
@@ -160,16 +161,123 @@ test("POV still accepts what the orchestrator really proposes (stock buy, option
 });
 
 // ------------------------------------------------------------------ the widget really uses them
-test("widget wiring: plan sanitizer before running, validated action on the card, SseParser instead of ad hoc parsing", () => {
-  const src = readFileSync(new URL("../src/components/FayeChatWidget.tsx", import.meta.url), "utf8");
+// After WP-C1 the guards live in src/lib/faye/transport.ts (runQuestion), AFTER the transport, so the local and the mailbox
+// transport go through the same code. The widget calls runQuestion and renders only what it returns.
+const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const widgetSrc = readFileSync(new URL("../src/components/FayeChatWidget.tsx", import.meta.url), "utf8");
+const transportSrc = readFileSync(new URL("../src/lib/faye/transport.ts", import.meta.url), "utf8");
+
+test("guard wiring: plan sanitizer before running, validated action on the card, SseParser instead of ad hoc parsing", () => {
+  const src = transportSrc;
   assert.match(src, /sanitizePlanCalls\(calls, callsRun\)/, "every turn's calls are checked");
-  assert.match(src, /sanitizePlanCalls\(data\.calls, 0\)/, "the first plan is checked");
-  assert.match(src, /validateProposedAction\(data\.action\)/, "first-turn actions are validated");
-  assert.match(src, /validateProposedAction\(json\.action\)/, "final-turn actions are validated");
-  assert.match(src, /m\.action\.summary/, "the card renders the validated summary");
+  assert.match(src, /sanitizePlanCalls\(first\.calls, 0\)/, "the first plan is checked");
+  assert.match(src, /validateProposedAction\(first\.action\)/, "first-turn actions are validated");
+  assert.match(src, /validateProposedAction\(res\.action\)/, "final-turn actions are validated");
+  assert.match(widgetSrc, /m\.action\.summary/, "the card renders the validated summary");
   assert.match(src, /new SseParser\(\)/);
   assert.doesNotMatch(src, /JSON\.parse\(dataMatch/, "the unguarded SSE parse is gone");
-  assert.doesNotMatch(src, /as ProposedAction/, "no unvalidated cast of a server action");
+  assert.doesNotMatch(src + widgetSrc, /as ProposedAction/, "no unvalidated cast of a server action");
   assert.match(src, /Object\.create\(null\)/, "result map has no prototype");
   assert.match(src, /hasOwnProperty\.call\(ALLOWED_TOOLS/, "allowlist lookup cannot be fooled by prototype keys");
+  assert.match(widgetSrc, /runQuestion\(/, "the widget goes through the shared engine, whatever the transport");
+  assert.doesNotMatch(stripComments(widgetSrc), /fetch\(\s*(CHAT_URL|CONTINUE_URL|STATUS_URL)|127\.0\.0\.1/, "the widget never talks to a transport URL itself");
+});
+
+test("the read-only allowlist is unchanged by the move: same twelve routes, same methods", () => {
+  assert.deepEqual(Object.keys(TRANSPORT.ALLOWED_TOOLS).sort(), [
+    "/api/catalyst-calendar", "/api/crypto-regime", "/api/gex-signal", "/api/guided-trade-signals", "/api/historical-backtest", "/api/macro-overview",
+    "/api/option-chain-contracts", "/api/option-expirations", "/api/research-screener", "/api/sector-recommendations", "/api/security-analysis", "/api/watchlist-scan",
+  ]);
+  assert.equal(TRANSPORT.ALLOWED_TOOLS["/api/watchlist-scan"], "POST");
+  for (const [k, v] of Object.entries(TRANSPORT.ALLOWED_TOOLS)) if (k !== "/api/watchlist-scan") assert.equal(v, "GET", k);
+});
+
+test("executeCall: only allowlisted routes with the listed method, safe params, safe POST body; nothing else is fetched", async () => {
+  const seen: string[] = [];
+  const f = async (u: any) => { seen.push(String(u)); return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } }); };
+  const base = { id: "a", tool: "t", agent: "A", method: "GET", params: {} };
+  for (const bad of [
+    { ...base, path: "/api/paper-trading/order", method: "POST" },
+    { ...base, path: "/api/macro-overview", method: "POST" },
+    { ...base, path: "/api/toString" },
+    { ...base, path: "/api/macro-overview", params: { "bad key": "x" } },
+    { ...base, path: "/api/macro-overview", params: { ticker: "NVDA;drop" } },
+    { ...base, path: "/api/macro-overview", params: { ticker: "a".repeat(41) } },
+    { ...base, path: "/api/watchlist-scan", method: "POST", body: { entries: [] } },
+    { ...base, path: "/api/watchlist-scan", method: "POST", body: { entries: [{ symbol: "A;B", assetClass: "equity" }] } },
+    { ...base, path: "/api/watchlist-scan", method: "POST", body: { entries: Array.from({ length: 11 }, () => ({ symbol: "A", assetClass: "equity" })) } },
+  ]) {
+    const r = await TRANSPORT.executeCall(bad as any, f as any);
+    assert.equal(r.ok, false, JSON.stringify(bad));
+    assert.match(r.error, /blocked/);
+  }
+  assert.deepEqual(seen, [], "no blocked call ever reached fetch");
+  const ok = await TRANSPORT.executeCall({ ...base, path: "/api/macro-overview", params: { ticker: "NVDA", n: 3 } } as any, f as any);
+  assert.equal(ok.ok, true);
+  assert.deepEqual(seen, ["/api/macro-overview?ticker=NVDA&n=3"]);
+});
+
+test("widget: model text is only ever a React text node (no HTML sinks)", () => {
+  const code = stripComments(widgetSrc);
+  assert.doesNotMatch(code, /dangerouslySetInnerHTML|innerHTML|insertAdjacentHTML|document\.write|outerHTML/);
+  assert.doesNotMatch(code, /\beval\(|new Function/);
+});
+
+test("widget: Jarvis tokens only (no hex or rgb colour literals), avatar used, stylesheet de-duplicated", () => {
+  const code = stripComments(widgetSrc);
+  assert.doesNotMatch(code, /["'`]#[0-9a-fA-F]{3,8}["'`]/, "no quoted hex");
+  assert.doesNotMatch(code, /\brgba?\(\s*\d/, "no rgb literals");
+  assert.doesNotMatch(code, /#0f6e56|rgba\(255,255,255/i, "the old hard-coded green and white-alpha are gone");
+  assert.match(widgetSrc, /import \{ FayeAvatar \} from "@\/components\/faye\/FayeAvatar"/);
+  assert.match(widgetSrc, /var\(--ink-900,\$\{J\.ink900\}\)/, "tokens with the tokens.ts fallback");
+  assert.match(widgetSrc, /<style href="faye-widget-v1" precedence="default">/);
+});
+
+test("widget: phone layout is full width and safe-area aware; touch targets and 16px input on phones", () => {
+  assert.match(widgetSrc, /@media \(max-width:520px\)/);
+  assert.match(widgetSrc, /env\(safe-area-inset-bottom\)/);
+  assert.match(widgetSrc, /env\(safe-area-inset-right\)/);
+  assert.match(widgetSrc, /env\(safe-area-inset-left\)/);
+  assert.match(widgetSrc, /\.fw-panel\{left:0;right:0;bottom:0;width:auto/);
+  assert.match(widgetSrc, /100dvh/);
+  assert.match(widgetSrc, /\.fw-input\{font-size:16px\}/, "iOS does not zoom a 16px input");
+  assert.match(widgetSrc, /\.fw-iconbtn\{[^}]*width:44px;height:44px/, "44px close target");
+});
+
+test("widget: accessibility wiring (dialog name, labelled input and buttons, one polite live region, Escape, focus return)", () => {
+  assert.match(widgetSrc, /role="dialog"/);
+  assert.match(widgetSrc, /aria-labelledby=\{titleId\}/);
+  assert.match(widgetSrc, /aria-expanded=\{open\}/);
+  assert.match(widgetSrc, /<label className="fw-sr" htmlFor=\{inputId\}>/);
+  assert.match(widgetSrc, /aria-label="Close Faye"/);
+  assert.match(widgetSrc, /aria-label="Stop Faye's answer"/);
+  assert.equal((widgetSrc.match(/aria-live="polite"/g) ?? []).length, 1, "exactly one polite live region");
+  assert.match(widgetSrc, /role="log"[\s\S]{0,40}aria-live="off"/, "the streaming conversation is not itself announced");
+  assert.match(widgetSrc, /e\.key === "Escape"/);
+  assert.match(widgetSrc, /launchRef\.current\?\.focus\(\)/, "focus returns to the launcher on close");
+  assert.match(widgetSrc, /inputRef\.current \?\? panelRef\.current\)\?\.focus\(\)/, "focus moves to the input on open");
+});
+
+test("widget: copy under the mailbox is true; the old lines survive only for the local transport", () => {
+  assert.match(widgetSrc, /transport\.kind === "mailbox" \? COPY_MAILBOX : COPY_LOCAL/);
+  assert.doesNotMatch(stripComments(widgetSrc), /Runs on your own computer/, "the false line is not hard-coded in the widget");
+  assert.match(TRANSPORT.COPY_MAILBOX, /24 hours/);
+});
+
+test("widget: feedback buttons, 'Used N notes', lab link and About-me are inert hooks, off by default", () => {
+  assert.match(widgetSrc, /feedback = false/);
+  assert.match(widgetSrc, /showNotesUsed = false/);
+  assert.match(widgetSrc, /feedback && !isUser/);
+  assert.match(widgetSrc, /showNotesUsed && \(m\.notesUsed \?\? 0\) > 0/);
+  assert.match(widgetSrc, /props\.labHref \?/);
+  assert.match(widgetSrc, /props\.aboutMeSlot \?\? null/);
+  for (const label of ["Good", "Wrong", "Too long", "Off-voice"]) assert.ok(widgetSrc.includes(label), label);
+  // the default transport is the env-selected one, and with nothing set that is local
+  assert.match(widgetSrc, /props\.transport \?\? createTransport\(\)/);
+});
+
+test("widget: a failed status check never makes an already-visible widget vanish; non-owners are hidden unless asked", () => {
+  assert.match(widgetSrc, /st\.state === "hidden" && statusRef\.current !== "checking" \? "offline"/);
+  assert.match(widgetSrc, /status === "not_allowed" && !showWhenNotAllowed\) return null/);
+  assert.match(widgetSrc, /status === "checking" \|\| status === "hidden"\) return null/);
 });
