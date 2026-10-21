@@ -8,6 +8,9 @@ import { JARVIS } from "@/lib/design/tokens";
 import type { ValidatedAction } from "@/lib/faye/action-validation";
 import { FayeAvatar } from "@/components/faye/FayeAvatar";
 import { FayeFullBody } from "@/components/faye/FayeFullBody";
+import { AboutMe, type AboutMeSummary } from "@/components/faye/AboutMe";
+import { NotesUsedLine } from "@/components/faye/AboutMeNotesUsed";
+import { createMemoryClient, rememberNote, type MemoryClient } from "@/lib/faye/memory-client";
 import {
   COPY_EMPTY,
   COPY_LOCAL,
@@ -58,6 +61,11 @@ interface ChatMessage {
   stopped?: boolean;
   retracted?: boolean;
   notesUsed?: number;
+  noteIds?: string[];
+  /** Small line under the owner's own message: "Saved a note." / "Proposed a note for you to approve." (from the remember call). */
+  memNote?: string;
+  /** Set on Faye's reply when the owner's message was a memory command ("remember that ...") handled without a chat job. */
+  memReply?: { undo?: { id: string; decision?: "undelete" }; state: "idle" | "working" | "done" | "error"; resultText?: string };
   // Rebuilt by validateProposedAction(): the card text and the executed values both come from this, never from server text.
   action?: ValidatedAction | null;
   actionStatus?: "pending" | "placing" | "done" | "cancelled" | "error";
@@ -75,13 +83,18 @@ export interface FayeChatWidgetProps {
   /** Feedback buttons (good, wrong, too long, off-voice). INERT SHELL: hidden unless true; presses go to onFeedback and do nothing else. */
   feedback?: boolean;
   onFeedback?: (messageId: string, kind: FeedbackKind) => void;
-  /** "Used N notes" line under an answer. Hidden placeholder until memory exists (WP-F); N comes from provenance.memory_ids. */
+  /** Force the "Used N notes" line on. By default it shows whenever memory is on (mailbox transport) and the owner's "Show which notes were used" setting is on. N comes from provenance.memory_ids. */
   showNotesUsed?: boolean;
-  /** Set true once Faye really keeps notes; only then does the offline line say "Your notes are still here." */
+  /** Force true to make the offline line say "Your notes are still here." By default the widget knows from the owner's own approved notes. */
   notesExist?: boolean;
+  /** Faye's memory (WP-F) in the widget: the About-me panel, the remember call before every typed message, "Saved a note" lines and the "Used N notes" list.
+   * Default true, but it only runs with the mailbox transport for an allowed owner. Set false to switch every memory call and the panel off. */
+  aboutMe?: boolean;
+  /** Replace the memory API client (tests and the visual preview). Default: this app's /api/faye/memory routes. */
+  memoryClient?: MemoryClient;
   /** HOOK for the Lab (WP-C2, design 5.1): when the owner has the Lab, pass its path and a link appears in the header. Inert when unset. */
   labHref?: string;
-  /** HOOK for the About-me panel (later package). Rendered between the header and the conversation when given. Inert when unset. */
+  /** Optional extra content between the header and the conversation (the built-in About-me panel replaces the conversation when it is open). Inert when unset. */
   aboutMeSlot?: ReactNode;
   /** Default "head" (unchanged: the aperture-face icon everywhere). "full" shows Faye as a full-body character above the messages in the open panel, on tall wide screens only (CSS media query); phones and the launcher keep the head icon. */
   variant?: "head" | "full";
@@ -112,6 +125,7 @@ export const FAYE_WIDGET_CSS = `
 font-family:var(--font-ui,-apple-system,"Segoe UI",system-ui,sans-serif);color:var(--fw-t0)}
 .fw *{box-sizing:border-box}
 .fw :focus-visible{outline:2px solid var(--fw-focus);outline-offset:2px}
+.fw [hidden]{display:none!important}
 .fw-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .fw-btn{font:inherit;cursor:pointer;color:var(--fw-t0);background:var(--fw-800);border:1px solid var(--fw-ctl);border-radius:8px;min-height:36px;padding:6px 12px;font-size:13px}
 .fw-btn:hover:not(:disabled){border-color:var(--fw-signal)}
@@ -124,6 +138,7 @@ box-shadow:0 2px 14px color-mix(in srgb,var(--fw-950) 80%,transparent)}
 .fw-panel{position:fixed;z-index:999;right:var(--fw-gap);bottom:calc(max(16px,env(safe-area-inset-bottom)) + var(--fw-lift) + 60px);width:360px;
 max-height:calc(100vh - 156px);max-height:min(580px,calc(100dvh - 156px));display:flex;flex-direction:column;background:var(--fw-900);border:1px solid var(--fw-ctl);border-radius:14px;
 box-shadow:0 10px 36px color-mix(in srgb,var(--fw-950) 85%,transparent);overflow:hidden}
+.fw-panel-wide{width:min(440px,calc(100vw - 32px))}
 .fw-stage{display:none}
 @media (min-height:760px) and (min-width:520px){
 .fw-full .fw-stage{display:flex;justify-content:center;padding:8px 0 2px;border-bottom:1px solid var(--fw-line);background:var(--fw-950)}
@@ -136,6 +151,16 @@ box-shadow:0 10px 36px color-mix(in srgb,var(--fw-950) 85%,transparent);overflow
 .fw-iconbtn{flex:none;width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:0;border-radius:10px;color:var(--fw-t1);font-size:22px;line-height:1;cursor:pointer}
 .fw-iconbtn:hover{color:var(--fw-t0);background:var(--fw-800)}
 .fw-link{color:var(--fw-signal);font-size:12px}
+.fw-about{flex:none;min-height:44px;padding:6px 12px;display:inline-flex;align-items:center;gap:6px}
+.fw-about[aria-pressed="true"]{border-color:var(--fw-signal);color:var(--fw-signal)}
+.fw-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--fw-verdict);color:var(--fw-950);font-size:12px;font-weight:600;line-height:1}
+.fw-notes{margin-top:6px;font-size:12px;color:var(--fw-t1);white-space:normal}
+.fw-notes summary{cursor:pointer;color:var(--fw-t2);list-style-position:inside}
+.fw-notes-list{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px;overflow-wrap:anywhere;color:var(--fw-t0)}
+.fw-notes-line{margin:6px 0 0}
+.fw-notes-open{margin-top:8px;min-height:32px;font-size:12px}
+.fw-memrow{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;white-space:normal}
+.fw-memrow .fw-btn{min-height:36px;font-size:12px;padding:3px 10px}
 .fw-note{margin:0;padding:6px 14px;border-bottom:1px solid var(--fw-line);font-size:12px;line-height:1.45;color:var(--fw-t1)}
 .fw-note summary{cursor:pointer;list-style-position:inside}
 .fw-note p{margin:6px 0 2px;color:var(--fw-t1)}
@@ -178,12 +203,15 @@ padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);
 .fw-msg{max-width:94%}
 .fw-btn{min-height:44px}
 .fw-fb .fw-btn{min-height:40px}
+.fw-memrow .fw-btn{min-height:44px}
+.fw-notes-open{min-height:44px}
 }
 `;
 
 export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
   const { showWhenNotAllowed = false, feedback = false, showNotesUsed = false, notesExist = false } = props;
   const transport = useMemo(() => props.transport ?? createTransport(), [props.transport]);
+  const memoryClient = useMemo(() => props.memoryClient ?? createMemoryClient(), [props.memoryClient]);
   const [status, setStatus] = useState<WidgetStatus>("checking");
   const [questionChars, setQuestionChars] = useState(4000);
   const [open, setOpen] = useState(!!props.defaultOpen);
@@ -199,6 +227,8 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [liveText, setLiveText] = useState("");
   const [recheck, setRecheck] = useState(0);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [mem, setMem] = useState<AboutMeSummary | null>(null);
   const { holdings, hydrated, addHolding, removeHolding, sellHolding } = usePortfolio();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -206,11 +236,18 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const launchRef = useRef<HTMLButtonElement>(null);
+  const aboutBtnRef = useRef<HTMLButtonElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const celebrateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aliveRef = useRef(true);
   const statusRef = useRef<WidgetStatus>("checking");
   statusRef.current = status;
+  // Memory (the About-me panel and the remember call) runs only with the mailbox transport, for someone Faye's status route allows.
+  const memEligible = props.aboutMe !== false && transport.kind === "mailbox" && (status === "available" || status === "offline");
+  const memRef = useRef<AboutMeSummary | null>(null);
+  memRef.current = mem;
+  const memEligibleRef = useRef(false);
+  memEligibleRef.current = memEligible;
   const ids = useId();
   const panelId = `${ids}-panel`;
   const inputId = `${ids}-input`;
@@ -249,6 +286,18 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, status, recheck]);
 
+  // Quietly learn how many notes there are (for the "Your notes are still here." line and the badge) whenever the panel opens.
+  async function refreshMemSummary() {
+    if (!memEligibleRef.current) return;
+    const r = await memoryClient.list();
+    if (!aliveRef.current || !r.ok) return;
+    setMem({ enabled: r.data.enabled, approved: r.data.counts.approved, proposed: r.data.counts.proposed, paused: r.data.settings.learningPaused, showUsedNotes: r.data.settings.showUsedNotes });
+  }
+  useEffect(() => {
+    if (open && memEligible) void refreshMemSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, memEligible]);
+
   // Whenever the panel opens, put focus in the input (or on the panel itself while the input is disabled), so keyboard and screen reader users start in the right place.
   useEffect(() => {
     if (!open) return;
@@ -258,6 +307,21 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
     });
     return () => cancelAnimationFrame(f);
   }, [open, status]);
+
+  // Opening About me moves focus to its title; closing it gives focus back to the About me button.
+  const aboutWasOpen = useRef(false);
+  useEffect(() => {
+    if (aboutOpen) {
+      const f = requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>('[data-faye-aboutme] [data-h="title"]')?.focus());
+      aboutWasOpen.current = true;
+      return () => cancelAnimationFrame(f);
+    }
+    if (aboutWasOpen.current) {
+      aboutWasOpen.current = false;
+      const f = requestAnimationFrame(() => aboutBtnRef.current?.focus());
+      return () => cancelAnimationFrame(f);
+    }
+  }, [aboutOpen]);
 
   // Keep the newest text in view, unless the reader has scrolled up to re-read something.
   useEffect(() => {
@@ -276,8 +340,18 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
     void refreshStatus(true); // wake=1 tells the mailbox to expect a question soon (a no-op for the local transport)
   }
 
+  function openAbout() {
+    setAboutOpen(true);
+  }
+
+  function closeAbout() {
+    setAboutOpen(false);
+    void refreshMemSummary();
+  }
+
   function closePanel() {
     setOpen(false);
+    setAboutOpen(false);
     requestAnimationFrame(() => launchRef.current?.focus());
   }
 
@@ -324,6 +398,27 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
     abortRef.current = ac;
 
     try {
+      // Memory first (WP-F contract): EVERY message the owner types goes to /api/faye/memory/remember BEFORE the chat job is queued.
+      // The call is bounded to a few seconds and never throws: if it fails for any reason the chat carries on as if it had not been made.
+      // Only the owner's own typed words are sent -- never Faye's answers, tool results or page text.
+      if (memEligible) {
+        const rem = await memoryClient.remember(question, ac.signal);
+        if (ac.signal.aborted) throw new FayeTransportError("cancelled");
+        const memNote = rememberNote(rem);
+        if (memNote) {
+          patch(userMsg.id, { memNote });
+          setLiveText(`${memNote} Faye is thinking.`);
+        }
+        if (rem && rem.handled && rem.reply) {
+          // A command such as "remember that ...": answered at once by the route, so no chat job is queued.
+          patch(assistantId, { text: rem.reply.replace(/\s*Undo\?\s*$/, ""), memReply: { undo: rem.undo, state: "idle" } });
+          setLiveText(`${memNote ? `${memNote} ` : ""}${rem.reply.replace(/\s*Undo\?\s*$/, "")}`.slice(0, ANNOUNCE_MAX));
+          if (rem.action === "saved" || rem.action === "updated") celebrate();
+          void refreshMemSummary();
+          return;
+        }
+        if (rem && rem.proposed > 0) void refreshMemSummary();
+      }
       const out = await runQuestion({
         transport,
         question,
@@ -349,6 +444,7 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
         toolLog: out.toolLog.length ? out.toolLog : undefined,
         retracted: out.retracted,
         notesUsed: out.notesUsed,
+        noteIds: out.noteIds,
         action: out.action,
         actionStatus: out.action ? "pending" : undefined,
       });
@@ -361,7 +457,7 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
       } else {
         const code = err instanceof FayeTransportError ? err.code : "client";
         const text = err instanceof FayeTransportError ? err.message : err instanceof Error ? err.message : FAYE_MESSAGES.unreachable;
-        const shown = code === "faye_offline" && notesExist && !text.includes(NOTES_STILL_HERE) ? text + NOTES_STILL_HERE : text;
+        const shown = code === "faye_offline" && (notesExist || (memRef.current?.approved ?? 0) > 0) && !text.includes(NOTES_STILL_HERE) ? text + NOTES_STILL_HERE : text;
         patch(assistantId, { text: shown, error: true });
         setErrorCode(code);
         setLiveText(shown);
@@ -461,6 +557,20 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
     patch(messageId, { actionStatus: "cancelled" });
   }
 
+  // "Undo" under a note Faye just saved or removed from a chat command. Saved: take the note away again (it can still be brought back from
+  // About me for a few minutes). Removed: bring it back.
+  async function undoMemReply(messageId: string, undo: { id: string; decision?: "undelete" }) {
+    const mark = (state: "working" | "done" | "error", resultText?: string) =>
+      setMessages((prev) => prev.map((m) => (m.id === messageId && m.memReply ? { ...m, memReply: { ...m.memReply, state, resultText } } : m)));
+    mark("working");
+    const r = undo.decision === "undelete" ? await memoryClient.decide(undo.id, "undelete") : await memoryClient.remove(undo.id);
+    if (!aliveRef.current) return;
+    const text = r.ok ? (undo.decision === "undelete" ? "Brought the note back." : "Removed that note. You can bring it back in About me for a few minutes.") : r.message;
+    mark(r.ok ? "done" : "error", text);
+    setLiveText(text);
+    void refreshMemSummary();
+  }
+
   function pressFeedback(messageId: string, kind: FeedbackKind) {
     patch(messageId, { feedback: kind });
     props.onFeedback?.(messageId, kind);
@@ -473,7 +583,9 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
   const mood = deriveMood({ status, sending, phase, typing: focused && input.trim().length > 0, celebrating, errorCode, unsure });
   const privacyShort = transport.kind === "mailbox" ? COPY_MAILBOX_SHORT : COPY_LOCAL_SHORT;
   const privacyFull = transport.kind === "mailbox" ? COPY_MAILBOX : COPY_LOCAL;
-  const offlineText = notesExist ? FAYE_MESSAGES.faye_offline + NOTES_STILL_HERE : FAYE_MESSAGES.faye_offline;
+  const haveNotes = notesExist || (mem?.approved ?? 0) > 0;
+  const offlineText = haveNotes ? FAYE_MESSAGES.faye_offline + NOTES_STILL_HERE : FAYE_MESSAGES.faye_offline;
+  const notesLineOn = showNotesUsed || (memEligible && (mem?.showUsedNotes ?? true));
   const usable = status === "available";
   const working = phase === "queued" ? `Waiting for Faye${queuePos ? ` (${queuePos} ahead)` : ""}…` : phase === "tools" ? "Faye is reading the app's tools…" : phase === "thinking" ? "Faye is thinking…" : "";
 
@@ -500,7 +612,7 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
         <section
           ref={panelRef}
           id={panelId}
-          className="fw-panel"
+          className={`fw-panel${aboutOpen ? " fw-panel-wide" : ""}`}
           role="dialog"
           aria-modal="false"
           aria-labelledby={titleId}
@@ -523,6 +635,23 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
                 </a>
               ) : null}
             </div>
+            {memEligible ? (
+              <button
+                ref={aboutBtnRef}
+                type="button"
+                className="fw-btn fw-about"
+                aria-pressed={aboutOpen}
+                aria-label={(mem?.proposed ?? 0) > 0 ? `About me, ${mem!.proposed} ${mem!.proposed === 1 ? "note is" : "notes are"} waiting for your OK` : "About me"}
+                onClick={() => (aboutOpen ? closeAbout() : openAbout())}
+              >
+                About me
+                {(mem?.proposed ?? 0) > 0 ? (
+                  <span className="fw-badge" aria-hidden="true">
+                    {mem!.proposed}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
             <button type="button" className="fw-iconbtn" aria-label="Close Faye" onClick={closePanel}>
               <span aria-hidden="true">×</span>
             </button>
@@ -535,8 +664,10 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
 
           {props.aboutMeSlot ?? null}
 
+          {memEligible && aboutOpen ? <AboutMe client={memoryClient} onClose={closeAbout} onSummary={setMem} /> : null}
+
           {props.variant === "full" ? (
-            <div className="fw-stage" data-testid="faye-fullbody-stage">
+            <div className="fw-stage" data-testid="faye-fullbody-stage" hidden={aboutOpen}>
               <FayeFullBody mood={mood} height={168} chunkTick={tick} decorative />
             </div>
           ) : null}
@@ -546,6 +677,7 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
             className="fw-msgs"
             role="log"
             aria-live="off"
+            hidden={aboutOpen}
             aria-label="Conversation with Faye"
             tabIndex={0}
             onScroll={onMsgsScroll}
@@ -581,12 +713,21 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
                       </details>
                     )}
                     {m.kind === "guardrail" && <div className="fw-meta">educational redirect</div>}
-                    {showNotesUsed && (m.notesUsed ?? 0) > 0 && (
-                      // HOOK (memory, WP-F): hidden until the showNotesUsed prop is on AND the answer's provenance lists notes.
-                      <div className="fw-meta" data-testid="faye-notes-used">
-                        Used {m.notesUsed} {m.notesUsed === 1 ? "note" : "notes"}
+                    {notesLineOn && (m.notesUsed ?? 0) > 0 && (
+                      // "Used N notes": collapsed; opening it lists which notes (looked up by id in About me). Hidden when the owner turns it off in About me.
+                      <NotesUsedLine count={m.notesUsed!} ids={m.noteIds ?? []} client={memEligible ? memoryClient : null} onOpenAboutMe={memEligible ? openAbout : undefined} />
+                    )}
+                    {m.memReply?.undo && m.memReply.state !== "done" && (
+                      <div className="fw-memrow">
+                        <button type="button" className="fw-btn" disabled={m.memReply.state === "working"} onClick={() => void undoMemReply(m.id, m.memReply!.undo!)}>
+                          {m.memReply.undo.decision === "undelete" ? "Bring it back" : "Undo"}
+                        </button>
+                        <button type="button" className="fw-btn" onClick={openAbout}>
+                          Open About me
+                        </button>
                       </div>
                     )}
+                    {m.memReply?.resultText && <div className={m.memReply.state === "error" ? "fw-bad" : "fw-ok"}>{m.memReply.resultText}</div>}
                     {m.action && m.actionStatus === "pending" && (
                       <div className="fw-card">
                         <div className="fw-card-sum" data-testid="faye-validated-summary">
@@ -607,6 +748,11 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
                     {m.actionStatus === "error" && <div className="fw-bad">{m.actionResultText}</div>}
                     {m.actionStatus === "cancelled" && <div className="fw-dim">Cancelled -- nothing changed.</div>}
                   </div>
+                  {isUser && m.memNote ? (
+                    <div className="fw-meta" data-testid="faye-memnote">
+                      {m.memNote}
+                    </div>
+                  ) : null}
                   {feedback && !isUser && m.kind && !m.error && !(sending && lastFaye) && (
                     // INERT SHELL: appears only when the `feedback` prop is on. A press marks the button and calls onFeedback; nothing is stored here.
                     <div className="fw-fb" role="group" aria-label="Rate this answer">
@@ -622,10 +768,10 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
             })}
           </div>
 
-          <div className="fw-status" aria-hidden="true">{working}</div>
+          <div className="fw-status" aria-hidden="true" hidden={aboutOpen}>{working}</div>
 
           {status === "offline" && (
-            <div className="fw-offline" role="status" data-testid="faye-offline">
+            <div className="fw-offline" role="status" data-testid="faye-offline" hidden={aboutOpen}>
               <span>{offlineText}</span>
               <button
                 type="button"
@@ -650,7 +796,7 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
             {liveText}
           </div>
 
-          <form className="fw-composer" onSubmit={sendMessage}>
+          <form className="fw-composer" onSubmit={sendMessage} hidden={aboutOpen}>
             <label className="fw-sr" htmlFor={inputId}>
               Ask Faye
             </label>

@@ -540,6 +540,7 @@ const same = (a: any, b: any) => JSON.stringify(a.outcome) === JSON.stringify(b.
   mb.scripts.push([{ done: result("Hi.", { provenance: { memory_ids: ["a", "b", 5], memory_hash: "h" } }) }]);
   const out = await TR.runQuestion({ transport: TR.createMailboxTransport(mb.deps()), question: "q", state: {} });
   t("notes used: counts memory_ids from provenance (strings only)", out.notesUsed === 2);
+  t("notes used: the ids ride along for the 'Used N notes' list (ids only, strings only)", Array.isArray(out.noteIds) && out.noteIds.join(",") === "a,b" && !("memory" in out));
 }
 
 // ------------------------------------------------------------------ pure helpers

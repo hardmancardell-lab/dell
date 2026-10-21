@@ -683,6 +683,8 @@ export interface RunOutcome {
   retracted: boolean;
   unsure: boolean;
   notesUsed: number;
+  /** Ids of the notes the answer used (provenance.memory_ids; ids only, never note text). The widget looks the text up in About me. */
+  noteIds: string[];
 }
 
 export interface RunOptions {
@@ -709,6 +711,12 @@ export function looksUnsure(o: { text: string; retracted?: boolean; toolLog?: re
 function notesCount(p: Record<string, unknown> | null | undefined): number {
   const ids = p && Array.isArray(p.memory_ids) ? p.memory_ids : [];
   return ids.filter((x) => typeof x === "string").length;
+}
+
+/** The note ids from provenance, strings only, at most 6 (the memory pack's cap), de-duplicated. */
+export function noteIdList(p: Record<string, unknown> | null | undefined): string[] {
+  const ids = p && Array.isArray(p.memory_ids) ? p.memory_ids : [];
+  return [...new Set(ids.filter((x): x is string => typeof x === "string" && x.length <= 64))].slice(0, 6);
 }
 
 export async function runQuestion(o: RunOptions): Promise<RunOutcome> {
@@ -812,6 +820,7 @@ export async function runQuestion(o: RunOptions): Promise<RunOutcome> {
       retracted: p.retracted,
       unsure: looksUnsure({ text: p.text, retracted: p.retracted, toolLog: p.toolLog }),
       notesUsed: notesCount(p.provenance),
+      noteIds: noteIdList(p.provenance),
     };
   }
 }

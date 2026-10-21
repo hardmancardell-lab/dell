@@ -268,12 +268,28 @@ test("widget: feedback buttons, 'Used N notes', lab link and About-me are inert 
   assert.match(widgetSrc, /feedback = false/);
   assert.match(widgetSrc, /showNotesUsed = false/);
   assert.match(widgetSrc, /feedback && !isUser/);
-  assert.match(widgetSrc, /showNotesUsed && \(m\.notesUsed \?\? 0\) > 0/);
+  assert.match(widgetSrc, /notesLineOn && \(m\.notesUsed \?\? 0\) > 0/);
+  assert.match(widgetSrc, /const notesLineOn = showNotesUsed \|\| \(memEligible/);
   assert.match(widgetSrc, /props\.labHref \?/);
   assert.match(widgetSrc, /props\.aboutMeSlot \?\? null/);
   for (const label of ["Good", "Wrong", "Too long", "Off-voice"]) assert.ok(widgetSrc.includes(label), label);
   // the default transport is the env-selected one, and with nothing set that is local
   assert.match(widgetSrc, /props\.transport \?\? createTransport\(\)/);
+});
+
+test("widget: memory (About me, remember, 'Used N notes') is wired, mailbox-only, owner-only and cannot break the chat", () => {
+  const code = stripComments(widgetSrc);
+  const send = code.slice(code.indexOf("async function sendMessage"), code.indexOf("async function placePaperOrder"));
+  assert.ok(send.indexOf("memoryClient.remember(question") > 0 && send.indexOf("memoryClient.remember(question") < send.indexOf("await runQuestion("), "remember comes before the job is queued");
+  assert.match(code, /const memEligible = props\.aboutMe !== false && transport\.kind === "mailbox"/, "off for the local transport");
+  assert.match(code, /import \{ AboutMe, type AboutMeSummary \} from "@\/components\/faye\/AboutMe"/);
+  assert.match(code, /aboutMe\?: boolean/);
+  assert.match(code, /memoryClient\?: MemoryClient/);
+  assert.match(code, /noteIds: out\.noteIds/, "the answer keeps the ids behind 'Used N notes'");
+  assert.doesNotMatch(code, /dangerouslySetInnerHTML|innerHTML/);
+  // the old hooks are still there for callers that use them
+  assert.match(code, /props\.aboutMeSlot \?\? null/);
+  assert.match(code, /notesExist = false/);
 });
 
 test("widget: a failed status check never makes an already-visible widget vanish; non-owners are hidden unless asked", () => {
