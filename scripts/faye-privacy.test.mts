@@ -629,12 +629,12 @@ function py(args: string[]) {
     }
   }
 
-  // relay guard vs the Python runtime guard (information only: WP-B tightened the Python one, WP-A has not copied it yet)
+  // relay guard vs the Python runtime guard: the relay copy now carries the 2026-10-20 tightening (hardening item 4)
   const original = ["I recommend NVDA", "my top pick is GLD", "you should buy it", "I would buy this", "the best choice is cash", "definitely sell", "go with NVDA"];
   t("relay guard: catches every phrase in the eval's original leak pattern", original.every((p) => G.applyRelayGuard(p).tripped));
   const tightening = ["I'd buy NVDA now", "I would sell it", "I suggest you buy it", "my recommendation is NVDA", "we recommend VOO", "you ought to buy gold", "buy it now"];
   const missed = tightening.filter((p) => !G.applyRelayGuard(p).tripped);
-  note(`INFO relay guard: ${missed.length} of ${tightening.length} phrases that the Python runtime guard now catches are NOT caught by src/lib/faye/mailbox/output-guard.ts (${missed.join(" | ")})`);
+  t("relay guard: catches every phrase the Python runtime guard added", missed.length === 0, missed.join(" | "));
 }
 
 // ================================================================================================ static lint of the migrations
