@@ -505,7 +505,7 @@ begin
   if v_uid is null then return jsonb_build_object('ok', false, 'code', 'not_allowed'); end if;
   select coalesce(jsonb_agg(jsonb_build_object('id', i.id, 'split', i.split, 'suite', i.suite, 'question', i.question,
            'required_keywords', to_jsonb(i.required_keywords), 'approved', i.approved, 'used_in_corpus', i.used_in_corpus,
-           'from_correction', i.source_correction_id is not null, 'created_at', i.created_at) order by i.created_at desc), '[]'::jsonb)
+           'source_correction_id', i.source_correction_id, 'created_at', i.created_at) order by i.created_at desc), '[]'::jsonb)
     into v_items from (select * from public.faye_eval_items x where x.user_id = v_uid order by x.created_at desc limit 300) i;
   return jsonb_build_object('ok', true, 'items', v_items);
 end $$;
@@ -575,7 +575,7 @@ begin
     return jsonb_build_object('ok', false, 'code', 'bad_request', 'detail', 'bad_status');
   end if;
   select coalesce(jsonb_agg(jsonb_build_object('id', n.id, 'title', n.title, 'body', n.body, 'status', n.status,
-           'from_correction', n.from_correction_id is not null, 'from_practice', n.from_eval_item_id is not null,
+           'from_correction_id', n.from_correction_id, 'from_eval_item_id', n.from_eval_item_id,
            'decided_at', n.decided_at, 'created_at', n.created_at) order by n.created_at desc), '[]'::jsonb)
     into v_items from (select * from public.faye_corpus_notes x where x.user_id = v_uid and (p_status is null or x.status = p_status)
                        order by x.created_at desc limit 200) n;
