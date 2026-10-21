@@ -124,11 +124,15 @@ export async function fetchBarsForTimeframeDetailed(
   const chunkMs = MAX_CANDLES_PER_REQUEST * barMs;
   // Snap to the cache window so equal requests build an identical URL (callers pass Date.now()-based windows).
   const win = snapWindow(startMs, endMs, revalidateSeconds);
+  // snapWindow rounds the end UP to the next cache bucket, which can be a moment in the future. OANDA rejects a `to` in the
+  // future ("Invalid value specified for 'to'. Time is in the future"), which broke every forex chart. Cap the end at the START
+  // of the current cache bucket: never in the future, and still identical for every call inside one bucket (stable cache key).
+  const hardEndMs = Math.min(win.endMs, snapWindow(Date.now(), Date.now(), revalidateSeconds).startMs);
 
   const allCandles: OandaCandle[] = [];
   let chunkStart = win.startMs;
-  while (chunkStart < win.endMs) {
-    const chunkEnd = Math.min(chunkStart + chunkMs, win.endMs);
+  while (chunkStart < hardEndMs) {
+    const chunkEnd = Math.min(chunkStart + chunkMs, hardEndMs);
     const data = await fetchOanda<OandaCandlesResponse>(
       `/v3/instruments/${instrument}/candles`,
       {
@@ -190,13 +194,15 @@ export async function fetchDailyBars(
 export async function fetchBidAsk(symbol: string, startMs: number, endMs: number, revalidateSeconds: number): Promise<MarketBidAsk[]> {
   const instrument = toOandaInstrument(symbol);
   const win = snapWindow(startMs, endMs, revalidateSeconds);
+  const toMs = Math.min(win.endMs, snapWindow(Date.now(), Date.now(), revalidateSeconds).startMs); // OANDA rejects a `to` in the future (see fetchBarsForTimeframeDetailed)
+  if (toMs <= win.startMs) return [];
   const data = await fetchOanda<OandaCandlesResponse>(
     `/v3/instruments/${instrument}/candles`,
     {
       granularity: "M1",
       price: "BA",
       from: new Date(win.startMs).toISOString(),
-      to: new Date(win.endMs).toISOString(),
+      to: new Date(toMs).toISOString(),
     },
     revalidateSeconds
   );
