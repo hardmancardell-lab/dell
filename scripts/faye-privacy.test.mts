@@ -620,12 +620,12 @@ function py(args: string[]) {
       const exactBad = table.vectors.filter((r) => exact.has(r.ts_expect) && r.gap);
       t("parity: exact on instruction, control, card, ssn, length and empty notes (zero disagreements)", exactBad.length === 0, all(exactBad.map((r) => r.ts_expect)));
       const clean = table.vectors.filter((r) => r.ts_expect === null);
-      t("parity: every clean note is kept by Python too (except the one pinned newline case)", clean.filter((r) => r.python !== "kept" && !r.known_gap).length === 0);
+      t("parity: every clean note is kept by Python too (except the by-design newline case: stored text never holds a raw newline, the database refuses it too)", clean.filter((r) => r.python !== "kept" && !r.by_design).length === 0 && clean.filter((r) => r.by_design).length === 1);
       const unpinned = table.vectors.filter((r) => r.gap && r.known_gap !== r.gap);
       const stale = table.vectors.filter((r) => !r.gap && r.known_gap);
       t("parity: every disagreement between the two sides is a pinned, known one", unpinned.length === 0 && stale.length === 0, all(unpinned.map((r) => r.text)));
       const keeps = table.vectors.filter((r) => r.gap === "python_keeps_what_typescript_refuses");
-      note(`INFO parity: ${keeps.length} of ${vectors.filter((v) => v.expect).length} refused vectors are kept by the Python render-time sanitizer (secrets, credentials, contact, address, amounts, shares, health/legal words, markup). They cannot arrive through the normal path: rank.ts and the database screen first.`);
+      t("parity: the Python render-time sanitizer keeps none of the vectors the TypeScript list refuses (full parity since the hardening pass)", keeps.length === 0);
     }
   }
 
