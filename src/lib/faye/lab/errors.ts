@@ -44,6 +44,7 @@ const BY_DETAIL: Record<string, string> = {
   "rate_limited:queue_full": "Faye has a full queue right now. Try again soon.",
   "rate_limited:route": "Too many requests. Wait a moment and try again.",
   "rate_limited:long_runs": "You have started enough long tests for today. Try again tomorrow.",
+  "bad_request:one_at_a_time": "A full run is too long for one job. Start one test at a time.",
   "bad_request:rejected": "That did not pass the checks for length and characters.",
   "confirm_required:long": "This test takes 30 to 40 minutes and uses the same model as chat. Confirm to start it.",
 };

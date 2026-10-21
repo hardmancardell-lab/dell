@@ -388,7 +388,7 @@ export async function handleRunsList(request: Request, deps: LabDeps): Promise<R
 
 /**
  * POST /api/faye/lab/eval  { suite, confirm_long?: true, request_id?, label? }
- * Only "guardrail" and "orchestration" start on a plain request. "heldout", "domain", "persona" and "full" take 30 to 40 minutes and share
+ * Only "guardrail" and "orchestration" start on a plain request. "guardrail_model", "heldout", "domain" and "persona" reach the model and take a long time and share
  * the model with chat, so they need confirm_long: true. The job is created through the mailbox (kind "eval", owner only, one in flight).
  */
 export async function handleEvalRequest(request: Request, deps: LabDeps): Promise<Response> {
@@ -397,6 +397,7 @@ export async function handleEvalRequest(request: Request, deps: LabDeps): Promis
   const b = await readBody(request);
   if (!b.ok) return b.response;
   const v = b.value;
+  if (v.suite === "full") return bad("one_at_a_time"); // --suite all takes about 61 minutes; one eval job may run 60
   if (!isEvalSuite(v.suite)) return bad("bad_suite");
   const suite = v.suite;
   if (!isDefaultSuite(suite)) {

@@ -20,8 +20,11 @@ export function labHrefFor(env: Env = process.env): string | undefined {
   return v === LAB_PATH ? LAB_PATH : undefined;
 }
 
-/** Test suites the worker's eval job understands (contract section 4.4). */
-export const EVAL_SUITES = ["guardrail", "orchestration", "heldout", "domain", "persona", "full"] as const;
+/**
+ * Test suites the Lab will request (contract section 4.4 plus WP-E's guardrail_model). "full" (= --suite all, about 61 minutes) is NOT
+ * offered: it is longer than the 3,600 second cap of one eval job, so the Lab asks for one suite at a time.
+ */
+export const EVAL_SUITES = ["guardrail", "orchestration", "guardrail_model", "heldout", "domain", "persona"] as const;
 export type EvalSuite = (typeof EVAL_SUITES)[number];
 
 /** Short, model-free or nearly so. These two may be requested with one click. */
@@ -37,11 +40,11 @@ export const SUITE_LABEL: Record<EvalSuite, string> = {
   heldout: "Held-out exam",
   domain: "Domain",
   persona: "Voice",
-  full: "Full run",
+  guardrail_model: "Guardrail with the model",
 };
 
 /** The suites in the Test console chart and table. */
-export const CHART_SUITES: readonly EvalSuite[] = ["guardrail", "orchestration"];
+export const CHART_SUITES: readonly EvalSuite[] = ["guardrail", "orchestration", "guardrail_model"];
 
 export const LAB_LIMITS = {
   /** Whole request body a lab route will read. An answer can be 8,000 characters (up to 4 bytes each). */
@@ -69,6 +72,6 @@ export const LAB_RATE = {
   writePerMinute: 60,
   /** Any eval request. */
   evalPerTenMin: 4,
-  /** Held-out, domain, voice and full runs: they take long and share the model with chat. */
+  /** Every suite that reaches the model (guardrail_model, held-out, domain, voice): they take long and share the model with chat. */
   longPerDay: 6,
 } as const;

@@ -503,7 +503,7 @@ let ctx: any;
   r = await post({ suite: "orchestration" });
   t("after it finishes, orchestration starts", r.status === 201);
   db.U(A.id).jobs.forEach((j) => (j.status = "done"));
-  for (const s of ["heldout", "domain", "persona", "full"]) {
+  for (const s of ["guardrail_model", "heldout", "domain", "persona"]) {
     const before = db.calls("faye_submit_job").length;
     d.limiters.evalRun.reset(`evalRun:${A.id}`);
     r = await post({ suite: s });
@@ -520,7 +520,8 @@ let ctx: any;
   }
   t("the confirmation text says 30 to 40 minutes and shared model", /30 to 40 minutes/.test(ER.labSentence("confirm_required", "long")) && /same model as chat/.test(ER.labSentence("confirm_required", "long")));
   t("bad suite 400", (await post({ suite: "everything" })).status === 400 && (await post({})).status === 400);
-  t("default suites are exactly guardrail and orchestration", CFG.DEFAULT_SUITES.join() === "guardrail,orchestration" && CFG.isDefaultSuite("guardrail") && !CFG.isDefaultSuite("full"));
+  t("default suites are exactly guardrail and orchestration; guardrail_model reaches the model so it needs the flag", CFG.DEFAULT_SUITES.join() === "guardrail,orchestration" && CFG.isDefaultSuite("guardrail") && !CFG.isDefaultSuite("guardrail_model") && !CFG.isDefaultSuite("heldout"));
+  { const f = await post({ suite: "full", confirm_long: true }); t("a full run (--suite all, about 61 minutes, longer than the 3,600 s job cap) is refused: one suite at a time", f.status === 400 && f.body.detail === "one_at_a_time" && /one test at a time/.test(f.body.error)); }
   // request cap
   const db2 = fakeDb();
   const d2 = mkDeps(db2, A);
@@ -537,7 +538,7 @@ let ctx: any;
   for (let i = 0; i < CFG.LAB_RATE.longPerDay + 1; i++) {
     db3.U(A.id).jobs.forEach((j) => (j.status = "done"));
     d3.limiters.evalRun.reset(`evalRun:${A.id}`);
-    lastLong = await post({ suite: "full", confirm_long: true }, d3);
+    lastLong = await post({ suite: "domain", confirm_long: true }, d3);
   }
   t(`long tests are capped at ${CFG.LAB_RATE.longPerDay} a day`, lastLong.status === 429 && lastLong.body.detail === "long_runs" && /enough long tests/.test(lastLong.body.error));
   // idempotency
@@ -708,7 +709,7 @@ let state1: any;
   t("store: the exam question is in heldOut and NOT in training", store.getState().training.length === 0 && store.getState().heldOut[0].set === "held_out");
   const wall = await store.proposeNote({ examId: store.getState().heldOut[0].id, title: "Leak attempt", body: "Trying to turn the exam into a note for Faye." });
   t("store: a note from the exam is refused with the wall sentence and the list is reloaded", wall === false && /never be taught/.test(store.getState().notice.text) && store.getState().notice.tone === "error" && store.getState().notes.length === 0);
-  t("store: a long test needs the box ticked (no call made)", (await store.requestEval("full", false)) === false && store.getState().notice.text === CP.LAB_COPY.notice.confirmFirst && !fetchImpl.calls.some((c) => c.method === "POST" && c.path === "/eval"));
+  t("store: a long test needs the box ticked (no call made)", (await store.requestEval("domain", false)) === false && store.getState().notice.text === CP.LAB_COPY.notice.confirmFirst && !fetchImpl.calls.some((c) => c.method === "POST" && c.path === "/eval"));
   t("store: guardrail request -> pending -> thinking mood", (await store.requestEval("guardrail", false)) && store.getState().pending.length === 1 && store.getState().mood.mood === "thinking" && store.getState().notice.text === CP.LAB_COPY.notice.testQueued);
   db.U(A.id).jobs.forEach((j) => (j.status = "done"));
   db.U(A.id).runs.push({ id: UUID(80), suite: "guardrail", started_at: iso(), finished_at: iso(), passed: 8, total: 8, constraint_sha: "abc", persona_sha: "def", model: "gemma3:1b", created_at: iso() });
@@ -815,9 +816,9 @@ function richState(over: any = {}) {
   t("view: 'Approve' and 'Reject' name their note", /aria-label="Approve: Note &lt;img/.test(noStyle) && /aria-label="Reject: Note /.test(noStyle));
   t("view: the notes hint says approving writes nothing to Faye's notes", /Nothing is added to Faye&#x27;s notes from this page|Nothing is added to Faye's notes from this page/.test(noStyle));
   t("view: BLOCKED shows when the latest guardrail run missed a question", /BLOCKED: the guardrail missed a question/.test(noStyle) && /role="alert"/.test(noStyle) && /7 of 8 BLOCKED/.test(noStyle));
-  t("view: two charts (guardrail, orchestration), n visible", (noStyle.match(/<figure class="fl-chart"/g) ?? []).length === 2 && /n = 8 questions per run/.test(noStyle) && /n = 208 questions per run/.test(noStyle));
+  t("view: three charts (guardrail, orchestration, guardrail with the model), n visible", (noStyle.match(/<figure class="fl-chart"/g) ?? []).length === 3 && /n = 8 questions per run/.test(noStyle) && /n = 208 questions per run/.test(noStyle));
   t("view: the runs table has a caption, column headers with scope, and a likely range", /<caption>Recent runs<\/caption>/.test(noStyle) && (noStyle.match(/<th scope="col">/g) ?? []).length === 5 && /Likely range/.test(noStyle) && /68% to 100%/.test(noStyle));
-  t("view: long tests are behind a details block with the 30 to 40 minutes warning, and their buttons are disabled until the box is ticked", /<details class="fl-more"><summary>Longer tests<\/summary>/.test(noStyle) && /30 to 40 minutes/.test(noStyle) && ["Held-out exam", "Domain", "Voice", "Full run"].every((n) => new RegExp(`<button type="button" class="fl-btn" disabled="">${n}</button>`).test(noStyle)));
+  t("view: long tests are behind a details block with the 30 to 40 minutes warning, and their buttons are disabled until the box is ticked", /<details class="fl-more"><summary>Longer tests<\/summary>/.test(noStyle) && /30 to 40 minutes/.test(noStyle) && ["Guardrail with the model", "Held-out exam", "Domain", "Voice"].every((n) => new RegExp(`<button type="button" class="fl-btn" disabled="">${n}</button>`).test(noStyle)));
   t("view: quick-test buttons are disabled while a test is running", /<button type="button" class="fl-btn fl-btn-primary" disabled="">Run guardrail \(8 questions\)<\/button>/.test(noStyle));
   t("view: a live region (status, polite) exists and the skip link points at main", /role="status" aria-live="polite"/.test(noStyle) && /class="fl-skip" href="#[^"]+-main"/.test(noStyle) && /<main class="fl-main" id="[^"]+-main"/.test(noStyle));
   t("view: every form control has a visible label", (() => { const ctrls = (noStyle.match(/<(input|select|textarea)\b/g) ?? []).length; const labels = (noStyle.match(/<label\b/g) ?? []).length; return labels >= ctrls; })());
@@ -909,7 +910,7 @@ function grade(text: string) {
   const routes = src.filter(({ f }) => /api\/faye\/lab\/.*route\.ts$/.test(f));
   t(`lint: ${routes.length} route files; each is a thin wrapper (force-dynamic, handler import, no logic)`, routes.length === 9 && routes.every(({ s }) => /force-dynamic/.test(s) && /from "@\/lib\/faye\/lab\/handlers"/.test(s) && !/\bif \(/.test(stripComments(s))));
   t("lint: every handler checks the flag, the owner gate and a limiter in begin()", (() => { const hs = read("../src/lib/faye/lab/handlers.ts"); const b = hs.slice(hs.indexOf("async function begin"), hs.indexOf("function fail")); return /labEnabled/.test(b) && /gateOwner/.test(b) && /\.hit\(/.test(b) && /checkPostRequest/.test(b); })());
-  t("lint: every exported handler calls begin() first", (() => { const hs = read("../src/lib/faye/lab/handlers.ts"); const fns = [...hs.matchAll(/export async function (handle\w+)\([^)]*\)[^{]*\{\n\s*const g = await begin/g)]; return fns.length === 13; })());
+  t("lint: every exported handler calls begin() first", (() => { const hs = read("../src/lib/faye/lab/handlers.ts"); const fns = [...hs.matchAll(/export async function (handle\w+)\([^)]*\)[^{]*\{\r?\n\s*const g = await begin/g)]; return fns.length === 13; })());
 }
 
 // ------------------------------------------------------------------------------------------------ the migration (static lint; the SQL runs on PGlite in the harness named in the report)

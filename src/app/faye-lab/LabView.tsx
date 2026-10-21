@@ -322,7 +322,7 @@ export function LabView({ state, store }: LabViewProps) {
                   <span>{LAB_COPY.tests.longConfirm}</span>
                 </label>
                 <div className="fl-row">
-                  {(["heldout", "domain", "persona", "full"] as const).map((s) => (
+                  {(["guardrail_model", "heldout", "domain", "persona"] as const).map((s) => (
                     <button key={s} type="button" className="fl-btn" disabled={!confirmLong || busy(`eval:${s}`) || state.pending.length > 0 || !state.online} onClick={() => void store.requestEval(s as EvalSuite, confirmLong)}>
                       {LAB_COPY.tests[s]}
                     </button>
