@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { gateOwner, type GateClient } from "@/lib/faye/access";
+import type { GateClient } from "@/lib/faye/access";
 import { labEnabled } from "@/lib/faye/lab/config";
 import { createClient } from "@/lib/supabase/server";
+import { labPageAccess } from "./access";
 import { Lab } from "./Lab";
 
 // Owner-only. Anyone who is not the owner (signed out, signed in as someone else, unconfirmed e-mail, not on FAYE_OWNER_EMAILS) gets the
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Faye Lab", robots: { index: false, follow: false } };
 
 export default async function FayeLabPage() {
-  const gate = await gateOwner(async () => (await createClient()) as unknown as GateClient);
-  if (!gate.ok) notFound();
+  const access = await labPageAccess(async () => (await createClient()) as unknown as GateClient);
+  if (access !== "owner") notFound();
   return <Lab enabled={labEnabled()} />;
 }
