@@ -7,6 +7,7 @@ import { getOrCreateSessionId } from "@/lib/analytics/use-track";
 import { JARVIS } from "@/lib/design/tokens";
 import type { ValidatedAction } from "@/lib/faye/action-validation";
 import { FayeAvatar } from "@/components/faye/FayeAvatar";
+import { FayeFullBody } from "@/components/faye/FayeFullBody";
 import {
   COPY_EMPTY,
   COPY_LOCAL,
@@ -82,6 +83,8 @@ export interface FayeChatWidgetProps {
   labHref?: string;
   /** HOOK for the About-me panel (later package). Rendered between the header and the conversation when given. Inert when unset. */
   aboutMeSlot?: ReactNode;
+  /** Default "head" (unchanged: the aperture-face icon everywhere). "full" shows Faye as a full-body character above the messages in the open panel, on tall wide screens only (CSS media query); phones and the launcher keep the head icon. */
+  variant?: "head" | "full";
 }
 
 const MOOD_WORD: Record<AvatarMood, string> = {
@@ -121,6 +124,11 @@ box-shadow:0 2px 14px color-mix(in srgb,var(--fw-950) 80%,transparent)}
 .fw-panel{position:fixed;z-index:999;right:var(--fw-gap);bottom:calc(max(16px,env(safe-area-inset-bottom)) + var(--fw-lift) + 60px);width:360px;
 max-height:calc(100vh - 156px);max-height:min(580px,calc(100dvh - 156px));display:flex;flex-direction:column;background:var(--fw-900);border:1px solid var(--fw-ctl);border-radius:14px;
 box-shadow:0 10px 36px color-mix(in srgb,var(--fw-950) 85%,transparent);overflow:hidden}
+.fw-stage{display:none}
+@media (min-height:760px) and (min-width:520px){
+.fw-full .fw-stage{display:flex;justify-content:center;padding:8px 0 2px;border-bottom:1px solid var(--fw-line);background:var(--fw-950)}
+.fw-full .fw-head .fayeav,.fw-full .fw-empty .fayeav{display:none}
+}
 .fw-head{display:flex;align-items:center;gap:10px;padding:10px 8px 8px 12px;border-bottom:1px solid var(--fw-line)}
 .fw-head-text{flex:1;min-width:0}
 .fw-title{margin:0;font-size:15px;font-weight:600;line-height:1.2}
@@ -470,7 +478,7 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
   const working = phase === "queued" ? `Waiting for Faye${queuePos ? ` (${queuePos} ahead)` : ""}…` : phase === "tools" ? "Faye is reading the app's tools…" : phase === "thinking" ? "Faye is thinking…" : "";
 
   return (
-    <div className="fw" data-faye-widget data-transport={transport.kind}>
+    <div className={`fw${props.variant === "full" ? " fw-full" : ""}`} data-faye-widget data-transport={transport.kind}>
       <style href="faye-widget-v1" precedence="default">
         {FAYE_WIDGET_CSS}
       </style>
@@ -526,6 +534,12 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
           </details>
 
           {props.aboutMeSlot ?? null}
+
+          {props.variant === "full" ? (
+            <div className="fw-stage" data-testid="faye-fullbody-stage">
+              <FayeFullBody mood={mood} height={168} chunkTick={tick} decorative />
+            </div>
+          ) : null}
 
           <div
             ref={scrollRef}
