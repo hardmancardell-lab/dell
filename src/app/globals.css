@@ -100,6 +100,41 @@ body.jv-app-bg {
   border-radius: 12px;
 }
 
+
+/* Character palette (full-body avatars). Mirrors CHARACTER in src/lib/design/tokens.ts; the token ratchet checks drift.
+   Skin tones run light to deep, medium-deep is the default; hair; three suit colourways; small accessories. */
+.jarvis {
+  --skin-fair: #f1cfb3;
+  --skin-fair-shade: #d9ab8c;
+  --skin-tan: #d3a07a;
+  --skin-tan-shade: #b57f5c;
+  --skin-medium: #b07a56;
+  --skin-medium-shade: #8f5e40;
+  --skin-medium-deep: #9a6542;
+  --skin-medium-deep-shade: #774b30;
+  --skin-deep: #6e4430;
+  --skin-deep-shade: #52311f;
+  --hair-black: #1b1412;
+  --hair-espresso: #2e1d16;
+  --hair-chestnut: #5b3a28;
+  --hair-sheen: #8a6552;
+  --suit-plum: #7c4170;
+  --suit-plum-shade: #57294e;
+  --suit-plum-light: #b57ca8;
+  --suit-teal: #1f7a7d;
+  --suit-teal-shade: #13575b;
+  --suit-teal-light: #5fc4c0;
+  --suit-amber: #c98a4b;
+  --suit-amber-shade: #9a6532;
+  --suit-amber-light: #f0c28a;
+  --blouse-ivory: #f4ece1;
+  --shoe-blush: #dcc4b0;
+  --lip-berry: #a8475c;
+  --frame-rose: #e3ab93;
+  --frame-gold: #d9b05f;
+  --frame-ivory: #efe6d8;
+}
+
 .jarvis::before {
   content: "";
   position: absolute;

@@ -1,0 +1,67 @@
+{
+ "_note": "sha256 and length of renderToStaticMarkup(FayeFullBody{mood,height,reducedMotion:true}) captured 2026-10-21 BEFORE the advisor work; regenerate only if Faye is changed on purpose.",
+ "idle@160": {
+  "sha256": "cdffda4e809db3c1251c9faab404456d257d7d762ef6f71823c865df75425ca6",
+  "length": 14237
+ },
+ "idle@320": {
+  "sha256": "ddfd34c7f9d6a320e5f626f4806e86a95a9b1f8c3c53a879d28a2047656b4a31",
+  "length": 15544
+ },
+ "listening@160": {
+  "sha256": "224c9b354226198dfe49bf9d5ed08cd827a73a279c52000838deeef66bf75577",
+  "length": 14463
+ },
+ "listening@320": {
+  "sha256": "f4831b82a2a9d2867a12b4b4b5395b96a818c39d4b3305805c4ee48954a9ed51",
+  "length": 15740
+ },
+ "thinking@160": {
+  "sha256": "7ea1ee089e7065bf352be6bbdc348702463af26f9a7c10ef7d0b939e00433324",
+  "length": 14892
+ },
+ "thinking@320": {
+  "sha256": "8e72e2e21b3cdc7f830d14fc01faec27c2185c2e787f0025571c277dd5bebd3f",
+  "length": 16214
+ },
+ "speaking@160": {
+  "sha256": "5829db04fbb8c17a83b713eae10b1e3b64ea20c06c5c060b6db2af597b77c822",
+  "length": 14531
+ },
+ "speaking@320": {
+  "sha256": "7618a9a66fadc171757454f76c334064c481f08eb7e67ee0cbf5acdf066700ef",
+  "length": 15808
+ },
+ "unsure@160": {
+  "sha256": "536ad646cfd1c2458e345472d4fea4548e81303502eb959b426e20bb9626ebc9",
+  "length": 14871
+ },
+ "unsure@320": {
+  "sha256": "3b95511c999a4e50749c7fd58a4c7990da35139e3c4daf00372eef6b966299ac",
+  "length": 16146
+ },
+ "celebrating@160": {
+  "sha256": "846c77afd6dab6ed2bb1a4ebd74855db48a176d3a72751350507d0a9b0ba4f81",
+  "length": 14716
+ },
+ "celebrating@320": {
+  "sha256": "65a539ea76f1abaed69c9260103c51a0a434ce03032d9adb9acbe92d35f103d7",
+  "length": 16429
+ },
+ "offline@160": {
+  "sha256": "735b6fac6f595543a6e20702f80e90e58684d1bf614b5e888f23da5293f1c089",
+  "length": 14479
+ },
+ "offline@320": {
+  "sha256": "aadb497812da2855c9cf02cfed48ff44036b83bb025b3108df0089b03dde0f01",
+  "length": 15564
+ },
+ "error@160": {
+  "sha256": "bf61477ca888d8e3e8ea4c1c87e05321c7ce014038284c3b572a424ca4a55ebb",
+  "length": 14712
+ },
+ "error@320": {
+  "sha256": "023ec7a97268f6397a5ec5fbc67b3c0264187638651694f0f06fa4bb24b4435a",
+  "length": 15797
+ }
+}

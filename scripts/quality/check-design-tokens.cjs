@@ -54,6 +54,27 @@ let bad = 0;
   }
 }
 
+// ---- the CHARACTER palette (skin, hair, clothing for the full-body avatars) must mirror its --skin-*/--hair-*/--suit-* custom
+// properties in globals.css too, and every entry must be a plain #rrggbb. It is a separate group on purpose: it adds no hex
+// literal to any .tsx file, so it never touches the baseline counts.
+{
+  const css = fs.readFileSync(path.join(src, "app", "globals.css"), "utf8");
+  const tokens = fs.readFileSync(path.join(src, "lib", "design", "tokens.ts"), "utf8");
+  const group = (tokens.match(/export const CHARACTER = \{([\s\S]*?)\} as const;/) || [])[1];
+  const names = (tokens.match(/export const CHARACTER_CSS_NAMES[^{]*\{([\s\S]*?)\};/) || [])[1];
+  if (!group || !names) { bad++; console.error("CHARACTER palette or CHARACTER_CSS_NAMES not found in tokens.ts"); }
+  else {
+    const cssNames = Object.fromEntries([...names.matchAll(/(\w+): *"([a-z-]+)"/g)].map((m) => [m[1], m[2]]));
+    const entries = [...group.matchAll(/(\w+): *"([^"]*)"/g)];
+    if (entries.length < 20) { bad++; console.error("CHARACTER palette looks truncated: " + entries.length + " entries"); }
+    for (const [, k, v] of entries) {
+      const cssName = cssNames[k];
+      const a = cssName && (css.match(new RegExp("--" + cssName + ": *(#[0-9a-fA-F]{6});")) || [])[1];
+      if (!/^#[0-9a-fA-F]{6}$/.test(v) || !cssName || !a || a.toLowerCase() !== v.toLowerCase()) { bad++; console.error("DRIFT CHARACTER " + k + " (" + v + ") != globals.css --" + cssName + " (" + a + ")"); }
+    }
+  }
+}
+
 console.log(JSON.stringify(counts));
 if (verbose) for (const [k, v] of Object.entries(viol)) { console.log(`\n${k} (${v.length})`); v.slice(0, 40).forEach((x) => console.log("  " + x)); }
 

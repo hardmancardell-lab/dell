@@ -22,6 +22,81 @@ export const JARVIS = {
   text2: "#7b8ca2",
 } as const;
 
+/**
+ * CHARACTER palette: skin, hair and clothing colours for the full-body characters (the advisor, src/components/faye/).
+ * Added 2026-10-21 at the owner's request ("skin tone brown with an afro for hair and a cute pants suit on with
+ * glasses"). The Jarvis set has no human skin tones, so these live in their own clearly named group instead of
+ * pretending to be semantic colours. They are NOT for text, charts or UI chrome. globals.css mirrors them under
+ * .jarvis (as --skin-*, --hair-*, --suit-*, --blouse-*, --shoe-*, --lip-*, --frame-*) and
+ * scripts/quality/check-design-tokens.cjs fails on drift, the same as for JARVIS.
+ * Skin runs light to deep, each with a shade for the second gradient stop; "skinMediumDeep" is the owner's choice and
+ * the default. Suits come in three options (plum, teal, amber), each as base, shade and light (piping, highlights).
+ */
+export const CHARACTER = {
+  skinFair: "#f1cfb3",
+  skinFairShade: "#d9ab8c",
+  skinTan: "#d3a07a",
+  skinTanShade: "#b57f5c",
+  skinMedium: "#b07a56",
+  skinMediumShade: "#8f5e40",
+  skinMediumDeep: "#9a6542",
+  skinMediumDeepShade: "#774b30",
+  skinDeep: "#6e4430",
+  skinDeepShade: "#52311f",
+  hairBlack: "#1b1412",
+  hairEspresso: "#2e1d16",
+  hairChestnut: "#5b3a28",
+  hairSheen: "#8a6552",
+  suitPlum: "#7c4170",
+  suitPlumShade: "#57294e",
+  suitPlumLight: "#b57ca8",
+  suitTeal: "#1f7a7d",
+  suitTealShade: "#13575b",
+  suitTealLight: "#5fc4c0",
+  suitAmber: "#c98a4b",
+  suitAmberShade: "#9a6532",
+  suitAmberLight: "#f0c28a",
+  blouseIvory: "#f4ece1",
+  shoeBlush: "#dcc4b0",
+  lipBerry: "#a8475c",
+  frameRose: "#e3ab93",
+  frameGold: "#d9b05f",
+  frameIvory: "#efe6d8",
+} as const;
+
+/** CSS custom property for each CHARACTER token (camelCase to kebab, the same rule as the rig's tokenVarName). */
+export const CHARACTER_CSS_NAMES: Record<keyof typeof CHARACTER, string> = {
+  skinFair: "skin-fair",
+  skinFairShade: "skin-fair-shade",
+  skinTan: "skin-tan",
+  skinTanShade: "skin-tan-shade",
+  skinMedium: "skin-medium",
+  skinMediumShade: "skin-medium-shade",
+  skinMediumDeep: "skin-medium-deep",
+  skinMediumDeepShade: "skin-medium-deep-shade",
+  skinDeep: "skin-deep",
+  skinDeepShade: "skin-deep-shade",
+  hairBlack: "hair-black",
+  hairEspresso: "hair-espresso",
+  hairChestnut: "hair-chestnut",
+  hairSheen: "hair-sheen",
+  suitPlum: "suit-plum",
+  suitPlumShade: "suit-plum-shade",
+  suitPlumLight: "suit-plum-light",
+  suitTeal: "suit-teal",
+  suitTealShade: "suit-teal-shade",
+  suitTealLight: "suit-teal-light",
+  suitAmber: "suit-amber",
+  suitAmberShade: "suit-amber-shade",
+  suitAmberLight: "suit-amber-light",
+  blouseIvory: "blouse-ivory",
+  shoeBlush: "shoe-blush",
+  lipBerry: "lip-berry",
+  frameRose: "frame-rose",
+  frameGold: "frame-gold",
+  frameIvory: "frame-ivory",
+};
+
 /** Hex string to the 0xRRGGBB number Phaser expects for fills and strokes. */
 export const toPhaserColor = (hex: string): number => parseInt(hex.slice(1), 16);
 
