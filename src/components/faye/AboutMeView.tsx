@@ -586,7 +586,11 @@ export function AboutMeView({ state, store, onClose, signInHref = "/login" }: Ab
           body={dialog === "delete_all" ? ABOUT_ME_COPY.confirmDeleteAll.body : ABOUT_ME_COPY.confirmErase.body}
           confirmLabel={dialog === "delete_all" ? ABOUT_ME_COPY.confirmDeleteAll.button : ABOUT_ME_COPY.confirmErase.button}
           working={busy(dialog)}
-          onCancel={() => setDialog(null)}
+          onCancel={() => {
+            const opener = dialog === "delete_all" ? "[data-delete-all-btn]" : "[data-erase-btn]";
+            setDialog(null);
+            focusFirst(opener, sectionKey("title"));
+          }}
           onConfirm={() => void confirmHeavy(dialog)}
         />
       ) : null}
@@ -604,13 +608,10 @@ export function ConfirmDialog(props: { title: string; body: ReactNode; confirmLa
   const [typed, setTyped] = useState("");
   const ok = typed === "DELETE";
 
+  // Focus goes to the DELETE field. (The caller gives focus back to the button that opened the dialog: by the time this runs the page
+  // behind is inert, so document.activeElement can no longer tell us which button that was.)
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
     ref.current?.querySelector<HTMLElement>("input")?.focus();
-    return () => {
-      // Back to the button that opened the dialog (the caller may move focus elsewhere right after).
-      if (opener && typeof opener.focus === "function") opener.focus();
-    };
   }, []);
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {

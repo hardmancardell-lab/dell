@@ -657,7 +657,7 @@ export function FayeChatWidget(props: FayeChatWidgetProps = {}) {
             </button>
           </header>
 
-          <details className="fw-note">
+          <details className="fw-note" hidden={aboutOpen}>
             <summary>{privacyShort}</summary>
             <p>{privacyFull}</p>
           </details>

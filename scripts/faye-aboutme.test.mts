@@ -329,8 +329,8 @@ const ready = (patch: any = {}) => ({ ...AM.initialState(1_760_000_000_000), loa
   await store.load();
   t("export without a recent sign-in: reauth_required is handled, nothing is saved", !(await store.exportAll()) && store.getState().reauth === "export" && saved.length === 0);
   const msg = store.getState().notice.text;
-  t("reauth: the message explains the 30 minute sign-in in plain words", /sign in again/i.test(msg) && /30 minutes/.test(msg) && store.getState().notice.tone === "error");
   const html = noStyle(render(store.getState(), store));
+  t("reauth: the live region says to sign in again; the block on screen explains the 30 minute rule in plain words", /sign in again/i.test(msg) && store.getState().notice.tone === "error" && /sign-in from the last 30 minutes/.test(html));
   t("reauth: a visible block with a sign-in link that opens in a new tab safely and a way to dismiss", /data-testid="aboutme-reauth"/.test(html) && /<a [^>]*href="\/login"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/.test(html) && /Please sign in again first/.test(html) && /Not now/.test(html));
   t("reauth: the block names the button to press again", /Export my notes/.test(html.match(/data-testid="aboutme-reauth"[\s\S]*?<\/div><\/div>/)?.[0] ?? ""));
   api.recent = true; // the owner signed in again
@@ -408,7 +408,7 @@ const ready = (patch: any = {}) => ({ ...AM.initialState(1_760_000_000_000), loa
   t("dialog: role, aria-modal, name and description", /role="dialog"/.test(html) && /aria-modal="true"/.test(html) && /aria-labelledby="[^"]+"/.test(html) && /aria-describedby="[^"]+"/.test(html));
   t("dialog: the destructive button starts disabled until DELETE is typed; Cancel is always there", /<button[^>]*disabled=""[^>]*>Erase all data/.test(html) && />Cancel</.test(html) && /Type DELETE to confirm/.test(html));
   const src = stripComments(read("../src/components/faye/AboutMeView.tsx"));
-  t("dialog: Escape closes it without closing Faye, Tab is trapped, focus goes to the field and comes back", /e\.key === "Escape"[\s\S]{0,120}e\.stopPropagation\(\)/.test(src) && /e\.key !== "Tab"/.test(src) && /querySelector<HTMLElement>\("input"\)\?\.focus\(\)/.test(src) && /opener\.focus\(\)/.test(src));
+  t("dialog: Escape closes it without closing Faye, Tab is trapped, focus goes to the field and comes back", /e\.key === "Escape"[\s\S]{0,120}e\.stopPropagation\(\)/.test(src) && /e\.key !== "Tab"/.test(src) && /querySelector<HTMLElement>\("input"\)\?\.focus\(\)/.test(src) && /focusFirst\(opener, sectionKey\("title"\)\)/.test(src) && /\[data-delete-all-btn\]/.test(src));
   t("dialog: the page behind it is inert", (src.match(/inert=\{dialog \? true : undefined\}/g) ?? []).length === 2);
   t("dialog: the confirm word is a constant 'DELETE' compared exactly", /typed === "DELETE"/.test(src));
   t("Escape in the panel goes back to the chat and never closes the whole window", /if \(e\.key !== "Escape" \|\| e\.defaultPrevented\) return;\s*e\.stopPropagation\(\)/.test(src));

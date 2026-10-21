@@ -33,7 +33,7 @@ font-family:var(--font-ui,-apple-system,"Segoe UI",system-ui,sans-serif);font-si
 .fam-btn-danger-solid{background:var(--am-danger);border-color:var(--am-danger);color:var(--am-950);font-weight:600}
 .fam-back{background:transparent;border-color:transparent;color:var(--am-t1);padding-left:8px}
 .fam-back:hover:not(:disabled){color:var(--am-t0)}
-.fam-live{flex:none;margin:8px 14px 0;padding:8px 12px;border:1px solid var(--am-line);border-radius:10px;background:var(--am-800);font-size:13px;color:var(--am-t0)}
+.fam-live{flex:none;margin:8px 14px 4px;padding:8px 12px;border:1px solid var(--am-line);border-radius:10px;background:var(--am-800);font-size:13px;color:var(--am-t0)}
 .fam-live:empty{display:none}
 .fam-live[data-tone="ok"]{border-color:var(--am-signal-dim)}
 .fam-live[data-tone="error"]{border-color:var(--am-danger)}

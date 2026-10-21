@@ -132,8 +132,11 @@ export function createAboutMeStore(deps: StoreDeps): AboutMeStore {
     try {
       const r = await call();
       if (!r.ok) {
-        if (r.code === "reauth_required" && opts.heavy) set({ reauth: opts.heavy });
-        fail(r);
+        if (r.code === "reauth_required" && opts.heavy) {
+          // The block on screen carries the full explanation (and takes focus); the live region just says what happened.
+          set({ reauth: opts.heavy });
+          notice("error", "Please sign in again first. The steps are on the screen.");
+        } else fail(r);
         if (opts.reloadOnFail || r.code === "not_found") await load(true);
         return false;
       }
