@@ -127,7 +127,7 @@ export function buildPack(question: string, candidates: Candidate[], now: number
 
   // 1. the always-on style card: the best two style notes (confidence, then recency)
   const styles = live
-    .filter((c) => c.category === "style")
+    .filter((c) => c.category === "style" && packable(c) !== null)
     .map((c) => ({ c, k: effectiveConfidence(c, now) + recency(c, now) }))
     .sort((a, b) => b.k - a.k || a.c.id.localeCompare(b.c.id))
     .slice(0, MEMORY_LIMITS.styleCard);

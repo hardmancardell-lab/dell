@@ -386,6 +386,7 @@ export function proposeFromStats(rows: UsageDay[], tzLabel = "UTC"): NoteCandida
     let best = -1;
     let bestN = 0;
     for (let h = 0; h < 24; h++) {
+      if (hours[h] === 0) continue; // a window starts at an hour that was actually used
       const n = hours[h] + hours[(h + 1) % 24] + hours[(h + 2) % 24];
       if (n > bestN) {
         bestN = n;

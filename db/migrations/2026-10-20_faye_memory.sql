@@ -155,7 +155,7 @@ begin
      or u ~ '\yyou\s+(are|will\s+be|shall\s+be)\s+now\y'
      or u ~ '\y(from\s+now\s+on|henceforth|going\s+forward)\y.{0,40}\yyou\y'
      or u ~ '\y(pretend|act|behave|roleplay|role-play|imagine)\y.{0,30}\y(as|to\s+be|you\s+are|like)\y.{0,30}\y(advis[eo]r|broker|analyst|fiduciary|planner|unrestricted|dan|jailbroken)\y'
-     or u ~ '\y(always|must|should|may\s+now|are\s+allowed\s+to|are\s+permitted\s+to|will)\y.{0,30}\y(give|giving|offer|provide|say|tell|recommend|suggest|advise)\y.{0,40}\y(advice|buy|sell|hold|trade|trades|what\s+to|which)\y'
+     or u ~ '\y(always|must|should|may\s+now|are\s+allowed\s+to|are\s+permitted\s+to|will)\y.{0,30}\y(give|giving|offer|provide|say|tell|recommend|suggest|advise)\y.{0,40}\y(advice|buy\w*|sell\w*|hold\w*|trade\w*|what\s+to|which)\y'
      or u ~ '\y(tell|say|give|recommend|suggest|advise|pick|choose)\y.{0,30}\y(what|which)\y.{0,25}\y(buy|sell|hold|trade|invest)\y'
      or u ~ '\ywants?\s+(faye|you|her|it|the\s+assistant)\s+to\s+(just\s+)?(say|tell|recommend|give|pick|choose|decide)\y'
      or u ~ '\ydisclaim\w*'

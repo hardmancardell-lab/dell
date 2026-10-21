@@ -74,7 +74,7 @@ const INSTRUCTION_U: RegExp[] = [
   /\byou\s+(are|will\s+be|shall\s+be)\s+now\b/,
   /\b(from\s+now\s+on|henceforth|going\s+forward)\b.{0,40}\byou\b/,
   /\b(pretend|act|behave|roleplay|role-play|imagine)\b.{0,30}\b(as|to\s+be|you\s+are|like)\b.{0,30}\b(advis[eo]r|broker|analyst|fiduciary|planner|unrestricted|dan|jailbroken)\b/,
-  /\b(always|must|should|may\s+now|are\s+allowed\s+to|are\s+permitted\s+to|will)\b.{0,30}\b(give|giving|offer|provide|say|tell|recommend|suggest|advise)\b.{0,40}\b(advice|buy|sell|hold|trade|trades|what\s+to|which)\b/,
+  /\b(always|must|should|may\s+now|are\s+allowed\s+to|are\s+permitted\s+to|will)\b.{0,30}\b(give|giving|offer|provide|say|tell|recommend|suggest|advise)\b.{0,40}\b(advice|buy\w*|sell\w*|hold\w*|trade\w*|what\s+to|which)\b/,
   /\b(tell|say|give|recommend|suggest|advise|pick|choose)\b.{0,30}\b(what|which)\b.{0,25}\b(buy|sell|hold|trade|invest)\b/,
   /\bwants?\s+(faye|you|her|it|the\s+assistant)\s+to\s+(just\s+)?(say|tell|recommend|give|pick|choose|decide)\b/,
   /\bdisclaim\w*/,
