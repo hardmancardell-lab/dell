@@ -2,10 +2,9 @@
  * Where the memory pack (design 3.5) is attached to a chat job. The pack is built SERVER-SIDE with the user-scoped client so the
  * worker only ever sees a slice; the browser can never supply one (a `memory` field in the request body is rejected).
  *
- * WP-F: replace the body of `buildMemoryPack` (one change, in this file) with a call to your ranker, for example
- *   return buildPackFromMemory(ctx.client, ctx.userId, ctx.question);
- * It may return a pack object or null. Whatever it returns is re-validated by validateMemoryPack(); an invalid pack is dropped
- * and the job runs without memory, never with a half-trusted one. Until then this returns null (no memory).
+ * WP-F (done): buildMemoryPack now calls the ranker in src/lib/faye/memory/pack.ts. It returns a pack object or null. Whatever it
+ * returns is re-validated by validateMemoryPack(); an invalid pack is dropped and the job runs without memory, never with a
+ * half-trusted one. The ranker itself is off unless FAYE_MEMORY_ENABLED is exactly "1" or "true".
  */
 import { buildPackFromMemory } from "../memory/pack";
 import type { MemoryPackV1 } from "./types";
