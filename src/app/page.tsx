@@ -376,7 +376,7 @@ export default async function Home() {
       <PaletteHost />
     </NavScope>
     <OnboardingWizard />
-    <FayeChatWidget />
+    <FayeChatWidget labHref={process.env.NEXT_PUBLIC_FAYE_LAB_HREF === "/faye-lab" ? "/faye-lab" : undefined} />
     <div className="min-h-screen">
       <main className="mx-auto max-w-4xl px-3 sm:px-6 py-8 sm:py-12">
         <Tabs
