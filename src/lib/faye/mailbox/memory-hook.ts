@@ -7,6 +7,7 @@
  * It may return a pack object or null. Whatever it returns is re-validated by validateMemoryPack(); an invalid pack is dropped
  * and the job runs without memory, never with a half-trusted one. Until then this returns null (no memory).
  */
+import { buildPackFromMemory } from "../memory/pack";
 import type { MemoryPackV1 } from "./types";
 import { validateMemoryPack } from "./validate";
 
@@ -27,7 +28,9 @@ export function setMemoryPackProvider(p: MemoryPackProvider | null): void {
 
 async function buildMemoryPack(ctx: MemoryContext): Promise<unknown> {
   if (provider) return provider(ctx);
-  return null; // WP-F: replace with the real ranker
+  // WP-F (the one marked change): the real ranker. It returns null unless FAYE_MEMORY_ENABLED is exactly "1" or "true" (default
+  // off), the person has memory on and learning is not paused; it never throws; and attachMemoryPack() re-validates its result.
+  return buildPackFromMemory({ client: ctx.client, userId: ctx.userId, question: ctx.question, env: ctx.env });
 }
 
 export async function attachMemoryPack(ctx: MemoryContext): Promise<MemoryPackV1 | null> {
