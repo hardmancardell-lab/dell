@@ -113,6 +113,21 @@ function backend() {
         return ok(run(fn, args));
       },
     };
+    // mirrors faye_memory_scrub_jobs in the memory migration (proved on PGlite): ids = null clears every pack of the caller and the
+    // source and result of their extract jobs; ids = [...] clears only packs that hold one of those notes
+    function scrubJobs(ids: string[] | null): number {
+      let n = 0;
+      for (const j of jobs.values()) {
+        if (j.user_id !== uid) continue;
+        if (ids === null) {
+          if (j.request && typeof j.request === "object" && "memory" in j.request) { delete j.request.memory; n++; }
+          if (j.kind === "extract" && (j.request || j.result)) { j.request = null; j.result = null; n++; }
+        } else if (j.request?.memory?.items?.some((x: any) => ids.includes(String(x.id).toLowerCase()))) {
+          delete j.request.memory; n++;
+        }
+      }
+      return n;
+    }
     function run(fn: string, a: Record<string, any>) {
       if (fn === "faye_erase_me") {
         if (a.p_confirm !== "DELETE") return { ok: false, code: "bad_request", detail: "confirm_required" };
@@ -174,7 +189,7 @@ function backend() {
       }
       if (fn === "faye_memory_delete") {
         const i = find(a.p_id); if (!i) return { ok: false, code: "not_found" };
-        if (a.p_permanent) { u.items = u.items.filter((x) => x !== i); ev(u, "purged", i.id, { count: 1 }); return { ok: true, permanent: true }; }
+        if (a.p_permanent) { u.items = u.items.filter((x) => x !== i); scrubJobs([i.id]); ev(u, "purged", i.id, { count: 1 }); return { ok: true, permanent: true }; }
         i.deleted_at = iso(); ev(u, "deleted", i.id);
         return { ok: true, permanent: false, undo_minutes: 10 };
       }
@@ -186,8 +201,8 @@ function backend() {
       if (fn === "faye_memory_delete_all") {
         if (a.p_confirm !== "DELETE") return { ok: false, code: "bad_request", detail: "confirm_required" };
         const n = u.items.length, s = u.stats.size;
-        u.items = []; u.stats = new Map(); ev(u, "deleted_all", null, { count: n });
-        return { ok: true, deleted: { faye_memory_items: n, faye_usage_stats: s } };
+        u.items = []; u.stats = new Map(); const nj = scrubJobs(null); ev(u, "deleted_all", null, { count: n });
+        return { ok: true, deleted: { faye_memory_items: n, faye_usage_stats: s, faye_job_payloads: nj } };
       }
       if (fn === "faye_memory_update_settings") {
         const was = u.settings.learning_paused;
@@ -489,8 +504,8 @@ const logsText = () => logs.join("\n");
   const tablesAfter = be.tables(A.id);
   t("delete-all: succeeds for a recent session and reports what it removed", r.status === 200 && da.ok === true && da.deleted.faye_memory_items >= 1);
   t("delete-all: no note text and no usage counts remain in the memory tables", !tablesAfter.includes("quokka") && !tablesAfter.includes("swing") && be.U(A.id).stats.size === 0 && be.U(A.id).items.length === 0);
-  const inJobs = be.jobText(A.id).includes("quokka");
-  note(`INFO delete-all: ${inJobs ? "note text from the memory pack still sits inside the user's earlier job payloads" : "no note text remains in job payloads"} (the database purges payloads after 24 hours; "erase everything" removes them at once). The About-me copy must not promise more than that.`)
+  t("delete-all: no note text remains in the user's earlier job payloads either (the database clears request.memory at once; proved on PGlite)", !be.jobText(A.id).includes("quokka") && !be.jobText(A.id).includes("swing"));
+  t("delete-all: the job rows and their other fields stay (only the pack is cleared)", [...be.jobs.values()].some((j) => j.user_id === A.id && JSON.stringify(j.request ?? {}).includes("PLANTEDCHAT")));
   const expAfter = await J(await H.handleExport(post("/api/faye/memory/export", {}), d));
   t("delete-all: the next export holds zero items and zero counts", expAfter.items.length === 0 && expAfter.usage_stats.length === 0);
 

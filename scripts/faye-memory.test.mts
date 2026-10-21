@@ -757,7 +757,7 @@ async function rpcBump(c) { await c.rpc("faye_usage_bump", { p_day: "2026-10-20"
     t(`sql: ${f} is security definer, owner-gated and granted to authenticated only`, new RegExp(`function public\\.${f}\\([^$]*?security definer`, "s").test(sql) && new RegExp(`grant execute on function public\\.${f}\\([^)]*\\)\\s+to authenticated;`).test(sql));
   }
   t("sql: the owner role is required (faye_memory_owner checks role = 'owner')", /faye_user_role\(auth\.uid\(\)\) = 'owner'/.test(sql));
-  t("sql: no function takes a user id argument", !/function public\.faye_(memory|usage)_\w+\([^)]*(p_user|p_uid|user_id)/.test(sql.replace(/faye_memory_(log|purge|supersede)\(p_uid/g, "")));
+  t("sql: no function takes a user id argument", !/function public\.faye_(memory|usage)_\w+\([^)]*(p_user|p_uid|user_id)/.test(sql.replace(/faye_memory_(log|purge|supersede|scrub_jobs)\(p_uid/g, "")));
   t("sql: the write-time trigger and the text screen exist", /create trigger faye_memory_items_guard_trg\s+before insert or update/.test(sql) && /function public\.faye_memory_text_problem/.test(sql));
   t("sql: held-out text is refused when the lab table exists", /split = ''heldout''/.test(sql));
   t("sql: constraints: length, category, source, status, confidence, approved flag, deleted_at", ["char_length(fact) between 3 and 200", "'style', 'preference', 'habit', 'tendency', 'goal', 'context', 'avoid'", "'stated', 'taught', 'observed', 'proposed_by_model'", "'proposed', 'approved', 'rejected', 'retired'", "confidence between 0 and 100", "status <> 'approved' or approved_at is not null", "deleted_at"].every((s) => sql.includes(s)));
@@ -767,6 +767,19 @@ async function rpcBump(c) { await c.rpc("faye_usage_bump", { p_day: "2026-10-20"
   t("sql: refuses to run before the mailbox migration", /Run 11-faye_mailbox\.sql first/.test(sql));
   t("sql: contract columns exist (user_id, category, slot, fact, source, source_ref, confidence, status, sensitivity)", ["user_id", "category", "slot", "fact", "source", "source_ref", "confidence", "status", "sensitivity"].every((c) => new RegExp(`\\n  ${c}\\s`).test(sql.slice(sql.indexOf("create table if not exists public.faye_memory_items"), sql.indexOf("create unique index")))));
   t("sql: the settings table has learning_paused", /learning_paused boolean not null default false/.test(sql));
+  // hardening item 6: note text copied into job payloads is cleared when the note goes (proved on PGlite by the memory harness)
+  const downSql = readFileSync(new URL("../db/migrations/2026-10-20_faye_memory_down.sql", import.meta.url), "utf8");
+  const fn = (name: string) => sql.slice(sql.indexOf(`function public.${name}(`), sql.indexOf("end $$;", sql.indexOf(`function public.${name}(`)));
+  t("sql: faye_memory_scrub_jobs exists, is internal (revoked from every browser and worker role) and is dropped by the down script",
+    /function public\.faye_memory_scrub_jobs\(p_uid uuid, p_ids uuid\[\] default null\)/.test(sql)
+    && /revoke all on function public\.faye_memory_scrub_jobs\(uuid, uuid\[\]\)\s+from public, anon, authenticated;/.test(sql)
+    && !/grant execute on function public\.faye_memory_scrub_jobs/.test(sql)
+    && /drop function if exists public\.faye_memory_scrub_jobs\(uuid, uuid\[\]\);/.test(downSql));
+  t("sql: delete all, permanent delete and the undo-window purge each call the scrub",
+    /faye_memory_scrub_jobs\(v_uid, null\)/.test(fn("faye_memory_delete_all")) && /faye_memory_scrub_jobs\(v_uid, array\[v_row\.id\]\)/.test(fn("faye_memory_delete"))
+    && /faye_memory_scrub_jobs\(p_uid, v_ids\)/.test(fn("faye_memory_purge")));
+  t("sql: the scrub only ever touches the caller's jobs and only removes request.memory (plus extract jobs on delete all)",
+    (fn("faye_memory_scrub_jobs").match(/user_id = p_uid|j\.user_id = p_uid/g) ?? []).length === 3 && !/delete from/.test(fn("faye_memory_scrub_jobs")));
   const setup = new URL("../../../../Dellegate/setup/12-faye_memory.sql", import.meta.url);
   if (existsSync(setup)) t("sql: the copy in Dellegate/setup is identical", readFileSync(setup, "utf8") === sql);
 }

@@ -50,14 +50,14 @@ export const ABOUT_ME_COPY = {
   exportTitle: "Export my notes",
   exportBody: "Save everything Faye keeps about you as a file. You need to have signed in within the last 30 minutes.",
   deleteAllTitle: "Delete all my notes",
-  deleteAllBody: "Remove every note and every habit count. Your settings stay.",
+  deleteAllBody: "Remove every note and every habit count. Notes copied into your recent questions are cleared too. Your settings stay.",
   eraseTitle: "Erase all my data",
   eraseBody: "Remove your notes, your settings, your habit counts and your recent chats. Anything saved to train Faye goes too.",
   reauthTitle: "Please sign in again first",
   reauthBody: `For your safety, Faye needs a sign-in from the last ${SAFETY_WINDOW_MINUTES} minutes before she will export or delete everything. Sign in, come back here, and press the button once more.`,
   confirmDeleteAll: {
     title: "Delete all your notes?",
-    body: "This removes every note and every habit count. You cannot undo it.",
+    body: "This removes every note and every habit count. Notes copied into your recent questions are cleared too. You cannot undo it.",
     button: "Delete all notes",
   },
   confirmErase: {

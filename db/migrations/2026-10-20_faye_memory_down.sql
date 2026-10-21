@@ -28,6 +28,7 @@ drop function if exists public.faye_memory_list(boolean);
 drop function if exists public.faye_memory_is_owner();
 drop function if exists public.faye_memory_owner();
 drop function if exists public.faye_memory_supersede(uuid, uuid, text);
+drop function if exists public.faye_memory_scrub_jobs(uuid, uuid[]);
 drop function if exists public.faye_memory_purge(uuid);
 drop function if exists public.faye_memory_item_json(public.faye_memory_items);
 drop function if exists public.faye_memory_log(uuid, text, uuid, uuid, integer, text);

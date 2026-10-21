@@ -15,7 +15,7 @@
 --              faye_memory_candidates, faye_memory_touch, faye_usage_bump, faye_usage_recent, faye_memory_note_dropped, faye_memory_note_erased
 --              -> role authenticated only (each one re-checks that the caller is the OWNER)
 --   Internal   faye_memory_owner, faye_memory_text_problem, faye_luhn_ok, faye_stats_counts_ok, faye_jsonb_add, faye_memory_purge,
---              faye_memory_supersede, faye_memory_log, faye_memory_item_json, and the trigger functions (no grants at all)
+--              faye_memory_scrub_jobs, faye_memory_supersede, faye_memory_log, faye_memory_item_json, and the trigger functions (no grants at all)
 --
 -- Security model in one paragraph:
 --   * RLS is ON for every table. Role anon has NO privileges. Role authenticated has SELECT only, on its own rows, and only while
@@ -32,6 +32,11 @@
 --     contained in) one of the owner's held-out questions is refused.
 --   * The audit trail records actions and counts only. Deleting a note removes its text everywhere; only the fact that something was
 --     deleted remains in faye_memory_events (kept 365 days, then removed).
+--   * Job copies: a chat job carries the memory pack (the note words the worker needs) in faye_jobs.request.memory, and the mailbox
+--     keeps payloads for 24 hours. So "delete permanently", the purge of a soft-deleted note, and "delete all" clear those copies at
+--     once through faye_memory_scrub_jobs() (delete all also clears the source text and result of the person's extract jobs).
+--     faye_erase_me (mailbox migration) deletes the person's jobs and chunks outright. Not scrubbed: an old note's wording after an
+--     EDIT (it ages out with the job at 24 hours), and an answer that happens to repeat a note in its own words (same 24 hours).
 --   * Soft delete with a short undo window: delete sets deleted_at (the note vanishes from every read at once) and the row is
 --     purged for good after 'memory_undo_minutes' (default 10) the next time any memory function runs. "Delete permanently",
 --     "delete all" and faye_erase_me remove rows immediately.
@@ -456,18 +461,54 @@ returns jsonb language sql stable set search_path = '' as $$
     'expires_at', i.expires_at, 'supersedes', i.supersedes, 'usefulness', i.usefulness, 'deleted_at', i.deleted_at)
 $$;
 
+-- Clears note text that was copied into the person's jobs. p_ids = null: every memory pack of the person, and the request and result of
+-- their extract jobs (those exist only to propose notes). p_ids = some note ids: only the packs that hold one of those notes lose
+-- the pack (the job keeps its question and result; a job still waiting for the worker simply runs without memory, which is safe).
+-- Returns the number of job rows changed. Internal: no grants to any browser or worker role.
+create or replace function public.faye_memory_scrub_jobs(p_uid uuid, p_ids uuid[] default null)
+returns integer language plpgsql volatile security definer set search_path = '' as $$
+declare
+  v_n integer := 0;
+  v_m integer := 0;
+begin
+  if p_uid is null or to_regclass('public.faye_jobs') is null then return 0; end if;
+  if p_ids is null then
+    update public.faye_jobs set request = request - 'memory'
+     where user_id = p_uid and request is not null and request ? 'memory';
+    get diagnostics v_n = row_count;
+    update public.faye_jobs set request = null, result = null
+     where user_id = p_uid and kind = 'extract' and (request is not null or result is not null);
+    get diagnostics v_m = row_count;
+  elsif cardinality(p_ids) > 0 then
+    update public.faye_jobs j set request = j.request - 'memory'
+     where j.user_id = p_uid and j.request is not null
+       and case when jsonb_typeof(j.request->'memory'->'items') = 'array'
+                then exists (select 1 from jsonb_array_elements(j.request->'memory'->'items') e
+                              where lower(e->>'id') = any (array(select x::text from unnest(p_ids) x)))
+                else false end;
+    get diagnostics v_n = row_count;
+  end if;
+  return v_n + v_m;
+end $$;
+
 -- Housekeeping for one person, run opportunistically by every memory function (no pg_cron needed):
 -- purge notes past the undo window, drop stale proposals, fade old observed notes, trim old audit and stats rows.
 create or replace function public.faye_memory_purge(p_uid uuid)
 returns void language plpgsql volatile security definer set search_path = '' as $$
 declare
   v_n integer;
+  v_ids uuid[];
 begin
-  delete from public.faye_memory_items
-   where user_id = p_uid and deleted_at is not null
-     and deleted_at < now() - make_interval(mins => public.faye_cfg('memory_undo_minutes', 10));
-  get diagnostics v_n = row_count;
-  if v_n > 0 then perform public.faye_memory_log(p_uid, 'purged', null, null, v_n); end if;
+  with gone as (
+    delete from public.faye_memory_items
+     where user_id = p_uid and deleted_at is not null
+       and deleted_at < now() - make_interval(mins => public.faye_cfg('memory_undo_minutes', 10))
+    returning id)
+  select coalesce(array_agg(id), '{}'::uuid[]), count(*) into v_ids, v_n from gone;
+  if v_n > 0 then
+    perform public.faye_memory_log(p_uid, 'purged', null, null, v_n);
+    perform public.faye_memory_scrub_jobs(p_uid, v_ids);
+  end if;
 
   delete from public.faye_memory_items
    where user_id = p_uid and deleted_at is null and status = 'proposed' and expires_at is not null and expires_at < now();
@@ -738,6 +779,7 @@ begin
   if not found then return jsonb_build_object('ok', false, 'code', 'not_found'); end if;
   if coalesce(p_permanent, false) then
     delete from public.faye_memory_items where id = v_row.id;
+    perform public.faye_memory_scrub_jobs(v_uid, array[v_row.id]);
     perform public.faye_memory_log(v_uid, 'purged', v_row.id, null, 1);
     return jsonb_build_object('ok', true, 'permanent', true);
   end if;
@@ -765,13 +807,15 @@ begin
   return jsonb_build_object('ok', true, 'item', public.faye_memory_item_json(v_row));
 end $$;
 
--- Delete every note and every usage count of the caller, at once. Settings and the audit trail stay.
+-- Delete every note and every usage count of the caller, at once, and clear the note text copied into the caller's jobs (see
+-- faye_memory_scrub_jobs). Settings and the audit trail stay.
 create or replace function public.faye_memory_delete_all(p_confirm text)
 returns jsonb language plpgsql volatile security definer set search_path = '' as $$
 declare
   v_uid uuid := public.faye_memory_owner();
   v_items integer;
   v_stats integer;
+  v_jobs integer;
 begin
   if v_uid is null then return jsonb_build_object('ok', false, 'code', 'not_allowed'); end if;
   if p_confirm is distinct from 'DELETE' then
@@ -781,8 +825,10 @@ begin
   get diagnostics v_items = row_count;
   delete from public.faye_usage_stats where user_id = v_uid;
   get diagnostics v_stats = row_count;
+  v_jobs := public.faye_memory_scrub_jobs(v_uid, null);
   perform public.faye_memory_log(v_uid, 'deleted_all', null, null, v_items);
-  return jsonb_build_object('ok', true, 'deleted', jsonb_build_object('faye_memory_items', v_items, 'faye_usage_stats', v_stats));
+  return jsonb_build_object('ok', true, 'deleted', jsonb_build_object('faye_memory_items', v_items, 'faye_usage_stats', v_stats,
+                                                                       'faye_job_payloads', v_jobs));
 end $$;
 
 create or replace function public.faye_memory_update_settings(p_learning_paused boolean default null, p_show_used_notes boolean default null)
@@ -962,6 +1008,7 @@ revoke all on function public.faye_memory_items_audit()                         
 revoke all on function public.faye_memory_log(uuid, text, uuid, uuid, integer, text)  from public, anon, authenticated;
 revoke all on function public.faye_memory_item_json(public.faye_memory_items)         from public, anon, authenticated;
 revoke all on function public.faye_memory_purge(uuid)                                 from public, anon, authenticated;
+revoke all on function public.faye_memory_scrub_jobs(uuid, uuid[])                    from public, anon, authenticated;
 revoke all on function public.faye_memory_supersede(uuid, uuid, text)                 from public, anon, authenticated;
 
 revoke all on function public.faye_memory_is_owner()                                  from public, anon, authenticated;
