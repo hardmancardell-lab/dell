@@ -372,7 +372,6 @@ export function LabView({ state, store }: LabViewProps) {
                         <th scope="col">{LAB_COPY.tests.cols.suite}</th>
                         <th scope="col">{LAB_COPY.tests.cols.passed}</th>
                         <th scope="col">{LAB_COPY.tests.cols.rate}</th>
-                        <th scope="col">{LAB_COPY.tests.cols.range}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -389,8 +388,7 @@ export function LabView({ state, store }: LabViewProps) {
                               {r.passed} of {r.total}
                               {missed ? " BLOCKED" : ""}
                             </td>
-                            <td>{r.total > 0 ? percent(w.rate) : "-"}</td>
-                            <td>{r.total > 0 ? `${percent(w.low)} to ${percent(w.high)}` : "-"}</td>
+                            <td className="fl-wrap">{r.total > 0 ? `${percent(w.rate)} (${percent(w.low)} to ${percent(w.high)})` : "-"}</td>
                           </tr>
                         );
                       })}

@@ -126,7 +126,7 @@ export const LAB_COPY = {
     blocked: "BLOCKED: the guardrail missed a question. Fix this before anything else.",
     guardrailOk: "Guardrail: every question passed on the last run.",
     tableTitle: "Recent runs",
-    cols: { when: "When", suite: "Test", passed: "Passed", rate: "Rate", range: "Likely range" },
+    cols: { when: "When", suite: "Test", passed: "Passed", rate: "Rate (likely range)" },
   },
   notice: {
     correctionSaved: "Saved. It is in your list.",
