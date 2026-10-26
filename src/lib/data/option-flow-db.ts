@@ -26,11 +26,31 @@ const SCALAR_COLUMNS = [
   "data_feed", "quote_lag_seconds",
 ].join(",");
 
+/**
+ * Supabase sometimes answers a valid service-role call with a one-off 401 (and, rarely, 408/429/5xx or a dropped connection).
+ * Seen in production 2026-10-21..26: about one run in four lost SPY's snapshot to "Supabase request failed (401)", while the next call a few
+ * seconds later succeeded. Retry those a couple of times with a short pause. Every write here is an idempotent upsert on
+ * (symbol, snapshot_time), so a repeat can never double-count; a missing table (404) or a bad request (400) is never retried.
+ */
+export const RETRY_DELAYS_MS = [300, 900];
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      const transient = res.status === 401 || res.status === 408 || res.status === 429 || res.status >= 500;
+      if (!transient || attempt >= RETRY_DELAYS_MS.length) return res;
+    } catch (error) {
+      if (attempt >= RETRY_DELAYS_MS.length) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+  }
+}
+
 async function request<T>(path: string, init: { method: string; body?: unknown; prefer?: string }): Promise<T> {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new OptionFlowDbUnavailable("Supabase is not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY), so option-flow snapshots cannot be stored or read.");
-  const res = await fetch(`${url}/rest/v1/${path}`, {
+  const res = await fetchWithRetry(`${url}/rest/v1/${path}`, {
     method: init.method,
     cache: "no-store",
     headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}`, Prefer: init.prefer ?? "return=minimal" },
