@@ -113,6 +113,7 @@ export function rigVars(rig: CharacterRig): CSSProperties {
     "--fb-ink": tokenRef("ink900"),
   };
   // Additive: only rigs that define these (the advisor) get the extra properties, so Faye's markup is untouched.
+  if (rig.hair.style !== "none") v["--fb-hair-sheen"] = tokenRef("hairSheen");
   if (rig.glasses) v["--fb-glasses"] = tokenRef(rig.glasses.colour);
   if (rig.face) {
     v["--fb-lips"] = tokenRef(rig.face.lips);
@@ -330,12 +331,12 @@ export type AdvisorPose = (typeof ADVISOR_POSE_NAMES)[number];
 export const ADVISOR_POSES: Record<AdvisorPose, PoseSpec> = {
   idle: { ...POSES.idle, describe: "standing relaxed and confident" },
   listening: { ...POSES.listening, describe: "one hand at the ear, head tilted toward you" },
-  thinking: { ...POSES.thinking, describe: "one hand at the chin, the other arm across the waist" },
+  thinking: { ...POSES.thinking, describe: "one hand at the chin, the other arm across the waist", R: { target: [137, 110], bend: -1, handRot: -35 } },
   speaking: { ...POSES.speaking, describe: "one open palm raised, explaining" },
   presenting: {
     describe: "one arm out toward a chart",
     L: { target: [74, 256], bend: 1 },
-    R: { target: [226, 150], bend: 1, handRot: 28, open: true },
+    R: { target: [226, 143], bend: 1, handRot: 28, open: true },
     lift: 0,
     sit: 0,
     head: { tilt: 3, dy: 0 },
