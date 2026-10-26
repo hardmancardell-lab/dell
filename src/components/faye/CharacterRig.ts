@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { JARVIS } from "@/lib/design/tokens";
+import { CHARACTER, JARVIS } from "@/lib/design/tokens";
 import type { FayeMood } from "./FayeAvatar";
 
 /**
@@ -9,7 +9,11 @@ import type { FayeMood } from "./FayeAvatar";
  * design-token ratchet stays happy and a theme change reaches the body for free. `rigVars()` turns a rig into CSS custom
  * properties (`--fb-jacket: var(--ink-700, <fallback>)`), which FayeFullBody's stylesheet reads.
  *
- * ## How to build the advisor character next (nothing here draws him or her yet)
+ * ## The advisor (built 2026-10-21: AdvisorFullBody.tsx, advisorDefault below)
+ * The notes that follow were the plan; the advisor now exists as a human head (afro, glasses, a real face), a pantsuit and
+ * the ADVISOR_POSES table, and the owner's choices are props (skin, suit, hairStyle, hairColour, glasses, frame).
+ *
+ * ## How the advisor was planned (original notes)
  * The owner would choose, in about five minutes:
  *   1. Skin tone. Only tokens may be used today, so Faye's "ink-glass" blue-grey is the one available tone. A human
  *      skin range (say 6 tones) needs a small palette added to src/lib/design/tokens.ts AND globals.css, which is an
@@ -24,9 +28,14 @@ import type { FayeMood } from "./FayeAvatar";
  * Poses (POSES below), the arm solver and the stylesheet are shared, so a new character gets all seven poses at once.
  */
 
-export type TokenName = keyof typeof JARVIS;
+/** A Jarvis token (ink, line, signal...) or a CHARACTER token (skin, hair, suit colours; see tokens.ts). */
+export type TokenName = keyof typeof JARVIS | keyof typeof CHARACTER;
 
-export type HairStyle = "none";
+/** "none": Faye (the aperture face is the head). "afro": full and round. "afroTapered": a smaller, closer natural crop. */
+export type HairStyle = "none" | "afro" | "afroTapered";
+
+/** Glasses for a human head (the advisor). "none" draws no frames. */
+export type GlassesStyle = "none" | "round" | "softRect";
 
 export interface CharacterRig {
   id: string;
@@ -35,6 +44,9 @@ export interface CharacterRig {
   skin: TokenName;
   skinShade: TokenName;
   hair: { style: HairStyle; colour: TokenName };
+  /** Human heads only (additive; FAYE_RIG leaves these out and its output is unchanged). */
+  glasses?: { style: GlassesStyle; colour: TokenName };
+  face?: { lips: TokenName; eyeWhite: TokenName; iris: TokenName };
   outfit: {
     jacket: TokenName;
     jacketShade: TokenName;
@@ -68,14 +80,15 @@ export const FAYE_RIG: CharacterRig = {
   },
 };
 
-/** camelCase token name to the CSS custom property in globals.css (ink900 to --ink-900, lineBright to --line-bright). */
+/** camelCase token name to the CSS custom property in globals.css (ink900 to --ink-900, lineBright to --line-bright, skinMediumDeep to --skin-medium-deep). */
 export function tokenVarName(name: TokenName): string {
   return "--" + String(name).replace(/([A-Z])/g, (m) => "-" + m.toLowerCase()).replace(/([a-z])(\d)/, "$1-$2");
 }
 
 /** `var(--ink-700, <tokens.ts value>)`: the live token with the tokens.ts value as fallback outside a .jarvis island. */
 export function tokenRef(name: TokenName): string {
-  return `var(${tokenVarName(name)},${JARVIS[name]})`;
+  const value = (JARVIS as Record<string, string>)[name] ?? (CHARACTER as Record<string, string>)[name];
+  return `var(${tokenVarName(name)},${value})`;
 }
 
 export function rigVars(rig: CharacterRig): CSSProperties {
@@ -99,6 +112,13 @@ export function rigVars(rig: CharacterRig): CSSProperties {
     "--fb-danger": tokenRef("danger"),
     "--fb-ink": tokenRef("ink900"),
   };
+  // Additive: only rigs that define these (the advisor) get the extra properties, so Faye's markup is untouched.
+  if (rig.glasses) v["--fb-glasses"] = tokenRef(rig.glasses.colour);
+  if (rig.face) {
+    v["--fb-lips"] = tokenRef(rig.face.lips);
+    v["--fb-eye-white"] = tokenRef(rig.face.eyeWhite);
+    v["--fb-iris"] = tokenRef(rig.face.iris);
+  }
   return v as CSSProperties;
 }
 
@@ -241,4 +261,86 @@ export const POSES: Record<FayeMood, PoseSpec> = {
     head: { tilt: 7, dy: 7 },
     seated: true,
   },
+};
+
+// ------------------------------------------------------------------------------------------------------ the advisor
+// Everything below is additive: Faye's rig, poses and geometry above are unchanged.
+
+export type AdvisorSkin = "fair" | "tan" | "medium" | "mediumDeep" | "deep";
+export type AdvisorSuit = "plum" | "teal" | "amber";
+export type AdvisorHairColour = "black" | "espresso" | "chestnut";
+export type AdvisorFrame = "rose" | "gold" | "ivory";
+
+/** Skin swatches, light to deep. mediumDeep is the owner's choice and the default. */
+export const ADVISOR_SKINS: Record<AdvisorSkin, { skin: TokenName; skinShade: TokenName }> = {
+  fair: { skin: "skinFair", skinShade: "skinFairShade" },
+  tan: { skin: "skinTan", skinShade: "skinTanShade" },
+  medium: { skin: "skinMedium", skinShade: "skinMediumShade" },
+  mediumDeep: { skin: "skinMediumDeep", skinShade: "skinMediumDeepShade" },
+  deep: { skin: "skinDeep", skinShade: "skinDeepShade" },
+};
+
+/** Three pantsuit colourways: jacket, trousers (matching), lapel and piping. Default plum: distinct from Faye's ink-blue and teal and from Claude's amber. */
+export const ADVISOR_SUITS: Record<AdvisorSuit, Pick<CharacterRig["outfit"], "jacket" | "jacketShade" | "lapel" | "piping" | "trousers" | "trousersShade">> = {
+  plum: { jacket: "suitPlum", jacketShade: "suitPlumShade", lapel: "suitPlumShade", piping: "suitPlumLight", trousers: "suitPlum", trousersShade: "suitPlumShade" },
+  teal: { jacket: "suitTeal", jacketShade: "suitTealShade", lapel: "suitTealShade", piping: "suitTealLight", trousers: "suitTeal", trousersShade: "suitTealShade" },
+  amber: { jacket: "suitAmber", jacketShade: "suitAmberShade", lapel: "suitAmberShade", piping: "suitAmberLight", trousers: "suitAmber", trousersShade: "suitAmberShade" },
+};
+
+export const ADVISOR_HAIR: Record<AdvisorHairColour, TokenName> = { black: "hairBlack", espresso: "hairEspresso", chestnut: "hairChestnut" };
+export const ADVISOR_FRAMES: Record<AdvisorFrame, TokenName> = { rose: "frameRose", gold: "frameGold", ivory: "frameIvory" };
+
+export interface AdvisorChoices {
+  skin?: AdvisorSkin;
+  suit?: AdvisorSuit;
+  hairStyle?: Exclude<HairStyle, "none">;
+  hairColour?: AdvisorHairColour;
+  glasses?: GlassesStyle;
+  frame?: AdvisorFrame;
+}
+
+/** Build an advisor rig from the owner's choices; anything omitted takes the default (medium-deep skin, plum suit, full afro, soft-rectangle rose-gold glasses). */
+export function advisorRig(c: AdvisorChoices = {}): CharacterRig {
+  const skin = ADVISOR_SKINS[c.skin ?? "mediumDeep"] ?? ADVISOR_SKINS.mediumDeep;
+  const suit = ADVISOR_SUITS[c.suit ?? "plum"] ?? ADVISOR_SUITS.plum;
+  const hairStyle: HairStyle = c.hairStyle === "afroTapered" ? "afroTapered" : "afro";
+  return {
+    id: "advisor",
+    displayName: "Advisor",
+    skin: skin.skin,
+    skinShade: skin.skinShade,
+    hair: { style: hairStyle, colour: ADVISOR_HAIR[c.hairColour ?? "espresso"] ?? ADVISOR_HAIR.espresso },
+    glasses: { style: c.glasses === "round" || c.glasses === "none" ? c.glasses : "softRect", colour: ADVISOR_FRAMES[c.frame ?? "rose"] ?? ADVISOR_FRAMES.rose },
+    face: { lips: "lipBerry", eyeWhite: "blouseIvory", iris: "hairEspresso" },
+    outfit: { ...suit, shirt: "blouseIvory", shoes: "shoeBlush", outline: "lineBright" },
+  };
+}
+
+/** The advisor preset: medium-deep brown skin, full afro, soft-rectangle glasses, plum pantsuit, ivory blouse, blush flats. */
+export const advisorDefault: CharacterRig = advisorRig();
+
+/** Moods and poses the advisor has. A person does not power down, so offline and error map to idle (see AdvisorFullBody). */
+export const ADVISOR_POSE_NAMES = ["idle", "listening", "thinking", "speaking", "presenting", "unsure", "celebrating"] as const;
+export type AdvisorPose = (typeof ADVISOR_POSE_NAMES)[number];
+
+/**
+ * One pose per advisor pose. The arm solver, shoulders and lengths are the shared ones. "presenting" is new: the right
+ * arm out to the side (toward a chart on the viewer's right), palm up, the head turned a little toward it.
+ */
+export const ADVISOR_POSES: Record<AdvisorPose, PoseSpec> = {
+  idle: { ...POSES.idle, describe: "standing relaxed and confident" },
+  listening: { ...POSES.listening, describe: "one hand at the ear, head tilted toward you" },
+  thinking: { ...POSES.thinking, describe: "one hand at the chin, the other arm across the waist" },
+  speaking: { ...POSES.speaking, describe: "one open palm raised, explaining" },
+  presenting: {
+    describe: "one arm out toward a chart",
+    L: { target: [74, 256], bend: 1 },
+    R: { target: [226, 150], bend: 1, handRot: 28, open: true },
+    lift: 0,
+    sit: 0,
+    head: { tilt: 3, dy: 0 },
+    seated: false,
+  },
+  unsure: { ...POSES.unsure, describe: "a small shrug, palms out" },
+  celebrating: { ...POSES.celebrating, describe: "both arms raised in celebration" },
 };

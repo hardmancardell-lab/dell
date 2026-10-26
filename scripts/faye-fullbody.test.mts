@@ -188,7 +188,7 @@ for (const height of HEIGHTS) {
   t("a different rig reuses the whole body: its name and piping token flow through", s.includes('aria-label="Advisor, idle:') && s.includes(`--fb-piping:var(--verdict,${JARVIS.verdict})`) && s.includes(`--fb-jacket:var(--ink-700,${JARVIS.ink700})`));
   t("the default rig is Faye", fb({}).includes('aria-label="Faye, idle:') && RIG.FAYE_RIG.hair.style === "none");
   const srcRig = readFileSync(new URL("../src/components/faye/CharacterRig.ts", import.meta.url), "utf8");
-  t("the advisor options are documented in the rig file (skin, hair, outfit, build, head) and no advisor is built", /How to build the advisor character next/.test(srcRig) && /Skin tone/.test(srcRig) && /Hair/.test(srcRig) && /Outfit/.test(srcRig) && !/ADVISOR_RIG|advisorRig/.test(srcRig));
+  t("the advisor options are documented in the rig file (skin, hair, outfit, build, head) and the advisor preset now exists as an additive export", /How the advisor was planned/.test(srcRig) && /Skin tone/.test(srcRig) && /Hair/.test(srcRig) && /Outfit/.test(srcRig) && /export const advisorDefault/.test(srcRig) && RIG.advisorDefault.id === "advisor");
 }
 
 // ------------------------------------------------------------------ widget: optional, default-off variant
