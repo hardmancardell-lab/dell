@@ -195,6 +195,17 @@ runs `prune()` once per session, on the opening bucket. If the Supabase plan is 
 first. The delete and the null-out are two `prune(olderThanDateKey, {detailOnly})` calls in
 `src/lib/data/option-flow-db.ts`.
 
+### Export to files (added 2026-11-06)
+
+`GET /api/cron/option-flow-export` (Bearer `CRON_SECRET`, read-only) returns the stored rows with the per-contract jsonb:
+`?list=1` gives the days per symbol that still hold detail; `?symbol=SPY&date=YYYY-MM-DD&offset=0&limit=40` gives a day in
+pages (a whole SPY day is about 2.3 MB; the route answers 413 above about 4.2 MB, Vercel's response cap is 4.5 MB).
+`scripts/vm/option_flow_export.sh` runs nightly on the Oracle VM (23:10 UTC, weekdays), saves each finished session as
+`~/option_flow_archive/SYMBOL_YYYY-MM-DD.json.gz` (skips files it already has), and logs to `~/option_flow_export.log`.
+`scripts/vm/pull_option_flow_archive.sh` copies files the PC does not have yet into `Documents/Dellegate/option_flow_archive`.
+A row in a file is the table row exactly as stored; each `contracts` entry is `[expIdx, strike, right, volume, oi, bid, ask, last, iv]`
+and `expIdx` indexes that row's `expirations_used`.
+
 ## Setup checklist
 
 1. Run `db/migrations/2026-10-15_option_flow_snapshots.sql` once in the Supabase SQL editor.

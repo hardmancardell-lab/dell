@@ -158,6 +158,24 @@ export async function getDaySeries(symbol: string, sessionDate: string, opts: { 
   return rows.map(fromRow);
 }
 
+/** One session's rows exactly as stored (every column, including the per-contract jsonb), in time order. For the file export: not parsed through fromRow. */
+export async function getDayRowsRaw(symbol: string, sessionDate: string, opts: { offset?: number; limit?: number } = {}): Promise<Record<string, unknown>[]> {
+  const offset = Math.max(0, Math.floor(opts.offset ?? 0)), limit = Math.min(500, Math.max(1, Math.floor(opts.limit ?? 500)));
+  return request<Record<string, unknown>[]>(
+    `${TABLE}?select=*&symbol=eq.${encodeURIComponent(symbol)}&session_date=eq.${sessionDate}&order=snapshot_time.asc&limit=${limit}&offset=${offset}`,
+    { method: "GET", prefer: REP }
+  );
+}
+
+/** Session dates (oldest first) that still hold per-contract detail for this symbol, i.e. the days the export has not yet missed. */
+export async function getDatesWithDetail(symbol: string): Promise<string[]> {
+  const rows = await request<{ session_date: string }[]>(
+    `${TABLE}?select=session_date&symbol=eq.${encodeURIComponent(symbol)}&contracts=not.is.null&order=session_date.asc&limit=4000`,
+    { method: "GET", prefer: REP }
+  );
+  return [...new Set(rows.map((r) => String(r.session_date).slice(0, 10)))];
+}
+
 /** The most recent `n` session dates that have rows for this symbol, newest first. */
 export async function getRecentSessionDates(symbol: string, n = 20): Promise<string[]> {
   // One narrow column; a full session is about 78 rows, so this reads at most n x 80 tiny rows.
