@@ -188,8 +188,9 @@ Rough figures, not measured on a live database:
 - Per-contract detail: about 30 KB for SPY and for QQQ, 20 to 30 KB for GLD, under 10 KB for NVDA and DELL, so about
   100 KB per tick and about 8 MB per session before Postgres compresses large jsonb values (it may roughly halve it).
 
-Retention is set in `OPTION_FLOW_CONFIG`: per-contract detail is nulled after 14 days (`detailRetentionDays`; about
-110 MB at steady state before compression), and whole rows are deleted after 400 days (`rowRetentionDays`). The route
+Retention is set in `OPTION_FLOW_CONFIG`: per-contract detail is nulled after 30 days (`detailRetentionDays`, raised from
+14 on 2026-11-06 at the owner's request; about 175 MB at steady state before compression, so watch the Supabase Free
+plan's 500 MB limit; export the detail to files before it is nulled), and whole rows are deleted after 400 days (`rowRetentionDays`). The route
 runs `prune()` once per session, on the opening bucket. If the Supabase plan is small, lower `detailRetentionDays`
 first. The delete and the null-out are two `prune(olderThanDateKey, {detailOnly})` calls in
 `src/lib/data/option-flow-db.ts`.

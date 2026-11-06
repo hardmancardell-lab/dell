@@ -64,7 +64,7 @@ create table if not exists option_flow_snapshots (
   quote_lag_seconds numeric,
 
   -- [expIdx, strike, right, volume, oi, bid, ask, last, iv] for strikes within +-10% of spot, first 3 expirations.
-  -- About 30 KB per row for SPY/QQQ; nulled after the detail retention period (14 days, OPTION_FLOW_CONFIG) by the prune job.
+  -- About 30 KB per row for SPY/QQQ; nulled after the detail retention period (30 days since 2026-11-06, OPTION_FLOW_CONFIG) by the prune job.
   contracts jsonb,
 
   unique (symbol, snapshot_time)
